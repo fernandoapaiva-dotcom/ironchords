@@ -1,0 +1,158 @@
+:root {
+  --primary-copper: #B87333;
+  --primary-copper-dark: #8B4513;
+  --primary-copper-light: #D4AF37;
+  --bg-industrial: #0F0F12;
+  --bg-card: #16161D;
+  --text-steel: #A5A9B4;
+  --text-light: #E2E8F0;
+  --border-metallic: #2D2D35;
+}
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-[#0F0F12] text-[#A5A9B4] font-sans antialiased selection:bg-[#B87333]/30;
+    background-image:
+      radial-gradient(circle at 0% 0%, rgba(184, 115, 51, 0.05) 0%, transparent 50%),
+      radial-gradient(circle at 100% 100%, rgba(165, 169, 180, 0.05) 0%, transparent 50%);
+    background-attachment: fixed;
+  }
+}
+
+.glass-card {
+  @apply bg-white/5 backdrop-blur-xl border border-white/10 shadow-2xl;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.02) 100%);
+}
+
+.copper-button {
+  @apply bg-[#B87333] hover:bg-[#8B4513] text-white font-bold transition-all duration-300 shadow-lg shadow-[#B87333]/20;
+}
+
+.metallic-border {
+  @apply border-[#2D2D35];
+}
+
+@keyframes forge-pulse {
+
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.9;
+    filter: brightness(1);
+  }
+
+  50% {
+    transform: scale(1.05);
+    opacity: 1;
+    filter: brightness(1.2);
+  }
+}
+
+@keyframes hammer-strike {
+  0% {
+    transform: rotate(45deg) translate(20px, -60px);
+  }
+
+  15% {
+    transform: rotate(0deg) translate(0, 0);
+  }
+
+  25% {
+    transform: rotate(-5deg) translate(0, 5px);
+  }
+
+  40%,
+  100% {
+    transform: rotate(45deg) translate(20px, -60px);
+  }
+}
+
+@keyframes note-eruption {
+  0% {
+    transform: translate(0, 0) scale(0);
+    opacity: 0;
+  }
+
+  15% {
+    transform: translate(var(--tw-translate-x), var(--tw-translate-y)) scale(1);
+    opacity: 1;
+  }
+
+  100% {
+    transform: translate(calc(var(--tw-translate-x) * 1.5), -120px) scale(1.2);
+    opacity: 0;
+  }
+}
+
+@keyframes spark-burst {
+
+  0%,
+  15% {
+    transform: scale(0);
+    opacity: 0;
+  }
+
+  16% {
+    transform: scale(1);
+    opacity: 1;
+  }
+
+  100% {
+    transform: translate(var(--tw-translate-x), var(--tw-translate-y)) scale(0);
+    opacity: 0;
+  }
+}
+
+@keyframes anvil-vibrate {
+
+  0%,
+  14%,
+  26%,
+  100% {
+    transform: translate(0, 0);
+  }
+
+  16%,
+  20% {
+    transform: translate(1px, 1px);
+  }
+
+  18%,
+  22% {
+    transform: translate(-1px, -1px);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.animate-forge-pulse {
+  animation: forge-pulse 2s ease-in-out infinite;
+}
+
+.animate-hammer-strike {
+  animation: hammer-strike 2s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+
+.animate-note-eruption {
+  animation: note-eruption 2s ease-out infinite;
+}
+
+.animate-spark-burst {
+  animation: spark-burst 2s ease-out infinite;
+}
+
+.animate-anvil-vibrate {
+  animation: anvil-vibrate 2s ease-in-out infinite;
+}

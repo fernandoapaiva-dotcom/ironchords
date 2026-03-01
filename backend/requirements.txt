@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+pandas
+requests
+beautifulsoup4
+python-docx
+pydantic
+sqlalchemy
+pdfplumber
+pypiwin32
