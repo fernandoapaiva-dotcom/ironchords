@@ -175,15 +175,30 @@ def generate_docx(songs: list, output_filename: str = "Livreto.docx", cover_imag
             section = doc.add_section(WD_SECTION.CONTINUOUS)
             create_columns(section, 1)
             
-            h_txt = f"{str(song['song_name']).title()} ({song['key']}) - {song['artist_name']}"
+            shape_key = song.get('key', 'C')
+            sounding_key = song.get('sounding_key', shape_key)
+            capo = song.get('capo', 0)
+            
+            h_txt = f"{str(song['song_name']).title()} - {song['artist_name']}"
             h = doc.add_heading(h_txt, level=1)
             h.paragraph_format.space_before = Pt(0)
             h.paragraph_format.space_after = Pt(2)
             
-            p_t = doc.add_paragraph(f"Tom: {song['key']}")
+            tom_text = f"Tom: {sounding_key}"
+            if capo > 0:
+                tom_text += f" (forma de {shape_key})"
+            p_t = doc.add_paragraph(tom_text)
             p_t.style.font.name = 'Courier New'
             p_t.style.font.bold = True
-            p_t.paragraph_format.space_after = Pt(2)
+            
+            if capo > 0:
+                p_t.paragraph_format.space_after = Pt(0)
+                p_c = doc.add_paragraph(f"Capo: {capo}ª casa")
+                p_c.style.font.name = 'Courier New'
+                p_c.style.font.bold = True
+                p_c.paragraph_format.space_after = Pt(2)
+            else:
+                p_t.paragraph_format.space_after = Pt(2)
 
             if n_cols == 2:
                 section = doc.add_section(WD_SECTION.CONTINUOUS)
@@ -209,14 +224,14 @@ def generate_docx(songs: list, output_filename: str = "Livreto.docx", cover_imag
                         if not is_valid_chord(c_txt): continue
                         st, en = m.span()
                         if st > last_idx:
-                            s_part = str(l_str)[int(last_idx):int(st)]
+                            s_part = l_str[last_idx:st]
                             p.add_run(s_part).font.size = Pt(f_size)
                         run = p.add_run(c_txt)
                         run.bold = True
                         run.font.size = Pt(f_size)
                         last_idx = en
                     if last_idx < len(l_str):
-                        s_rest = str(l_str)[int(last_idx):]
+                        s_rest = l_str[last_idx:]
                         p.add_run(s_rest).font.size = Pt(f_size)
                 else:
                     run = p.add_run(l_str)

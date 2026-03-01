@@ -117,6 +117,8 @@ export default function App() {
     const [suggestions, setSuggestions] = useState([]);
     const [showSuggestions, setShowSuggestions] = useState(false);
     const [suggestionType, setSuggestionType] = useState('song');
+    const [availableVersions, setAvailableVersions] = useState([{ name: 'Principal', key: 'Principal' }]);
+    const [manualCapo, setManualCapo] = useState(0);
 
     // Batch Form State
     const [batchLoading, setBatchLoading] = useState(false);
@@ -229,9 +231,7 @@ export default function App() {
     const syncLineByText = (text, isFinal) => {
         const songIdx = activeTab === 'player' ? selectedManualIndex : selectedManualIndex;
         if (songIdx === null || !songs[songIdx]) return;
-        const currentSong = songs[songIdx];
-        const transcriptRaw = text.toLowerCase();
-        const lines = currentSong.content.split('\n');
+        const lines = (currentSong?.content || "").split('\n');
 
         let foundIndex = -1;
         const searchRange = 6;
@@ -478,16 +478,41 @@ export default function App() {
 
     const fetchSongMetadata = async (song, artist) => {
         try {
-            const res = await fetch(`http://localhost:8000/api/music/metadata?song_name=${encodeURIComponent(song)}&artist_name=${encodeURIComponent(artist)}`);
+            const res = await fetch(`http://127.0.0.1:8000/api/music/metadata?song_name=${encodeURIComponent(song)}&artist_name=${encodeURIComponent(artist)}`);
             const data = await res.json();
             if (data.key) setSongKey(normalizeNote(data.key));
         } catch (err) { console.error(err); }
+
+        // Fetch versions independently
+        try {
+            const artistSlug = artist.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+            const songSlug = song.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+            fetchVersions(artistSlug, songSlug);
+        } catch (err) { console.error(err); }
+    };
+
+    const fetchVersions = async (artistSlug, songSlug) => {
+        try {
+            const res = await fetch(`http://127.0.0.1:8000/api/song/versions?artist_slug=${artistSlug}&song_slug=${songSlug}`);
+            const data = await res.json();
+            if (data.versions && data.versions.length > 0) {
+                setAvailableVersions(data.versions);
+                setSongVersion(data.versions[0].key);
+            } else {
+                setAvailableVersions([{ name: 'Principal', key: 'Principal' }]);
+                setSongVersion('Principal');
+            }
+        } catch (err) {
+            console.error(err);
+            setAvailableVersions([{ name: 'Principal', key: 'Principal' }]);
+            setSongVersion('Principal');
+        }
     };
 
     const fetchAcervo = async () => {
         setAcervoLoading(true);
         try {
-            const res = await fetch('http://localhost:8000/api/chords');
+            const res = await fetch('http://127.0.0.1:8000/api/chords');
             const data = await res.json();
             setAcervo(data.chords);
         } catch (err) { console.error(err); }
@@ -497,14 +522,14 @@ export default function App() {
     const handleDeleteAcervo = async (id) => {
         if (!confirm('Tem certeza?')) return;
         try {
-            await fetch(`http://localhost:8000/api/chords/${id}`, { method: 'DELETE' });
+            await fetch(`http://127.0.0.1:8000/api/chords/${id}`, { method: 'DELETE' });
             fetchAcervo();
         } catch (err) { alert(err); }
     };
 
     const handleEditOpen = async (id) => {
         try {
-            const res = await fetch(`http://localhost:8000/api/chords/${id}`);
+            const res = await fetch(`http://127.0.0.1:8000/api/chords/${id}`);
             const data = await res.json();
             setEditingChord(data.id);
             setEditFormData({ song_name: data.song_name, artist_name: data.artist_name, song_key: data.song_key, content: data.content });
@@ -514,7 +539,7 @@ export default function App() {
     const handleEditSave = async (e) => {
         e.preventDefault();
         try {
-            await fetch(`http://localhost:8000/api/chords/${editingChord}`, {
+            await fetch(`http://127.0.0.1:8000/api/chords/${editingChord}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(editFormData)
@@ -529,7 +554,7 @@ export default function App() {
         setManualLoading(true);
         setManualError('');
         try {
-            const res = await fetch('http://localhost:8000/api/music/manual', {
+            const res = await fetch('http://127.0.0.1:8000/api/music/manual', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -537,14 +562,24 @@ export default function App() {
                     artist_name: artistName,
                     key: songKey,
                     version: songVersion,
-                    include_tabs: includeTabs
+                    include_tabs: includeTabs,
+                    capo: manualCapo
                 })
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.detail || 'Erro ao buscar cifra.');
-            setSongs([...songs, { ...data, status: 'success', show_chords: true }]);
+            const newSong = {
+                ...data,
+                status: 'success',
+                show_chords: true,
+                sounding_key: data.sounding_key || data.requested_key || data.original_key,
+                song_key: data.original_key || data.requested_key,
+                capo: data.capo || manualCapo
+            };
+            setSongs([...songs, newSong]);
             setSongName(''); setArtistName(''); setSongKey('C');
             setSongVersion('Principal');
+            setManualCapo(0);
         } catch (err) { setManualError(err.message); }
         finally { setManualLoading(false); }
     };
@@ -559,7 +594,7 @@ export default function App() {
             try {
                 const formData = new FormData();
                 formData.append('file', file);
-                const res = await fetch('http://localhost:8000/api/music/batch/pdf', {
+                const res = await fetch('http://127.0.0.1:8000/api/music/batch/pdf', {
                     method: 'POST',
                     body: formData
                 });
@@ -704,34 +739,96 @@ export default function App() {
                                             )}
                                         </div>
                                         <div className="grid grid-cols-2 gap-4">
-                                            <div>
-                                                <label className="block text-xs font-black uppercase tracking-widest text-[#A5A9B4] mb-2 ml-1">Tom Desejado</label>
-                                                <select value={songKey} onChange={e => setSongKey(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-4 text-white focus:ring-2 focus:ring-[#B87333]/50 outline-none transition-all font-medium cursor-pointer">
-                                                    {NOTES.map(n => <option key={n} value={n} className="bg-[#1A1A1A]">{n}</option>)}
-                                                </select>
+                                            <div className="space-y-4">
+                                                <div>
+                                                    <label className="block text-xs font-black uppercase tracking-widest text-[#A5A9B4] mb-2 ml-1">Tom Desejado</label>
+                                                    <select value={songKey} onChange={e => setSongKey(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-4 text-white focus:ring-2 focus:ring-[#B87333]/50 outline-none transition-all font-medium cursor-pointer">
+                                                        {NOTES.map(n => <option key={n} value={n} className="bg-[#1A1A1A]">{n}</option>)}
+                                                    </select>
+                                                </div>
+                                                {availableVersions && availableVersions.length > 1 && (
+                                                    <div>
+                                                        <label className="block text-xs font-black uppercase tracking-widest text-[#A5A9B4] mb-2 ml-1">Várias versões encontradas!</label>
+                                                        <select value={songVersion} onChange={e => setSongVersion(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-4 text-white focus:ring-2 focus:ring-[#B87333]/50 outline-none transition-all font-medium cursor-pointer">
+                                                            {availableVersions.map(v => (
+                                                                <option key={v.key} value={v.key} className="bg-[#1A1A1A]">{v.name}</option>
+                                                            ))}
+                                                        </select>
+                                                    </div>
+                                                )}
                                             </div>
-                                            <div>
-                                                <label className="block text-xs font-black uppercase tracking-widest text-[#A5A9B4] mb-2 ml-1">Versão</label>
-                                                <select value={songVersion} onChange={e => setSongVersion(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-4 text-white focus:ring-2 focus:ring-[#B87333]/50 outline-none transition-all font-medium cursor-pointer">
-                                                    <option value="Principal" className="bg-[#1A1A1A]">Principal</option>
-                                                    <option value="Simplificada" className="bg-[#1A1A1A]">Simplificada</option>
-                                                    <option value="v2" className="bg-[#1A1A1A]">v2</option>
-                                                    <option value="v3" className="bg-[#1A1A1A]">v3</option>
-                                                </select>
+
+                                            <div className="space-y-4">
+                                                <div>
+                                                    <label className="block text-xs font-black uppercase tracking-widest text-[#A5A9B4] mb-2 ml-1">Capo (Capotraste)</label>
+                                                    <select value={manualCapo} onChange={e => setManualCapo(Number(e.target.value))} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-4 text-white focus:ring-2 focus:ring-[#B87333]/50 outline-none transition-all font-medium cursor-pointer">
+                                                        {[...Array(13)].map((_, i) => (
+                                                            <option key={i} value={i} className="bg-[#1A1A1A]">{i === 0 ? 'Sem Capo' : `${i}ª Casa`}</option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                                <div className="flex flex-col justify-end">
+                                                    <div className="flex items-center justify-between p-4 bg-black/20 border border-white/5 rounded-2xl h-[58px]">
+                                                        <div className="flex items-center space-x-3">
+                                                            <Info className="w-4 h-4 text-[#B87333]" />
+                                                            <span className="text-[10px] font-black text-[#A5A9B4] uppercase tracking-widest">Incluir Tab</span>
+                                                        </div>
+                                                        <label className="relative inline-flex items-center cursor-pointer">
+                                                            <input type="checkbox" className="sr-only peer" checked={includeTabs} onChange={() => setIncludeTabs(!includeTabs)} />
+                                                            <div className="w-11 h-6 bg-white/5 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-slate-400 after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#B87333] peer-checked:after:bg-white text-xs"></div>
+                                                        </label>
+                                                    </div>
+                                                </div>
                                             </div>
-                                        </div>
-                                        <div className="flex items-center justify-between p-4 bg-black/20 border border-white/5 rounded-2xl">
-                                            <div className="flex items-center space-x-3">
-                                                <Info className="w-4 h-4 text-[#B87333]" />
-                                                <span className="text-[10px] font-black text-[#A5A9B4] uppercase tracking-widest">Incluir Tablaturas</span>
-                                            </div>
-                                            <label className="relative inline-flex items-center cursor-pointer">
-                                                <input type="checkbox" className="sr-only peer" checked={includeTabs} onChange={() => setIncludeTabs(!includeTabs)} />
-                                                <div className="w-11 h-6 bg-white/5 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-slate-400 after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#B87333] peer-checked:after:bg-white text-xs"></div>
-                                            </label>
                                         </div>
                                         <button disabled={manualLoading} type="submit" className="w-full py-5 bg-[#B87333] hover:bg-[#8B4513] text-white font-black uppercase tracking-widest rounded-xl transition-all shadow-xl shadow-[#B87333]/20 active:scale-[0.98]">Adicionar à seleção de músicas</button>
                                     </form>
+                                )}
+
+                                {activeTab === 'acervo' && (
+                                    <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-700">
+                                        <div className="flex items-center justify-between mb-2 px-1">
+                                            <h3 className="text-[10px] font-black text-[#A5A9B4] uppercase tracking-[0.3em]">Cifras no Acervo</h3>
+                                            <button onClick={fetchAcervo} className="p-2 text-[#B87333] hover:bg-white/5 rounded-lg transition-all">
+                                                <RefreshCw className={`w-4 h-4 ${acervoLoading ? 'animate-spin' : ''}`} />
+                                            </button>
+                                        </div>
+                                        <div className="space-y-3 max-h-[420px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-[#B87333]/20">
+                                            {acervoLoading ? (
+                                                <div className="py-20 flex flex-col items-center space-y-4">
+                                                    <RefreshCw className="w-8 h-8 text-[#B87333] animate-spin opacity-20" />
+                                                    <p className="text-[10px] uppercase font-bold text-slate-700 tracking-widest">Sincronizando...</p>
+                                                </div>
+                                            ) : acervo.length === 0 ? (
+                                                <div className="py-20 text-center border-2 border-dashed border-white/5 rounded-3xl">
+                                                    <Database className="w-10 h-10 text-slate-800 mx-auto mb-4" />
+                                                    <p className="text-[10px] uppercase font-bold text-slate-700 tracking-widest">Acervo Vazio</p>
+                                                </div>
+                                            ) : acervo.map((item, idx) => (
+                                                <div key={idx} className="bg-black/20 border border-white/5 p-5 rounded-[24px] flex items-center justify-between hover:border-[#B87333]/40 transition-all group">
+                                                    <div className="max-w-[70%]">
+                                                        <p className="text-sm font-black text-white italic tracking-tight truncate uppercase">{item.song_name}</p>
+                                                        <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest mt-1">{item.artist_name} • <span className="text-[#B87333]">{item.song_key}</span></p>
+                                                    </div>
+                                                    <button
+                                                        onClick={() => {
+                                                            const newSong = {
+                                                                ...item,
+                                                                requested_key: item.song_key,
+                                                                sounding_key: item.song_key,
+                                                                capo: item.capo || 0,
+                                                                show_chords: true
+                                                            };
+                                                            setSongs([...songs, newSong]);
+                                                        }}
+                                                        className="p-3 bg-white/5 hover:bg-[#B87333] text-slate-700 hover:text-white rounded-xl transition-all shadow-lg active:scale-90"
+                                                    >
+                                                        <Plus className="w-4 h-4" />
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
                                 )}
 
                                 {activeTab === 'batch' && (
@@ -818,11 +915,26 @@ export default function App() {
                                             <ArrowLeft className="w-7 h-7" />
                                         </button>
                                         <div className="flex flex-col">
+                                            {selectedManualIndex !== null && (
+                                                <div className="flex items-center space-x-3 mb-1">
+                                                    <p className="text-xs font-bold text-[#B87333] tracking-[0.3em] uppercase opacity-80">
+                                                        Tom: {songs[selectedManualIndex]?.sounding_key || songs[selectedManualIndex]?.song_key || 'C'}
+                                                        {songs[selectedManualIndex]?.sounding_key && songs[selectedManualIndex]?.sounding_key !== (songs[selectedManualIndex]?.song_key || songs[selectedManualIndex]?.requested_key) &&
+                                                            ` (forma de ${songs[selectedManualIndex]?.requested_key || songs[selectedManualIndex]?.song_key})`
+                                                        }
+                                                    </p>
+                                                    {songs[selectedManualIndex]?.capo > 0 && (
+                                                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                                                            Capo {songs[selectedManualIndex]?.capo}ª casa
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            )}
                                             <h2 className="text-2xl font-black text-white leading-none uppercase italic tracking-tighter">
-                                                {selectedManualIndex !== null ? songs[selectedManualIndex].song_name : 'Modo Performance'}
+                                                {selectedManualIndex !== null ? songs[selectedManualIndex]?.song_name : 'Modo Performance'}
                                             </h2>
                                             <p className="text-[#B87333] font-black text-[10px] uppercase tracking-[0.3em] mt-2 opacity-80">
-                                                {selectedManualIndex !== null ? songs[selectedManualIndex].artist_name : 'Sincronização Industrial'}
+                                                {selectedManualIndex !== null ? songs[selectedManualIndex]?.artist_name : 'Sincronização Industrial'}
                                             </p>
                                         </div>
                                     </div>
@@ -845,6 +957,30 @@ export default function App() {
                                             </button>
                                         </div>
 
+                                        {selectedManualIndex !== null && (
+                                            <div className="flex items-center px-4 border-l border-white/10 space-x-3">
+                                                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Capo</span>
+                                                <select
+                                                    value={songs[selectedManualIndex]?.capo || 0}
+                                                    onChange={(e) => {
+                                                        const newCapo = Number(e.target.value);
+                                                        const oldCapo = songs[selectedManualIndex]?.capo || 0;
+                                                        const diff = oldCapo - newCapo;
+                                                        // Transpose song based on capo change
+                                                        transposeSong(selectedManualIndex, diff);
+                                                        // Update capo field in song
+                                                        const newSongs = [...songs];
+                                                        newSongs[selectedManualIndex].capo = newCapo;
+                                                        setSongs(newSongs);
+                                                    }}
+                                                    className="bg-black/40 border border-white/5 rounded-lg px-2 py-1 text-[10px] font-black text-[#B87333] outline-none"
+                                                >
+                                                    {[...Array(13)].map((_, i) => (
+                                                        <option key={i} value={i} className="bg-[#1A1A1A]">{i === 0 ? 'Off' : `${i}ª`}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                        )}
                                         {selectedManualIndex !== null && (
                                             <div className="flex items-center space-x-3 bg-black/40 p-2 rounded-2xl border border-white/10">
                                                 <div className="flex items-center px-4 border-r border-white/10 space-x-3">
@@ -887,7 +1023,7 @@ export default function App() {
                                         ) : (
                                             <div ref={scrollContainerRef} className="flex-1 overflow-y-auto whitespace-pre-wrap leading-relaxed relative pb-64 px-12 scrollbar-none">
                                                 <div className="max-w-4xl mx-auto py-24">
-                                                    {songs[selectedManualIndex].content.split('\n').map((line, idx) => {
+                                                    {songs[selectedManualIndex]?.content.split('\n').map((line, idx) => {
                                                         const isChordLine = line.match(/^[a-g][b#]?\s/i) || (line.trim().length > 0 && line.trim().length < 15 && line.includes('  '));
                                                         const isActive = currentLineIndex === idx;
                                                         return (
@@ -1082,7 +1218,13 @@ export default function App() {
                                                 </div>
                                                 <div>
                                                     <h4 className="font-black text-white text-sm line-clamp-1 uppercase italic tracking-tight">{song.song_name}</h4>
-                                                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">{song.artist_name} • {song.requested_key}</p>
+                                                    <p className="text-xs text-slate-400 font-medium tracking-wider">
+                                                        {song.artist_name} • Tom: {song.sounding_key || song.song_key}
+                                                        {song.sounding_key && song.sounding_key !== (song.song_key || song.requested_key) &&
+                                                            ` (forma de ${song.requested_key || song.song_key})`
+                                                        }
+                                                        {song.capo > 0 && ` • CAPO ${song.capo}ª`}
+                                                    </p>
                                                 </div>
                                             </div>
                                             <div className="flex items-center space-x-2">
@@ -1141,16 +1283,16 @@ export default function App() {
                         <div className="bg-white/90 backdrop-blur-xl border-b border-slate-100 p-6 flex items-center justify-between shadow-sm">
                             <div className="flex items-center space-x-5">
                                 <div className="p-4 bg-blue-700 rounded-3xl shadow-2xl shadow-blue-700/30"><Music className="w-8 h-8 text-white" /></div>
-                                <div><h2 className="text-3xl font-black text-slate-900 tracking-tighter">{songs[selectedManualIndex].song_name}</h2><p className="text-sm font-bold text-blue-600 uppercase tracking-widest">{songs[selectedManualIndex].artist_name} • {songs[selectedManualIndex].requested_key}</p></div>
+                                <div><h2 className="text-3xl font-black text-slate-900 tracking-tighter">{songs[selectedManualIndex]?.song_name}</h2><p className="text-sm font-bold text-blue-600 uppercase tracking-widest">{songs[selectedManualIndex]?.artist_name} • {songs[selectedManualIndex]?.requested_key || songs[selectedManualIndex]?.song_key || 'C'}</p></div>
                             </div>
                             <div className="flex items-center space-x-6">
                                 <button onClick={() => transposeSong(selectedManualIndex, -1)} className="p-4 border rounded-2xl"><ChevronDown /></button>
-                                <span className="text-3xl font-black font-mono text-blue-900">{songs[selectedManualIndex].requested_key}</span>
+                                <span className="text-3xl font-black font-mono text-blue-900">{songs[selectedManualIndex]?.requested_key || songs[selectedManualIndex]?.song_key || 'C'}</span>
                                 <button onClick={() => transposeSong(selectedManualIndex, 1)} className="p-4 border rounded-2xl"><ChevronUp /></button>
                                 <button onClick={() => { setIsFullScreenPlayer(false); setSelectedManualIndex(null); }} className="p-4 bg-slate-950/5 hover:bg-red-600 hover:text-white rounded-2xl transition-all"><X className="w-6 h-6" /></button>
                             </div>
                         </div>
-                        <div ref={scrollContainerRef} className="flex-1 overflow-y-auto font-mono text-4xl whitespace-pre-wrap leading-[1.8] p-16 scrollbar-none"><div className="max-w-4xl mx-auto pb-[60vh]">{songs[selectedManualIndex].content.split('\n').map((line, idx) => (<div key={idx} data-line-index={idx} onClick={() => handleLineClick(idx)} className={`py-6 px-12 cursor-pointer transition-all ${currentLineIndex === idx ? 'bg-blue-50 border-l-8 border-blue-600 scale-105 shadow-sm' : 'opacity-20 hover:opacity-100 grayscale'}`}>{line || ' '}</div>))}</div></div>
+                        <div ref={scrollContainerRef} className="flex-1 overflow-y-auto font-mono text-4xl whitespace-pre-wrap leading-[1.8] p-16 scrollbar-none"><div className="max-w-4xl mx-auto pb-[60vh]">{(songs[selectedManualIndex]?.content || "").split('\n').map((line, idx) => (<div key={idx} data-line-index={idx} onClick={() => handleLineClick(idx)} className={`py-6 px-12 cursor-pointer transition-all ${currentLineIndex === idx ? 'bg-blue-50 border-l-8 border-blue-600 scale-105 shadow-sm' : 'opacity-20 hover:opacity-100 grayscale'}`}>{line || ' '}</div>))}</div></div>
                     </div>
                 )}
 

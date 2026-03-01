@@ -18,6 +18,7 @@ def init_db():
             song_key TEXT NOT NULL COLLATE NOCASE,
             content TEXT NOT NULL,
             source TEXT NOT NULL,
+            capo INTEGER DEFAULT 0,
             UNIQUE(song_name, artist_name, song_key)
         )
     ''')
@@ -40,7 +41,13 @@ def get_chord(song_name: str, artist_name: str, song_key: str = None):
     conn.close()
     return dict(chord) if chord else None
 
-def save_chord(song_name: str, artist_name: str, song_key: str, content: str, source: str):
+def get_all_chords():
+    conn = get_db_connection()
+    chords = conn.execute('SELECT * FROM chords ORDER BY song_name ASC').fetchall()
+    conn.close()
+    return [dict(c) for c in chords]
+
+def save_chord(song_name: str, artist_name: str, song_key: str, content: str, source: str, capo: int = 0):
     conn = get_db_connection()
     # Clean inputs
     name = song_name.strip()
@@ -62,15 +69,15 @@ def save_chord(song_name: str, artist_name: str, song_key: str, content: str, so
     
     try:
         conn.execute(
-            'INSERT INTO chords (song_name, artist_name, song_key, content, source) VALUES (?, ?, ?, ?, ?)',
-            (name, artist, key_to_save, content, source)
+            'INSERT INTO chords (song_name, artist_name, song_key, content, source, capo) VALUES (?, ?, ?, ?, ?, ?)',
+            (name, artist, key_to_save, content, source, capo)
         )
         conn.commit()
     except sqlite3.IntegrityError:
         # If it already exists (same name, artist, and key), update it
         conn.execute(
-            'UPDATE chords SET content = ?, source = ? WHERE song_name = ? AND artist_name = ? AND song_key = ?',
-            (content, source, name, artist, key_to_save)
+            'UPDATE chords SET content = ?, source = ?, capo = ? WHERE song_name = ? AND artist_name = ? AND song_key = ?',
+            (content, source, capo, name, artist, key_to_save)
         )
         conn.commit()
     finally:

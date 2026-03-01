@@ -27,8 +27,19 @@ def scrape_cifraclub(song_name: str, artist_url_name: str, version: Optional[str
         path_version = f"/{v_clean}"
     
     url = f"https://www.cifraclub.com.br/{artist_url_name}/{s_slug}{path_version}/imprimir.html"
+    # Fallback to non-print URL if we need meta info like capo
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
     try:
+        # First, try to get the regular page to extract metadata like capo
+        meta_url = f"https://www.cifraclub.com.br/{artist_url_name}/{s_slug}{path_version}/"
+        meta_res = requests.get(meta_url, headers=headers, timeout=10)
+        capo = 0
+        if meta_res.status_code == 200:
+            # Extract capo from window._ccq in JS
+            capo_match = re.search(r'capo:\s*(\d+)', meta_res.text)
+            if capo_match:
+                capo = int(capo_match.group(1))
+
         response = requests.get(url, headers=headers, timeout=10)
         if response.status_code != 200: return None
         soup = BeautifulSoup(response.text, 'html.parser')
@@ -65,10 +76,62 @@ def scrape_cifraclub(song_name: str, artist_url_name: str, version: Optional[str
             "song_name": song_name,
             "artist_name": artist_url_name.replace("-", " ").title(),
             "key": key,
+            "capo": capo,
             "content": clean_text(content),
             "source": "cifraclub"
         }
     except: return None
+
+def get_cifraclub_versions(artist_url_name: str, song_slug: str) -> List[Dict]:
+    url = f"https://www.cifraclub.com.br/{artist_url_name}/{song_slug}/"
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+    versions = []
+    try:
+        response = requests.get(url, headers=headers, timeout=10)
+        if response.status_code != 200: return []
+        soup = BeautifulSoup(response.text, 'html.parser')
+        
+        # Versions are typically in a div with class 'list-versions'
+        versions_container = soup.find('div', class_='list-versions')
+        if versions_container:
+            for link in versions_container.find_all('a', class_='js-version'):
+                title_span = link.find('span', title=True)
+                if not title_span:
+                    # Fallback to direct span text if title is not present
+                    title_span = link.find('span')
+                
+                version_name = title_span.get('title') if title_span and title_span.get('title') else (title_span.text.strip() if title_span else "Principal")
+                
+                # Extract version suffix from URL
+                # Example: /legiao-urbana/tempo-perdido/simplificada.html
+                # We want "simplificada"
+                href = link.get('href', '')
+                v_slug = "Principal"
+                if href:
+                    parts = href.strip('/').split('/')
+                    if len(parts) > 2:
+                        last_part = parts[-1]
+                        if last_part.endswith('.html'):
+                            v_slug = last_part.replace('.html', '')
+                        else:
+                            # Might be just a folder or the principal one
+                            v_slug = last_part
+                    elif len(parts) == 2:
+                        v_slug = "Principal"
+                
+                versions.append({
+                    "name": version_name,
+                    "key": v_slug,
+                    "label": version_name # Using the display name as label
+                })
+        else:
+            # If no versions found, at least return "Principal"
+            versions.append({"name": "Principal", "key": "Principal"})
+            
+        return versions
+    except Exception as e:
+        print(f"Error fetching versions: {e}")
+        return [{"name": "Principal", "key": "Principal"}]
 
 def scrape_cifras_com_br(song_name: str, artist_name: str) -> Optional[Dict]:
     a_slug = get_slug(artist_name)

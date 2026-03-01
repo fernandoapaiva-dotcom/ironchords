@@ -6,16 +6,67 @@ from typing import List, Optional, Any, Dict, Union, cast
 import pandas as pd
 import io
 import os
+import time
 import json
 import tempfile
 import zipfile
 import requests
 import re
 
-from scraper import find_chord_cascade
-from database import init_db, get_chord, save_chord, get_db_connection
+import scraper
+from scraper import find_chord_cascade, get_cifraclub_versions
+from database import init_db, get_chord, save_chord, get_db_connection, get_all_chords
+import chord_utils
 from chord_utils import process_chords
 from document_generator import generate_docx
+
+def fix_pywin32():
+    import os
+    import sys
+    try:
+        venv_base = os.path.dirname(os.path.dirname(sys.executable))
+        site_packages = os.path.join(venv_base, "Lib", "site-packages")
+        if not os.path.exists(site_packages):
+            for p in sys.path:
+                if p.endswith("site-packages"):
+                    site_packages = p
+                    break
+        
+        pywin32_system32 = os.path.join(site_packages, "pywin32_system32")
+        if os.path.exists(pywin32_system32):
+            add_dll = getattr(os, 'add_dll_directory', None)
+            if add_dll:
+                try: add_dll(pywin32_system32)
+                except: pass
+            else:
+                os.environ["PATH"] = pywin32_system32 + os.pathsep + os.environ["PATH"]
+                
+        for sub in ["win32", "win32\\lib", "Pythonwin"]:
+            p = os.path.join(site_packages, sub)
+            if os.path.exists(p) and p not in sys.path:
+                sys.path.append(p)
+        
+        # Carregamento forçado de pywintypes e pythoncom
+        import win32api
+        import pywintypes
+        import pythoncom
+        return True
+    except Exception as e:
+        with open("debug_fix.log", "a") as f:
+            f.write(f"fix_pywin32 error: {str(e)}\n")
+        return False
+
+HAS_PYWIN32 = fix_pywin32()
+PYWIN32_ERR = None
+if HAS_PYWIN32:
+    try:
+        import pythoncom
+        import win32com.client
+    except Exception as e:
+        HAS_PYWIN32 = False
+        PYWIN32_ERR = str(e)
+else:
+    PYWIN32_ERR = "Failed to bootstrap pywin32"
 
 app = FastAPI()
 
@@ -37,11 +88,13 @@ class ManualEntryRequest(BaseModel):
     key: str
     version: Optional[str] = "Principal"
     include_tabs: bool = True
+    capo: Optional[int] = 0
 
 class TransposeRequest(BaseModel):
     content: str
     current_key: str
     semitones: int
+    capo: Optional[int] = 0
 
 @app.post("/api/music/manual")
 def add_manual_music(request: ManualEntryRequest):
@@ -73,7 +126,8 @@ def add_manual_music(request: ManualEntryRequest):
                 artist_name=chord_data['artist_name'],
                 song_key=chord_data['key'],
                 content=chord_data['content'],
-                source=chord_data['source']
+                source=chord_data['source'],
+                capo=chord_data.get('capo', 0)
             )
         
     final_content = process_chords(chord_data['content'], chord_data['key'], request.key)
@@ -85,17 +139,40 @@ def add_manual_music(request: ManualEntryRequest):
             artist_name=chord_data['artist_name'],
             song_key=request.key,
             content=final_content,
-            source=chord_data['source']
+            source=chord_data['source'],
+            capo=chord_data.get('capo', 0)
         )
+    
+    # Calculate sounding key
+    sounding_key = chord_utils.get_sounding_key(chord_data['key'], request.capo)
+    
+    save_chord(
+        song_name=chord_data['song_name'],
+        artist_name=chord_data['artist_name'],
+        song_key=chord_data['key'],
+        content=final_content,
+        source=chord_data['source'],
+        capo=request.capo
+    )
     
     return {
         "song_name": chord_data['song_name'],
         "artist_name": chord_data['artist_name'],
         "original_key": chord_data['key'],
         "requested_key": request.key,
+        "sounding_key": sounding_key,
         "content": final_content,
-        "source": chord_data['source']
+        "source": chord_data['source'],
+        "capo": request.capo
     }
+
+@app.get("/api/song/versions")
+async def get_song_versions(artist_slug: str, song_slug: str):
+    versions = scraper.get_cifraclub_versions(artist_slug, song_slug)
+    # Filter out if only Principal is available
+    if len(versions) <= 1:
+        return {"versions": []}
+    return {"versions": versions}
 
 @app.post("/api/transpose")
 def transpose_endpoint(request: TransposeRequest):
@@ -128,12 +205,21 @@ def transpose_endpoint(request: TransposeRequest):
         print(f"TRANSPOSE ERROR: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/api/song/versions")
+async def get_song_versions(artist_slug: str, song_slug: str):
+    versions = scraper.get_cifraclub_versions(artist_slug, song_slug)
+    # Filter out versions if only Principal is available
+    if len(versions) <= 1:
+        return {"versions": []}
+    return {"versions": versions}
+
 class BatchEntry(BaseModel):
     song_name: str
     artist_name: str
     key: str
     version: Optional[str] = "Principal"
     include_tabs: bool = True
+    capo: Optional[int] = 0
 
 class BatchRequest(BaseModel):
     songs: List[BatchEntry]
@@ -196,11 +282,16 @@ def add_batch_music(request: BatchRequest):
                         source=chord_data['source']
                     )
 
+                # Calculate sounding key
+                sounding_key = chord_utils.get_sounding_key(req_key, row.capo)
+                
                 results.append({
                     "song_name": chord_data['song_name'],
                     "artist_name": chord_data['artist_name'],
                     "original_key": chord_data['key'],
                     "requested_key": req_key,
+                    "sounding_key": sounding_key,
+                    "capo": row.capo,
                     "content": final_content,
                     "status": "success"
                 })
@@ -296,13 +387,16 @@ class ChordUpdate(BaseModel):
     artist_name: str
     song_key: str
     content: str
+    capo: Optional[int] = 0
 
 @app.get("/api/chords")
-def list_chords():
-    conn = get_db_connection()
-    chords = conn.execute("SELECT id, song_name, artist_name, song_key, source FROM chords ORDER BY song_name").fetchall()
-    conn.close()
-    return {"chords": [dict(c) for c in chords]}
+def get_chords():
+    chords = get_all_chords()
+    return {"chords": chords}
+
+@app.get("/api/acervo")
+def get_acervo_alias():
+    return get_chords()
 
 @app.get("/api/chords/{chord_id}")
 def get_single_chord(chord_id: int):
@@ -437,17 +531,21 @@ async def generate_book(
             
         prepared_songs = []
         for song in songs:
+            base_key = song.get("song_key") or song.get("key") or "C"
             prepared_songs.append({
-                "song_name": song["song_name"],
-                "artist_name": song["artist_name"],
-                "key": song.get("requested_key", song.get("original_key", "C")),
-                "content": song["content"],
+                "song_name": song.get("song_name", "Sem Título"),
+                "artist_name": song.get("artist_name", "Desenhecido"),
+                "key": base_key,
+                "sounding_key": song.get("sounding_key") or base_key,
+                "capo": int(song.get("capo") or 0),
+                "content": song.get("content", ""),
                 "show_chords": song.get("show_chords", True)
             })
             
         cover_path = None
-        if cover_image:
-            cover_ext = os.path.splitext(cover_image.filename)[1]
+        if cover_image and getattr(cover_image, 'filename', None):
+            cover_filename = cast(str, cover_image.filename)
+            cover_ext = os.path.splitext(cover_filename)[1]
             temp_cover = tempfile.NamedTemporaryFile(delete=False, suffix=cover_ext)
             temp_cover.write(await cover_image.read())
             temp_cover.close()
@@ -457,32 +555,69 @@ async def generate_book(
         file_path = generate_docx(prepared_songs, docx_filename, cover_path)
         
         # --- NOVO: Força a atualização do sumário no DOCX via Word COM ---
-        import pythoncom
-        import win32com.client
-        pythoncom.CoInitialize()
-        try:
-            word = win32com.client.DispatchEx("Word.Application")
-            word.Visible = False
-            word.DisplayAlerts = False
-            doc_obj = word.Documents.Open(os.path.abspath(file_path))
-            # Atualiza o índice (UpdateTableOfContents)
-            if doc_obj.TablesOfContents.Count > 0:
-                doc_obj.TablesOfContents(1).Update()
-            doc_obj.Save()
-            
-            pdf_path = None
-            if export_format in ["pdf", "both"]:
-                pdf_filename = "Livreto.pdf"
-                pdf_path = os.path.join(os.path.dirname(__file__), pdf_filename)
-                # Export to PDF (17 = wdFormatPDF)
-                doc_obj.SaveAs(os.path.abspath(pdf_path), FileFormat=17)
-            
-            doc_obj.Close()
-            word.Quit()
-        except Exception as e:
-            print(f"Erro ao processar arquivo no Word: {str(e)}")
-        finally:
-            pythoncom.CoUninitialize()
+        pdf_path = None
+        with open("debug.log", "a") as debug_f:
+            debug_f.write(f"\n--- Início Processamento COM: {export_format} ---\n")
+            if HAS_PYWIN32:
+                pythoncom.CoInitialize()
+                word = None
+                doc_obj = None
+                try:
+                    debug_f.write("Acessando Word.Application...\n")
+                    word = win32com.client.DispatchEx("Word.Application")
+                    word.Visible = False
+                    word.DisplayAlerts = 0 # wdAlertsNone
+                    
+                    full_docx_path = os.path.abspath(file_path)
+                    debug_f.write(f"Abrindo documento: {full_docx_path}\n")
+                    doc_obj = word.Documents.Open(full_docx_path)
+                    
+                    # Garantir que estamos no modo de visualização de impressão para que os números de página sejam calculados
+                    debug_f.write("Mudando visualização para PrintView...\n")
+                    word.ActiveWindow.View.Type = 3 # wdPrintView
+                    
+                    # Força a repaginação
+                    debug_f.write("Repaginando...\n")
+                    doc_obj.Repaginate()
+                    
+                    # Atualiza todos os campos
+                    debug_f.write("Atualizando campos...\n")
+                    doc_obj.Fields.Update()
+                    
+                    # Atualiza o índice especificamente
+                    if doc_obj.TablesOfContents.Count > 0:
+                        debug_f.write("Atualizando TOC...\n")
+                        doc_obj.TablesOfContents(1).Update()
+                    
+                    debug_f.write("Salvando DOCX...\n")
+                    doc_obj.Save()
+                    
+                    if export_format in ["pdf", "both"]:
+                        pdf_filename = "Livreto.pdf"
+                        pdf_dest = os.path.join(os.path.dirname(__file__), pdf_filename)
+                        pdf_path = os.path.abspath(pdf_dest)
+                        debug_f.write(f"Exportando PDF para: {pdf_path}\n")
+                        # ExportFormat=17 is wdExportFormatPDF
+                        doc_obj.ExportAsFixedFormat(pdf_path, 17)
+                        debug_f.write("PDF Exportado com sucesso via ExportAsFixedFormat.\n")
+                    
+                    doc_obj.Close(SaveChanges=True)
+                except Exception as e:
+                    import traceback
+                    error_msg = f"Erro no Word COM: {str(e)}\n{traceback.format_exc()}"
+                    debug_f.write(error_msg + "\n")
+                    print(error_msg)
+                finally:
+                    if word:
+                        try:
+                            word.Quit()
+                        except:
+                            pass
+                    pythoncom.CoUninitialize()
+                    debug_f.write("COM Finalizado.\n")
+            else:
+                debug_f.write("HAS_PYWIN32 é False.\n")
+                print("pywin32 não disponível no main.py.")
                 
         # Clean up temporary cover image
         if cover_path:

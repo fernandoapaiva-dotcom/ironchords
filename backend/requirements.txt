@@ -8,3 +8,5 @@ pydantic
 sqlalchemy
 pdfplumber
 pypiwin32
+Pillow
+python-multipart
