@@ -1,0 +1,27 @@
+
+--- fix_pywin32 at Sun Mar  1 18:12:58 2026 ---
+Venv site-packages: C:\Projetos\Anti Gravity\Caminho das Cifras\.venv\Lib\site-packages
+Checking for pywin32_system32: C:\Projetos\Anti Gravity\Caminho das Cifras\.venv\Lib\site-packages\pywin32_system32
+pywin32_system32 found. Adding to DLL directory...
+add_dll_directory called.
+Added to sys.path: C:\Projetos\Anti Gravity\Caminho das Cifras\.venv\Lib\site-packages\win32
+Added to sys.path: C:\Projetos\Anti Gravity\Caminho das Cifras\.venv\Lib\site-packages\win32\lib
+Added to sys.path: C:\Projetos\Anti Gravity\Caminho das Cifras\.venv\Lib\site-packages\Pythonwin
+
+--- fix_pywin32 at Sun Mar  1 18:12:58 2026 ---
+Venv site-packages: C:\Projetos\Anti Gravity\Caminho das Cifras\.venv\Lib\site-packages
+Checking for pywin32_system32: C:\Projetos\Anti Gravity\Caminho das Cifras\.venv\Lib\site-packages\pywin32_system32
+pywin32_system32 found. Adding to DLL directory...
+add_dll_directory called.
+Added to sys.path: C:\Projetos\Anti Gravity\Caminho das Cifras\.venv\Lib\site-packages\win32
+Added to sys.path: C:\Projetos\Anti Gravity\Caminho das Cifras\.venv\Lib\site-packages\win32\lib
+Added to sys.path: C:\Projetos\Anti Gravity\Caminho das Cifras\.venv\Lib\site-packages\Pythonwin
+
+--- fix_pywin32 at Sun Mar  1 18:12:58 2026 ---
+Venv site-packages: C:\Projetos\Anti Gravity\Caminho das Cifras\.venv\Lib\site-packages
+Checking for pywin32_system32: C:\Projetos\Anti Gravity\Caminho das Cifras\.venv\Lib\site-packages\pywin32_system32
+pywin32_system32 found. Adding to DLL directory...
+add_dll_directory called.
+Added to sys.path: C:\Projetos\Anti Gravity\Caminho das Cifras\.venv\Lib\site-packages\win32
+Added to sys.path: C:\Projetos\Anti Gravity\Caminho das Cifras\.venv\Lib\site-packages\win32\lib
+Added to sys.path: C:\Projetos\Anti Gravity\Caminho das Cifras\.venv\Lib\site-packages\Pythonwin
