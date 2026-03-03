@@ -1104,16 +1104,20 @@ export default function App() {
                         in_acervo: inAcervo
                     });
                 } else {
+                    const errorData = await res.json().catch(() => ({}));
                     finalResults.push({
                         song_name: song.song_name,
                         artist_name: song.artist_name,
-                        status: 'error'
+                        requested_key: song.key,
+                        status: 'error',
+                        suggestions: errorData.detail?.suggestions || []
                     });
                 }
             } catch (err) {
                 finalResults.push({
                     song_name: song.song_name,
                     artist_name: song.artist_name,
+                    requested_key: song.key,
                     status: 'error'
                 });
             }
@@ -1127,6 +1131,55 @@ export default function App() {
         setShowMappingUI(false);
         setBatchProgress({ current: 0, total: 0 });
         if (fileInputRef.current) fileInputRef.current.value = '';
+    };
+
+    const handleTryBatchSuggestion = async (idx, suggestion) => {
+        setBatchLoading(true);
+        try {
+            const res = await fetch('http://localhost:8000/api/music/manual', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    song_name: suggestion.song,
+                    artist_name: suggestion.artist,
+                    key: batchResults[idx].requested_key || 'C',
+                    version: 'Principal',
+                    include_tabs: includeTabs,
+                    capo: 0
+                })
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                const inAcervo = acervo.some(a =>
+                    a.song_name.toLowerCase() === data.song_name.toLowerCase() &&
+                    a.artist_name.toLowerCase() === data.artist_name.toLowerCase()
+                );
+
+                const next = [...batchResults];
+                next[idx] = {
+                    ...data,
+                    status: 'success',
+                    show_chords: true,
+                    in_acervo: inAcervo
+                };
+                setBatchResults(next);
+            } else {
+                const errorData = await res.json().catch(() => ({}));
+                const next = [...batchResults];
+                next[idx] = {
+                    ...next[idx],
+                    song_name: suggestion.song,
+                    artist_name: suggestion.artist,
+                    suggestions: errorData.detail?.suggestions || []
+                };
+                setBatchResults(next);
+            }
+        } catch (err) {
+            console.error("Error trying suggestion:", err);
+        } finally {
+            setBatchLoading(false);
+        }
     };
 
     const handleCoverUpload = (e) => {
@@ -1821,12 +1874,35 @@ export default function App() {
                                                                                         </div>
                                                                                     </div>
                                                                                 ) : (
-                                                                                    <div className="flex items-center space-x-4">
-                                                                                        <span className="text-[10px] font-bold text-red-500 uppercase tracking-widest">Não Encontrada</span>
-                                                                                        <button onClick={() => setBatchFixData({ idx, song_name: item.song_name, artist_name: item.artist_name, song_key: item.requested_key || 'C', content: '', link: '' })} className="px-4 py-2 bg-red-600/20 text-red-500 hover:bg-red-600 hover:text-white border border-red-500/30 font-black uppercase text-[10px] rounded-lg transition-all flex items-center space-x-2">
-                                                                                            <Edit3 className="w-3 h-3" />
-                                                                                            <span>Inserir / Link</span>
-                                                                                        </button>
+                                                                                    <div className="flex flex-col items-end space-y-4">
+                                                                                        <div className="flex items-center space-x-4">
+                                                                                            <span className="text-[10px] font-bold text-red-500 uppercase tracking-widest">Não Encontrada</span>
+                                                                                            <button onClick={() => setBatchFixData({ idx, song_name: item.song_name, artist_name: item.artist_name, song_key: item.requested_key || 'C', content: '', link: '' })} className="px-4 py-2 bg-red-600/20 text-red-500 hover:bg-red-600 hover:text-white border border-red-500/30 font-black uppercase text-[10px] rounded-lg transition-all flex items-center space-x-2">
+                                                                                                <Edit3 className="w-3 h-3" />
+                                                                                                <span>Inserir / Link</span>
+                                                                                            </button>
+                                                                                        </div>
+                                                                                        {item.suggestions && item.suggestions.length > 0 && (
+                                                                                            <div className="flex flex-col items-end space-y-2 group/sug">
+                                                                                                <div className="flex items-center space-x-2">
+                                                                                                    <div className="w-1.5 h-1.5 bg-[#B87333] rounded-full animate-pulse"></div>
+                                                                                                    <span className="text-[9px] font-black text-[#B87333] uppercase tracking-widest opacity-60">Sugestões de Proximidade:</span>
+                                                                                                </div>
+                                                                                                <div className="flex flex-wrap justify-end gap-2 max-w-md">
+                                                                                                    {item.suggestions.slice(0, 3).map((sug, sIdx) => (
+                                                                                                        <button
+                                                                                                            key={sIdx}
+                                                                                                            onClick={() => handleTryBatchSuggestion(idx, sug)}
+                                                                                                            disabled={batchLoading}
+                                                                                                            className="px-4 py-1.5 bg-[#B87333]/5 hover:bg-[#B87333] text-[#B87333] hover:text-white border border-[#B87333]/20 hover:border-[#B87333] text-[9px] font-black uppercase rounded-xl transition-all flex items-center space-x-2 group-hover:scale-105 active:scale-95 disabled:opacity-50"
+                                                                                                        >
+                                                                                                            <Music className="w-3 h-3" />
+                                                                                                            <span>{sug.song} - {sug.artist}</span>
+                                                                                                        </button>
+                                                                                                    ))}
+                                                                                                </div>
+                                                                                            </div>
+                                                                                        )}
                                                                                     </div>
                                                                                 )}
                                                                             </div>

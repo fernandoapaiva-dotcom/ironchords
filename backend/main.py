@@ -13,6 +13,24 @@ import zipfile
 import requests
 import re
 
+import unicodedata
+
+def normalize_text(text: str) -> str:
+    """Removes accents and converts to lowercase for better comparison."""
+    if not text: return ""
+    return "".join(
+        c for c in unicodedata.normalize('NFD', text.lower())
+        if unicodedata.category(c) != 'Mn'
+    )
+
+def clean_song_name(name: str) -> str:
+    """Removes standard fluff like (Live), [Official Video], etc."""
+    if not name: return ""
+    # Remove anything in (...) or [...]
+    name = re.sub(r'[\(\[].*?[\)\]]', '', name)
+    # Remove extra spaces
+    return name.strip()
+
 import scraper
 from scraper import find_chord_cascade, get_cifraclub_versions
 from database import init_db, get_chord, save_chord, get_db_connection, get_all_chords
@@ -116,7 +134,46 @@ def add_manual_music(request: ManualEntryRequest):
         scraped = find_chord_cascade(request.song_name, request.artist_name, version=request.version, include_tabs=request.include_tabs)
         if not scraped:
             if not chord_data:
-                raise HTTPException(status_code=404, detail="Música não encontrada nos sites da busca.")
+                # Try to get suggestions with the new logic
+                song_clean = clean_song_name(request.song_name)
+                artist_clean = clean_song_name(request.artist_name)
+                
+                # 1. Try with the clean query (song + artist)
+                query_full = f"{song_clean} {artist_clean}".strip()
+                s_results_full = search_suggestions(query_full)
+                suggestions = s_results_full.get("suggestions", [])
+                
+                # 2. Try with just the clean song name (finds other artists)
+                s_results_song = search_suggestions(song_clean)
+                suggestions_song = s_results_song.get("suggestions", [])
+                
+                # 3. If still few results, try normalized (no accents)
+                suggestions_norm = []
+                if len(suggestions) + len(suggestions_song) < 5:
+                    query_norm = normalize_text(f"{song_clean} {artist_clean}")
+                    if query_norm != query_full.lower():
+                        s_results_norm = search_suggestions(query_norm)
+                        suggestions_norm = s_results_norm.get("suggestions", [])
+
+                # Merge and deduplicate
+                seen = set()
+                merged = []
+                # Priority: Full query > Song only > Normalized
+                for s in suggestions + suggestions_song + suggestions_norm:
+                    # Deduplicate by song and artist name
+                    key = (s.get("song", "").lower(), s.get("artist", "").lower())
+                    if key not in seen:
+                        seen.add(key)
+                        merged.append(s)
+                
+                raise HTTPException(
+                    status_code=404, 
+                    detail={
+                        "error": "not_found",
+                        "message": "Música não encontrada.",
+                        "suggestions": merged[:10]
+                    }
+                )
             # If scrape failed but we have DB data, we use DB data (fallback)
         else:
             chord_data = scraped
