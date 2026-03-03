@@ -82,6 +82,42 @@ def scrape_cifraclub(song_name: str, artist_url_name: str, version: Optional[str
         }
     except: return None
 
+def scrape_cifraclub_url(url: str) -> Optional[Dict]:
+    if not url.endswith("imprimir.html") and not url.endswith("imprimir.html/"):
+        url = url.rstrip("/") + "/imprimir.html"
+    
+    headers = {"User-Agent": "Mozilla/5.0"}
+    try:
+        response = requests.get(url, headers=headers, timeout=10)
+        if response.status_code != 200: return None
+        soup = BeautifulSoup(response.text, 'html.parser')
+        
+        pre_tag = soup.find('pre')
+        if not pre_tag: return None
+        content = pre_tag.get_text()
+        
+        title_h1 = soup.find('h1', class_='t1')
+        title = title_h1.text.strip() if title_h1 else "Unknown"
+        
+        artist_h2 = soup.find('h2', class_='t3')
+        artist = artist_h2.text.strip() if artist_h2 else "Unknown"
+        
+        key = "C"
+        key_tag = soup.find(id='cifra_tom')
+        if key_tag:
+            k_text = key_tag.get_text().upper().replace("TOM", "").replace(":", "").strip()
+            if k_text: key = k_text.split()[0]
+            
+        return {
+            "song_name": title,
+            "artist_name": artist,
+            "key": key,
+            "capo": 0,
+            "content": clean_text(content),
+            "source": "cifraclub_direct_link"
+        }
+    except: return None
+
 def get_cifraclub_versions(artist_url_name: str, song_slug: str) -> List[Dict]:
     url = f"https://www.cifraclub.com.br/{artist_url_name}/{song_slug}/"
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}

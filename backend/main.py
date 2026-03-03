@@ -382,6 +382,16 @@ async def extract_pdf_table(file: UploadFile = File(...)):
     finally:
         os.remove(tmp_path)
 
+class ScrapeLinkRequest(BaseModel):
+    url: str
+
+@app.post("/api/music/scrape-link")
+def scrape_link_endpoint(request: ScrapeLinkRequest):
+    data = scraper.scrape_cifraclub_url(request.url)
+    if not data:
+        raise HTTPException(status_code=400, detail="Não foi possível extrair a cifra deste link. Verifique se é uma URL válida do CifraClub.")
+    return data
+
 class ChordUpdate(BaseModel):
     song_name: str
     artist_name: str
@@ -393,6 +403,15 @@ class ChordUpdate(BaseModel):
 def get_chords():
     chords = get_all_chords()
     return {"chords": chords}
+
+@app.post("/api/chords")
+def create_chord(data: ChordUpdate):
+    try:
+        from database import save_chord
+        save_chord(data.song_name, data.artist_name, data.song_key, data.content, "manual")
+        return {"status": "ok"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/acervo")
 def get_acervo_alias():

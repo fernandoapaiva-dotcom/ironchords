@@ -1,96 +1,107 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Music, UploadCloud, Plus, FileText, CheckCircle, AlertCircle, FileAudio, Info, X, Guitar, Settings2, Image as ImageIcon, Database, Edit3, Trash2, ArrowRight, Play, Maximize, Pause, ChevronUp, ChevronDown, Download, ArrowLeft, SkipBack, SkipForward, Save, FolderHeart, Flame, Hammer, Sparkles, RefreshCw, Zap, ShieldCheck, Monitor, Tv, Check, LayoutList, Mic } from 'lucide-react';
+﻿import React, { useState, useRef, useEffect } from 'react';
+import { Music, UploadCloud, Plus, FileText, CheckCircle, AlertCircle, FileAudio, Info, X, Guitar, Settings2, Image as ImageIcon, Database, Edit3, Trash2, ArrowRight, Play, Maximize, Maximize2, Pause, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Download, ArrowLeft, SkipBack, SkipForward, Save, FolderHeart, Flame, Hammer, Sparkles, RefreshCw, Zap, ShieldCheck, Monitor, Tv, Check, LayoutList, Mic } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { SVGuitarChord } from 'svguitar';
 
-const ForgeLoading = ({ message = "Forjando conteúdo..." }) => (
-    <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-[#070709]/95 backdrop-blur-3xl animate-in fade-in duration-700">
-        <div className="relative w-80 h-80 flex items-center justify-center">
-            {/* The Solid Anvil */}
-            <div className="absolute bottom-12 w-64 h-32 flex flex-col items-center animate-anvil-vibrate">
-                {/* Anvil Top */}
-                <div className="w-56 h-12 bg-gradient-to-b from-slate-700 to-slate-900 rounded-lg shadow-[0_4px_0_0_rgba(0,0,0,0.5)] border-t border-white/10 relative overflow-hidden">
-                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent -translate-x-full animate-[shimmer_3s_infinite]"></div>
-                    {/* Glowing Metal Spot */}
-                    <div className="absolute left-1/2 top-0 -translate-x-1/2 w-24 h-full bg-[#B87333]/20 blur-xl animate-pulse"></div>
-                </div>
-                {/* Anvil Neck */}
-                <div className="w-32 h-8 bg-slate-800 shadow-inner translate-y-[-2px]"></div>
-                {/* Anvil Base */}
-                <div className="w-64 h-12 bg-slate-900 rounded-b-3xl shadow-2xl border-t border-black/40"></div>
-            </div>
+const MoltenLoading = ({ message = "Forjando conteúdo...", current = 0, total = 0 }) => {
+    const progress = total > 0 ? (current / total) * 100 : 0;
 
-            {/* The Sharper Fire (Layered) */}
-            <div className="absolute bottom-32 flex items-center justify-center pointer-events-none">
-                {/* Outer Glow */}
-                <Flame className="absolute w-40 h-40 text-[#B87333] opacity-20 blur-3xl scale-150 animate-forge-pulse" />
-                {/* Deep Orange Layer */}
-                <Flame className="absolute w-28 h-28 text-[#8B4513] fill-[#8B4513]/40 translate-y-2 opacity-60" />
-                {/* Main Flame */}
-                <Flame className="absolute w-24 h-24 text-[#B87333] fill-[#B87333]/30 animate-forge-pulse" />
-                {/* White Hot Center */}
-                <Flame className="absolute w-12 h-12 text-white/80 fill-white/10 scale-75 animate-pulse" />
-            </div>
+    return (
+        <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-[#070709]/98 backdrop-blur-3xl animate-in fade-in duration-700">
+            <div className="relative w-full max-w-2xl h-[500px] flex items-center justify-center">
 
-            {/* The Striking Hammer */}
-            <div className="absolute top-20 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
-                <div className="animate-hammer-strike origin-bottom-left">
-                    <Hammer className="w-24 h-24 text-slate-300 filter drop-shadow-[0_10px_10px_rgba(0,0,0,0.8)] -rotate-45" />
-                </div>
-            </div>
-
-            {/* Impact Effects (Sparks & Notes Burst) */}
-            <div className="absolute bottom-40 w-full h-40 pointer-events-none">
-                {/* Sparks Burst on Strike */}
-                {[...Array(16)].map((_, i) => (
-                    <div
-                        key={`spark-${i}`}
-                        className="absolute left-1/2 top-1/2 w-1.5 h-1.5 bg-yellow-400 rounded-full animate-spark-burst"
-                        style={{
-                            '--tw-translate-x': `${(Math.random() - 0.5) * 200}px`,
-                            '--tw-translate-y': `${-Math.random() * 100}px`,
-                            animationDelay: '0.15s'
-                        }}
-                    />
-                ))}
-
-                {/* Music Note Eruptions */}
-                {[...Array(6)].map((_, i) => (
-                    <div
-                        key={`note-${i}`}
-                        className="absolute left-1/2 top-1/2 animate-note-eruption"
-                        style={{
-                            '--tw-translate-x': `${(Math.random() - 0.5) * 150}px`,
-                            '--tw-translate-y': `${-Math.random() * 50}px`,
-                            animationDelay: `${0.15 + (i * 0.1)}s`
-                        }}
-                    >
-                        <Music className={`w-${8 + (i % 4)} h-${8 + (i % 4)} ${i % 2 === 0 ? 'text-[#B87333]' : 'text-white/60'}`} />
+                {/* Molten Pot (Bucket) - Positioned so the EDGE is the pour point */}
+                <div className="absolute top-20 left-1/2 -translate-x-32 w-32 h-32 animate-pot-tilt z-20">
+                    <div className="w-full h-full bg-gradient-to-br from-slate-700 to-slate-900 rounded-b-3xl border-2 border-white/5 relative shadow-2xl">
+                        {/* Molten metal inside */}
+                        <div className="absolute inset-2 bottom-0 bg-gradient-to-t from-orange-600 via-[#B87333] to-orange-400 rounded-b-2xl opacity-90 animate-pulse"></div>
+                        {/* Pot Handle */}
+                        <div className="absolute -top-4 left-1/2 -translate-x-1/2 w-36 h-20 border-t-4 border-l-4 border-r-4 border-slate-700 rounded-t-full -z-10"></div>
                     </div>
-                ))}
-            </div>
-        </div>
+                </div>
 
-        {/* Message Container */}
-        <div className="mt-8 text-center space-y-6 z-10">
-            <div className="space-y-2">
-                <h3 className="text-5xl font-black text-white italic tracking-[0.25em] animate-pulse uppercase drop-shadow-[0_0_15px_rgba(184,115,51,0.4)]">
-                    {message}
-                </h3>
-                <div className="flex items-center justify-center space-x-4 opacity-100">
-                    <div className="h-[2px] w-12 bg-gradient-to-r from-transparent to-[#B87333]"></div>
-                    <p className="text-lg text-[#B87333] font-bold uppercase tracking-[0.6em]">Aço ao rubro • Acordes afinados</p>
-                    <div className="h-[2px] w-12 bg-gradient-to-l from-transparent to-[#B87333]"></div>
+                {/* Pouring Liquid - Align with the edge of the pot */}
+                <div className="absolute top-[180px] left-1/2 -translate-x-[45px] w-4 bg-gradient-to-b from-orange-400 via-[#B87333] to-transparent animate-liquid-flow z-10 origin-top shadow-[0_0_15px_rgba(184,115,51,0.5)]"></div>
+
+                {/* Musical Note Mold - Custom SVG for fill logic */}
+                <div className="mt-32 relative">
+                    <div className="animate-note-fill-up flex items-center justify-center">
+                        <svg
+                            viewBox="0 0 24 24"
+                            className="w-48 h-48 animate-note-temper"
+                            stroke="currentColor"
+                            strokeWidth="1.5"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                        >
+                            <path d="M9 18V5l12-2v13"></path>
+                            <circle cx="6" cy="18" r="3"></circle>
+                            <circle cx="18" cy="16" r="3"></circle>
+                        </svg>
+                    </div>
+
+                    {/* Steam Effects - Timed after completion */}
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                        {[...Array(8)].map((_, i) => (
+                            <div
+                                key={i}
+                                className="absolute bg-white/10 blur-2xl rounded-full animate-steam-rise"
+                                style={{
+                                    width: `${40 + Math.random() * 60}px`,
+                                    height: `${40 + Math.random() * 60}px`,
+                                    animationDelay: `${i * 0.4}s`,
+                                    left: `${20 + Math.random() * 60}%`,
+                                    top: '30%'
+                                }}
+                            />
+                        ))}
+                    </div>
                 </div>
             </div>
 
-            {/* Minimal Progress Bar */}
-            <div className="w-64 h-1 bg-white/5 rounded-full mx-auto overflow-hidden border border-white/5">
-                <div className="h-full bg-[#B87333] w-1/3 animate-[shimmer_2s_infinite] origin-left scale-x-150"></div>
+            {/* Message Container */}
+            <div className="mt-4 text-center space-y-8 z-10 w-full max-w-lg px-8">
+                <div className="space-y-4">
+                    <h3 className="text-4xl font-black text-white italic tracking-[0.15em] animate-pulse uppercase drop-shadow-[0_0_20px_rgba(184,115,51,0.4)]">
+                        {message}
+                    </h3>
+
+                    {total > 0 && (
+                        <div className="flex flex-col items-center gap-2">
+                            <div className="flex items-baseline space-x-2">
+                                <span className="text-[#B87333] font-black text-4xl tracking-tighter">
+                                    {current}
+                                </span>
+                                <span className="text-white/20 text-xl font-black">/</span>
+                                <span className="text-white/40 font-black text-2xl tracking-tighter">
+                                    {total}
+                                </span>
+                            </div>
+                            <span className="text-white/30 text-[10px] uppercase font-black tracking-[0.6em]">Músicas Processadas</span>
+                        </div>
+                    )}
+                </div>
+
+                {/* Premium Progress Bar */}
+                <div className="w-full h-4 bg-black/60 rounded-full overflow-hidden border border-white/5 relative shadow-[0_0_30px_rgba(0,0,0,0.5)]">
+                    <div
+                        className="h-full bg-gradient-to-r from-[#B87333] via-orange-400 to-[#B87333] transition-all duration-1000 cubic-bezier(0.34, 1.56, 0.64, 1) relative"
+                        style={{ width: `${progress}%` }}
+                    >
+                        <div className="absolute inset-0 bg-[linear-gradient(90deg,transparent_0%,rgba(255,255,255,0.4)_50%,transparent_100%)] animate-[shimmer_2.5s_infinite]"></div>
+                    </div>
+                </div>
+
+                <div className="flex items-center justify-center space-x-6 opacity-30">
+                    <div className="h-[1px] flex-1 bg-gradient-to-r from-transparent to-white/20"></div>
+                    <p className="text-[10px] text-white font-black uppercase tracking-[1em] whitespace-nowrap">Aço ao Rubro • Acordes Fortes</p>
+                    <div className="h-[1px] flex-1 bg-gradient-to-l from-transparent to-white/20"></div>
+                </div>
             </div>
         </div>
-    </div>
-);
+    );
+};
+
 
 const StepIndicator = ({ currentStep, steps }) => (
     <div className="flex items-center justify-between mb-12 w-full max-w-4xl mx-auto px-4">
@@ -132,6 +143,8 @@ export default function App() {
     const [isFullScreenPlayer, setIsFullScreenPlayer] = useState(false);
     const [isTransposing, setIsTransposing] = useState(false);
     const [isGenerating, setIsGenerating] = useState(false);
+    const [forgeMessage, setForgeMessage] = useState("Forjando conteúdo...");
+    const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0 });
     const [downloadUrl, setDownloadUrl] = useState(null);
     const [currentStep, setCurrentStep] = useState(1);
 
@@ -152,6 +165,14 @@ export default function App() {
     const [showSuggestions, setShowSuggestions] = useState(false);
     const [availableVersions, setAvailableVersions] = useState([{ name: 'Principal', key: 'Principal' }]);
     const [manualCapo, setManualCapo] = useState(0);
+    const [manualPreviewSong, setManualPreviewSong] = useState(null);
+    const [stagedSongs, setStagedSongs] = useState([]);
+    const [manualScrollSpeed, setManualScrollSpeed] = useState(1);
+    const [isManualAutoScrolling, setIsManualAutoScrolling] = useState(false);
+    const [manualFontSize, setManualFontSize] = useState(18);
+    const [isManualFullscreen, setIsManualFullscreen] = useState(false);
+    const [chordDiagramOverlay, setChordDiagramOverlay] = useState(null);
+    const manualScrollContainerRef = useRef(null);
 
     // Batch Form State
     const [batchLoading, setBatchLoading] = useState(false);
@@ -163,10 +184,16 @@ export default function App() {
     const [batchHeaders, setBatchHeaders] = useState([]);
     const [batchMapping, setBatchMapping] = useState({ song_name: '', artist_name: '', key: '' });
     const [showMappingUI, setShowMappingUI] = useState(false);
+    const [batchResults, setBatchResults] = useState([]);
+    const [showBatchReview, setShowBatchReview] = useState(false);
+    const [batchFixData, setBatchFixData] = useState(null);
 
     // Acervo State
     const [acervo, setAcervo] = useState([]);
     const [acervoLoading, setAcervoLoading] = useState(false);
+    const [batchLinkLoading, setBatchLinkLoading] = useState(false);
+
+    // Filter Suggestions State
     const [editingChord, setEditingChord] = useState(null);
     const [editFormData, setEditFormData] = useState({ song_name: '', artist_name: '', song_key: '', content: '' });
 
@@ -220,6 +247,17 @@ export default function App() {
         }
         return () => clearInterval(interval);
     }, [activeTab, isAutoScrolling, scrollSpeed, micEnabled, micLevel, selectedManualIndex]);
+
+    // Manual Preview AutoScroll Effect
+    useEffect(() => {
+        let interval;
+        if (activeTab === 'manual' && isManualAutoScrolling && manualScrollContainerRef.current) {
+            interval = setInterval(() => {
+                manualScrollContainerRef.current.scrollTop += manualScrollSpeed;
+            }, 50);
+        }
+        return () => clearInterval(interval);
+    }, [activeTab, isManualAutoScrolling, manualScrollSpeed]);
 
     // Mic Level & Frequency Listener
     useEffect(() => {
@@ -351,7 +389,7 @@ export default function App() {
                 if (micEnabled && isAnchored && next > (lastVoiceMatchedIndexRef.current + maxLeashLines)) return;
                 const currentSong = songs[songIdx];
                 if (currentSong) {
-                    const lines = currentSong.content.split('\n');
+                    const lines = (currentSong.content || "").split('\n');
                     if (next < lines.length) {
                         let targetIndex = next;
                         while (targetIndex < lines.length && (lines[targetIndex].match(/^[a-g][b#]?\s/i) || lines[targetIndex].trim().length < 2)) {
@@ -433,23 +471,72 @@ export default function App() {
 
     const transposeSong = async (index, semitones) => {
         const song = songs[index];
-        if (!song || !song.requested_key || isTransposing) return;
+        if (!song) return;
+        const currentKeyToUse = song.requested_key || song.song_key || 'C';
         setIsTransposing(true);
         try {
             const res = await fetch('http://localhost:8000/api/transpose', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ content: song.content, current_key: song.requested_key, semitones: semitones })
+                body: JSON.stringify({ content: song.content, current_key: currentKeyToUse, semitones: semitones })
             });
             const data = await res.json();
             if (data.transposed_content) {
                 const newSongs = [...songs];
                 newSongs[index].content = data.transposed_content;
                 newSongs[index].requested_key = data.new_key;
+                let s_key = data.new_key;
+                if (newSongs[index].capo) {
+                    const NOTES_ARR = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+                    let baseMatch = s_key.match(/([A-G][b#]?)/i);
+                    let base = baseMatch ? baseMatch[1] : null;
+                    if (base) {
+                        let idx = NOTES_ARR.indexOf(base);
+                        if (idx !== -1) {
+                            let final_idx = (idx + newSongs[index].capo) % 12;
+                            s_key = s_key.replace(base, NOTES_ARR[final_idx]);
+                        }
+                    }
+                }
+                newSongs[index].sounding_key = s_key;
                 setSongs(newSongs);
             }
         } catch (err) { console.error(err); }
         finally { setIsTransposing(false); }
+    };
+
+    const transposeBatchSong = async (index, semitones) => {
+        const item = batchResults[index];
+        if (!item || item.status !== 'success') return;
+        const currentKeyToUse = item.sounding_key || item.requested_key || item.original_key || 'C';
+        try {
+            const res = await fetch('http://localhost:8000/api/transpose', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ content: item.content, current_key: currentKeyToUse, semitones: semitones })
+            });
+            const data = await res.json();
+            if (data.transposed_content) {
+                const next = [...batchResults];
+                next[index].content = data.transposed_content;
+                next[index].requested_key = data.new_key;
+                let s_key = data.new_key;
+                if (next[index].capo) {
+                    const NOTES_ARR = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+                    let baseMatch = s_key.match(/([A-G][b#]?)/i);
+                    let base = baseMatch ? baseMatch[1] : null;
+                    if (base) {
+                        let i_idx = NOTES_ARR.indexOf(base);
+                        if (i_idx !== -1) {
+                            let final_idx = (i_idx + next[index].capo) % 12;
+                            s_key = s_key.replace(base, NOTES_ARR[final_idx]);
+                        }
+                    }
+                }
+                next[index].sounding_key = s_key;
+                setBatchResults(next);
+            }
+        } catch (err) { console.error(err); }
     };
 
     const COMMON_CHORDS_MAP = {
@@ -582,8 +669,19 @@ export default function App() {
         } catch (err) { alert(err); }
     };
 
-    const handleManualSubmit = async (e) => {
-        e.preventDefault();
+    // Auto-update Manual Preview when Capo or Tabs change
+    useEffect(() => {
+        if (manualPreviewSong && activeTab === 'manual') {
+            handleManualSubmit();
+        }
+    }, [manualCapo, includeTabs]);
+
+    const handleManualSubmit = async (e, songNameOverride, artistNameOverride, keyOverride) => {
+        if (e) e.preventDefault();
+        const useSongName = songNameOverride || songName;
+        const useArtistName = artistNameOverride || artistName;
+        const useKey = keyOverride || songKey;
+        if (!useSongName || !useArtistName) return;
         setManualLoading(true);
         setManualError('');
         try {
@@ -591,9 +689,9 @@ export default function App() {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    song_name: songName,
-                    artist_name: artistName,
-                    key: songKey,
+                    song_name: useSongName,
+                    artist_name: useArtistName,
+                    key: useKey,
                     version: songVersion,
                     include_tabs: includeTabs,
                     capo: manualCapo
@@ -605,14 +703,12 @@ export default function App() {
                 ...data,
                 status: 'success',
                 show_chords: true,
-                sounding_key: data.sounding_key || data.requested_key || data.original_key,
-                song_key: data.original_key || data.requested_key,
+                sounding_key: data.sounding_key || data.requested_key || data.original_key || useKey,
+                requested_key: data.requested_key || data.original_key || useKey,
+                song_key: data.original_key || data.requested_key || useKey,
                 capo: data.capo || manualCapo
             };
-            setSongs([...songs, newSong]);
-            setSongName(''); setArtistName(''); setSongKey('C');
-            setSongVersion('Principal');
-            setManualCapo(0);
+            setManualPreviewSong(newSong);
         } catch (err) { setManualError(err.message); }
         finally { setManualLoading(false); }
     };
@@ -631,6 +727,13 @@ export default function App() {
                     method: 'POST',
                     body: formData
                 });
+
+                if (!res.ok) {
+                    let etext = await res.text();
+                    try { etext = JSON.parse(etext).detail || etext; } catch (e) { }
+                    throw new Error(etext);
+                }
+
                 const data = await res.json();
                 if (data.headers && data.rows) {
                     setBatchHeaders(data.headers);
@@ -655,7 +758,10 @@ export default function App() {
                         setShowMappingUI(true);
                     }
                 } catch (err) { setBatchError("Erro ao processar arquivo."); }
-                finally { setBatchLoading(false); }
+                finally {
+                    setBatchLoading(false);
+                    if (fileInputRef.current) fileInputRef.current.value = '';
+                }
             };
             reader.readAsBinaryString(file);
         }
@@ -663,23 +769,69 @@ export default function App() {
 
     const handleBatchProcess = async () => {
         setBatchLoading(true);
-        const songsPayload = batchRawData.map(row => ({
-            song_name: String(row[batchMapping.song_name] || ''),
-            artist_name: String(row[batchMapping.artist_name] || ''),
-            key: String(row[batchMapping.key] || ''),
+        setForgeMessage("Vasculhando Internet pelo Lote...");
+
+        const songsToProcess = batchRawData.map(row => ({
+            song_name: String(row[batchMapping.song_name] || '').trim(),
+            artist_name: String(row[batchMapping.artist_name] || '').trim(),
+            key: String(row[batchMapping.key] || '').trim(),
             version: 'Principal',
-            include_tabs: includeTabs
+            include_tabs: includeTabs,
+            capo: 0
         })).filter(s => s.song_name && s.key);
-        try {
-            const res = await fetch('http://localhost:8000/api/music/batch', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ songs: songsPayload })
-            });
-            const data = await res.json();
-            setSongs([...songs, ...data.results.map(s => ({ ...s, show_chords: true }))]);
-        } catch (err) { setBatchError(err.message); }
-        finally { setBatchLoading(false); setShowMappingUI(false); }
+
+        setBatchProgress({ current: 0, total: songsToProcess.length });
+        setIsGenerating(true);
+
+        const finalResults = [];
+
+        // Process one by one to show progress
+        for (let i = 0; i < songsToProcess.length; i++) {
+            const song = songsToProcess[i];
+            try {
+                const res = await fetch('http://localhost:8000/api/music/manual', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(song)
+                });
+
+                if (res.ok) {
+                    const data = await res.json();
+                    const inAcervo = acervo.some(a =>
+                        a.song_name.toLowerCase() === data.song_name.toLowerCase() &&
+                        a.artist_name.toLowerCase() === data.artist_name.toLowerCase()
+                    );
+
+                    finalResults.push({
+                        ...data,
+                        status: 'success',
+                        show_chords: true,
+                        in_acervo: inAcervo
+                    });
+                } else {
+                    finalResults.push({
+                        song_name: song.song_name,
+                        artist_name: song.artist_name,
+                        status: 'error'
+                    });
+                }
+            } catch (err) {
+                finalResults.push({
+                    song_name: song.song_name,
+                    artist_name: song.artist_name,
+                    status: 'error'
+                });
+            }
+            setBatchProgress(prev => ({ ...prev, current: i + 1 }));
+        }
+
+        setBatchResults(finalResults);
+        setShowBatchReview(true);
+        setBatchLoading(false);
+        setIsGenerating(false);
+        setShowMappingUI(false);
+        setBatchProgress({ current: 0, total: 0 });
+        if (fileInputRef.current) fileInputRef.current.value = '';
     };
 
     const handleCoverUpload = (e) => {
@@ -689,6 +841,7 @@ export default function App() {
 
     const handleGenerateDocument = async () => {
         if (songs.length === 0) return;
+        setForgeMessage("Forjando peças em metal quente...");
         setIsGenerating(true);
         try {
             const formData = new FormData();
@@ -698,6 +851,16 @@ export default function App() {
             formData.append('export_format', exportFormat);
             if (coverImage) formData.append('cover_image', coverImage);
             const res = await fetch('http://localhost:8000/api/generate_book', { method: 'POST', body: formData });
+
+            if (!res.ok) {
+                let errText = await res.text();
+                try {
+                    const errObj = JSON.parse(errText);
+                    errText = errObj.detail || errText;
+                } catch (e) { }
+                throw new Error("Erro no servidor: " + errText);
+            }
+
             const blob = await res.blob();
             setDownloadUrl(window.URL.createObjectURL(blob));
         } catch (err) { alert(err.message); }
@@ -715,7 +878,7 @@ export default function App() {
 
     return (
         <div className="min-h-screen bg-[#070709] bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] text-slate-300 font-sans selection:bg-[#B87333]/30 selection:text-white overflow-x-hidden">
-            {isGenerating && <ForgeLoading message="Forjando conteúdo..." />}
+            {isGenerating && <MoltenLoading message={forgeMessage} current={batchProgress.current} total={batchProgress.total} />}
             <main className="max-w-7xl mx-auto px-6 pt-32 pb-20 relative">
                 {/* Visual Header */}
                 <div className="absolute top-10 left-1/2 -translate-x-1/2 flex flex-col items-center space-y-4">
@@ -811,7 +974,7 @@ export default function App() {
                             <div className="flex-1 relative flex flex-col bg-[url('https://www.transparenttextures.com/patterns/black-paper.png')]">
                                 <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-16 scroll-smooth scrollbar-none pb-48">
                                     <div className="max-w-4xl mx-auto space-y-1">
-                                        {currentSong?.content.split('\n').map((line, lIdx) => {
+                                        {(currentSong?.content || "").split('\n').map((line, lIdx) => {
                                             const isChordLine = line.match(/^[A-G][b#]?(maj|min|m|7|sus|dim|aug)?/i);
                                             const isActive = currentLineIndex === lIdx;
                                             return (
@@ -890,7 +1053,7 @@ export default function App() {
                         <button onClick={() => setActiveTab('manual')} className="absolute top-10 right-10 p-5 bg-white/5 hover:bg-white/10 rounded-2xl text-white opacity-0 hover:opacity-100 transition-all"><X className="w-8 h-8" /></button>
                     </div>
                 ) : (
-                    <>
+                    <div className="selection-branch-root">
                         <StepIndicator currentStep={currentStep} steps={["Estoque", "Seleção", "Projeção", "Engrenagens", "Finalizar"]} />
                         <div className="min-h-[600px] flex flex-col">
 
@@ -911,108 +1074,343 @@ export default function App() {
                                         </div>
                                         <div className="min-h-[400px]">
                                             {activeTab === 'manual' && (
-                                                <form onSubmit={handleManualSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-8 animate-in fade-in duration-500">
-                                                    <div className="space-y-6">
-                                                        <div className="relative">
-                                                            <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2 ml-1">Nome da Música</label>
-                                                            <input
-                                                                type="text" required value={songName}
-                                                                onChange={e => { setSongName(e.target.value); setShowSuggestions(true); }}
-                                                                onFocus={() => setShowSuggestions(true)}
-                                                                onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
-                                                                className="w-full bg-black/40 border border-white/10 rounded-2xl px-5 py-5 text-white focus:ring-2 focus:ring-[#B87333]/40 outline-none transition-all font-bold" placeholder="Ex: Mil Acasos"
-                                                            />
-                                                            {showSuggestions && suggestions.length > 0 && (
-                                                                <div className="absolute z-[100] w-full mt-2 bg-[#16161D] border border-white/10 rounded-[24px] shadow-[0_20px_50px_rgba(0,0,0,0.5)] overflow-hidden backdrop-blur-3xl animate-in fade-in zoom-in-95 duration-300">
-                                                                    <div className="p-4 border-b border-white/5 bg-white/[0.02]">
-                                                                        <span className="text-[9px] font-black text-[#B87333] uppercase tracking-[0.3em]">Principais Resultados</span>
-                                                                    </div>
-                                                                    <div className="max-h-[300px] overflow-y-auto scrollbar-thin">
-                                                                        {suggestions.map((item, idx) => (
-                                                                            <button
-                                                                                key={idx} type="button"
-                                                                                onClick={() => {
-                                                                                    setSongName(item.song);
-                                                                                    setArtistName(item.artist);
-                                                                                    if (item.key) setSongKey(normalizeNote(item.key));
-                                                                                    else fetchSongMetadata(item.song, item.artist);
-                                                                                    setShowSuggestions(false);
-                                                                                }}
-                                                                                className="w-full text-left px-6 py-4 hover:bg-[#B87333]/10 transition-all border-b border-white/5 last:border-none flex items-center justify-between group active:bg-[#B87333]/20"
-                                                                            >
-                                                                                <div className="flex items-center space-x-4">
-                                                                                    <div className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center border border-white/5 group-hover:border-[#B87333]/40 group-hover:bg-[#B87333]/10 transition-all">
-                                                                                        <Music className="w-4 h-4 text-slate-500 group-hover:text-[#B87333]" />
+                                                <div className="space-y-10 animate-in fade-in duration-700">
+                                                    {/* Search Form */}
+                                                    <form onSubmit={handleManualSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-8 bg-black/40 p-8 rounded-[32px] border border-white/5 shadow-xl relative overflow-hidden">
+                                                        <div className="absolute top-0 right-0 w-32 h-32 bg-[#B87333]/5 rounded-bl-[100px] pointer-events-none"></div>
+                                                        <div className="space-y-6 relative z-10">
+                                                            <div className="relative">
+                                                                <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2 ml-1">Nome da Música</label>
+                                                                <input
+                                                                    type="text" required value={songName}
+                                                                    onChange={e => { setSongName(e.target.value); setShowSuggestions(true); }}
+                                                                    onFocus={() => setShowSuggestions(true)}
+                                                                    onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                                                                    className="w-full bg-black/60 border border-white/10 rounded-2xl px-5 py-5 text-white focus:ring-2 focus:ring-[#B87333]/40 outline-none transition-all font-bold placeholder:text-slate-700" placeholder="Ex: Mil Acasos"
+                                                                />
+                                                                {showSuggestions && suggestions.length > 0 && (
+                                                                    <div className="absolute z-[100] w-full mt-2 bg-[#16161D] border border-white/10 rounded-[24px] shadow-[0_20px_50px_rgba(0,0,0,0.5)] overflow-hidden backdrop-blur-3xl animate-in fade-in zoom-in-95 duration-300">
+                                                                        <div className="p-4 border-b border-white/5 bg-white/[0.02]">
+                                                                            <span className="text-[9px] font-black text-[#B87333] uppercase tracking-[0.3em]">Principais Resultados</span>
+                                                                        </div>
+                                                                        <div className="max-h-[300px] overflow-y-auto scrollbar-thin">
+                                                                            {suggestions.map((item, idx) => (
+                                                                                <button
+                                                                                    key={idx} type="button"
+                                                                                    onClick={() => {
+                                                                                        const resolvedKey = item.key ? normalizeNote(item.key) : songKey;
+                                                                                        setSongName(item.song);
+                                                                                        setArtistName(item.artist);
+                                                                                        if (item.key) setSongKey(resolvedKey);
+                                                                                        else fetchSongMetadata(item.song, item.artist);
+                                                                                        setShowSuggestions(false);
+                                                                                        // Auto-trigger search immediately after selecting a suggestion
+                                                                                        setTimeout(() => handleManualSubmit(null, item.song, item.artist, resolvedKey), 100);
+                                                                                    }}
+                                                                                    className="w-full text-left px-6 py-4 hover:bg-[#B87333]/10 transition-all border-b border-white/5 last:border-none flex items-center justify-between group active:bg-[#B87333]/20"
+                                                                                >
+                                                                                    <div className="flex items-center space-x-4">
+                                                                                        <div className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center border border-white/5 group-hover:border-[#B87333]/40 group-hover:bg-[#B87333]/10 transition-all">
+                                                                                            <Music className="w-4 h-4 text-slate-500 group-hover:text-[#B87333]" />
+                                                                                        </div>
+                                                                                        <div className="flex flex-col">
+                                                                                            <span className="text-xs font-black text-white uppercase italic tracking-tighter group-hover:text-[#B87333] transition-colors">{item.song}</span>
+                                                                                            <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">{item.artist}</span>
+                                                                                        </div>
                                                                                     </div>
-                                                                                    <div className="flex flex-col">
-                                                                                        <span className="text-xs font-black text-white uppercase italic tracking-tighter group-hover:text-[#B87333] transition-colors">{item.song}</span>
-                                                                                        <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">{item.artist}</span>
+                                                                                    <div className="flex items-center space-x-3">
+                                                                                        <span className="text-[8px] font-black text-slate-700 uppercase tracking-tighter bg-white/5 px-2 py-1 rounded border border-white/5 group-hover:border-[#B87333]/20 group-hover:text-[#B87333]/50">{item.key || 'TOM'}</span>
+                                                                                        <ArrowRight className="w-3 h-3 text-[#B87333] opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all" />
                                                                                     </div>
-                                                                                </div>
-                                                                                <div className="flex items-center space-x-3">
-                                                                                    <span className="text-[8px] font-black text-slate-700 uppercase tracking-tighter bg-white/5 px-2 py-1 rounded border border-white/5 group-hover:border-[#B87333]/20 group-hover:text-[#B87333]/50">{item.key || 'TOM'}</span>
-                                                                                    <ArrowRight className="w-3 h-3 text-[#B87333] opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all" />
-                                                                                </div>
-                                                                            </button>
-                                                                        ))}
+                                                                                </button>
+                                                                            ))}
+                                                                        </div>
                                                                     </div>
-                                                                    <div className="p-3 bg-black/40 text-center">
-                                                                        <p className="text-[8px] font-bold text-slate-600 uppercase tracking-widest">Pressione ENTER para buscar no Acervo</p>
-                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                            <div>
+                                                                <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2 ml-1">Artista / Banda</label>
+                                                                <input
+                                                                    type="text" required value={artistName}
+                                                                    onChange={e => setArtistName(e.target.value)}
+                                                                    className="w-full bg-black/60 border border-white/10 rounded-2xl px-5 py-5 text-white focus:ring-2 focus:ring-[#B87333]/40 outline-none transition-all font-bold placeholder:text-slate-700" placeholder="Ex: Skank"
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                        <div className="space-y-6 relative z-10">
+                                                            <div className="grid grid-cols-2 gap-4">
+                                                                <div>
+                                                                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2 ml-1">Tom Original</label>
+                                                                    <select value={songKey} onChange={e => setSongKey(e.target.value)} className="w-full bg-black/60 border border-white/10 rounded-2xl px-5 py-5 text-white outline-none cursor-pointer font-bold appearance-none">
+                                                                        {["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"].map(k => <option key={k} value={k} className="bg-[#1A1A1A]">{k}</option>)}
+                                                                    </select>
+                                                                </div>
+                                                                <div>
+                                                                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2 ml-1">Capo</label>
+                                                                    <select value={manualCapo} onChange={e => setManualCapo(Number(e.target.value))} className="w-full bg-black/60 border border-white/10 rounded-2xl px-5 py-5 text-white outline-none cursor-pointer font-bold appearance-none">
+                                                                        {[...Array(13)].map((_, i) => <option key={i} value={i} className="bg-[#1A1A1A]">{i === 0 ? 'Sem Capo' : `${i}ª Casa`}</option>)}
+                                                                    </select>
+                                                                </div>
+                                                                <div className="flex flex-col justify-center">
+                                                                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2 ml-1">Tablaturas</label>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => setIncludeTabs(!includeTabs)}
+                                                                        className={`w-full py-5 rounded-2xl border transition-all font-black uppercase text-[10px] tracking-widest ${includeTabs ? 'bg-[#B87333]/20 border-[#B87333] text-[#B87333]' : 'bg-black/60 border-white/10 text-slate-600'}`}
+                                                                    >
+                                                                        {includeTabs ? 'Ativadas' : 'Desativar'}
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                            {availableVersions && availableVersions.length > 1 && (
+                                                                <div>
+                                                                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2 ml-1">Versão</label>
+                                                                    <select value={songVersion} onChange={e => setSongVersion(e.target.value)} className="w-full bg-black/60 border border-white/10 rounded-2xl px-5 py-5 text-white outline-none cursor-pointer font-bold appearance-none">
+                                                                        {availableVersions.map(v => <option key={v.key} value={v.key} className="bg-[#1A1A1A]">{v.name}</option>)}
+                                                                    </select>
                                                                 </div>
                                                             )}
+                                                            {/* Manual search indicator - auto-triggers on suggestion select */}
+                                                            {manualLoading && (
+                                                                <div className="w-full py-4 flex items-center justify-center space-x-3 text-[#B87333]">
+                                                                    <RefreshCw className="w-5 h-5 animate-spin" />
+                                                                    <span className="text-[10px] font-black uppercase tracking-widest">Buscando cifra...</span>
+                                                                </div>
+                                                            )}
+                                                            {/* Hidden submit for keyboard Enter support */}
+                                                            <button type="submit" disabled={manualLoading} className="sr-only" aria-hidden="true">Buscar</button>
                                                         </div>
-                                                        <div>
-                                                            <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2 ml-1">Artista / Banda</label>
-                                                            <input
-                                                                type="text" required value={artistName}
-                                                                onChange={e => setArtistName(e.target.value)}
-                                                                className="w-full bg-black/40 border border-white/10 rounded-2xl px-5 py-5 text-white focus:ring-2 focus:ring-[#B87333]/40 outline-none transition-all font-bold" placeholder="Ex: Skank"
-                                                            />
+                                                    </form>
+
+                                                    {/* Live Preview Area */}
+                                                    {manualPreviewSong && (
+                                                        <div className={`${isManualFullscreen ? 'fixed inset-0 z-[9999] bg-[#0A0A0F]' : 'bg-[#16161D] border border-white/10 rounded-[40px] shadow-2xl'} animate-in fade-in slide-in-from-top-10 duration-700 overflow-hidden flex flex-col`}>
+                                                            {/* Preview Controls */}
+                                                            <div className="bg-black/60 border-b border-white/10 p-6 flex flex-wrap items-center justify-between gap-6 relative z-20">
+                                                                <div className="flex items-center space-x-6">
+                                                                    <div className="w-2 h-10 bg-[#B87333] rounded-full shadow-[0_0_15px_rgba(184,115,51,0.5)]"></div>
+                                                                    <div>
+                                                                        <div className="flex items-center space-x-3">
+                                                                            <h4 className="text-xl font-black text-white uppercase italic tracking-tighter line-clamp-1">{manualPreviewSong.song_name}</h4>
+                                                                            {manualPreviewSong.capo > 0 && (
+                                                                                <span className="bg-[#B87333]/20 text-[#B87333] text-[9px] font-black px-2 py-0.5 rounded border border-[#B87333]/30 uppercase tracking-widest">Capo {manualPreviewSong.capo}ª Casa</span>
+                                                                            )}
+                                                                        </div>
+                                                                        <p className="text-[10px] font-bold text-[#B87333] uppercase tracking-widest mt-1 opacity-60 italic">{manualPreviewSong.artist_name}</p>
+                                                                    </div>
+                                                                </div>
+
+                                                                <div className="flex items-center space-x-6">
+                                                                    {/* Navigation Arrows */}
+                                                                    {songs.length > 1 && (
+                                                                        <div className="flex items-center space-x-2 mr-4">
+                                                                            <button
+                                                                                onClick={() => {
+                                                                                    const idx = songs.findIndex(s => s.song_name === manualPreviewSong.song_name);
+                                                                                    const prevIdx = (idx - 1 + songs.length) % songs.length;
+                                                                                    setManualPreviewSong(songs[prevIdx]);
+                                                                                }}
+                                                                                className="w-10 h-10 bg-white/5 hover:bg-white/10 rounded-xl flex items-center justify-center text-white transition-all border border-white/10"
+                                                                            >
+                                                                                <ChevronLeft className="w-5 h-5" />
+                                                                            </button>
+                                                                            <button
+                                                                                onClick={() => {
+                                                                                    const idx = songs.findIndex(s => s.song_name === manualPreviewSong.song_name);
+                                                                                    const nextIdx = (idx + 1) % songs.length;
+                                                                                    setManualPreviewSong(songs[nextIdx]);
+                                                                                }}
+                                                                                className="w-10 h-10 bg-white/5 hover:bg-white/10 rounded-xl flex items-center justify-center text-white transition-all border border-white/10"
+                                                                            >
+                                                                                <ChevronRight className="w-5 h-5" />
+                                                                            </button>
+                                                                        </div>
+                                                                    )}
+
+                                                                    <div className="flex items-center space-x-8">
+                                                                        {/* Fullscreen Toggle */}
+                                                                        <button
+                                                                            onClick={() => setIsManualFullscreen(!isManualFullscreen)}
+                                                                            className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${isManualFullscreen ? 'bg-red-900/40 text-red-500 border-red-500/30' : 'bg-white/5 text-slate-500 hover:text-white border-white/10'} border`}
+                                                                        >
+                                                                            {isManualFullscreen ? <X className="w-6 h-6" /> : <Maximize2 className="w-5 h-5" />}
+                                                                        </button>
+
+                                                                        {/* Font Size */}
+                                                                        <div className="flex flex-col items-center">
+                                                                            <span className="text-[8px] font-black text-slate-600 uppercase tracking-widest mb-2">Fonte</span>
+                                                                            <div className="flex items-center space-x-2 bg-black/40 p-1 rounded-xl border border-white/5">
+                                                                                <button onClick={() => setManualFontSize(prev => Math.max(10, prev - 1))} className="p-1.5 text-slate-500 hover:text-white transition-all"><ChevronDown className="w-3.5 h-3.5" /></button>
+                                                                                <span className="text-[10px] font-black text-white w-5 text-center">{manualFontSize}</span>
+                                                                                <button onClick={() => setManualFontSize(prev => Math.min(40, prev + 1))} className="p-1.5 text-slate-500 hover:text-white transition-all"><ChevronUp className="w-3.5 h-3.5" /></button>
+                                                                            </div>
+                                                                        </div>
+
+                                                                        {/* Transpose */}
+                                                                        <div className="flex flex-col items-center">
+                                                                            <span className="text-[8px] font-black text-slate-600 uppercase tracking-widest mb-2">Tom</span>
+                                                                            <div className="flex items-center space-x-2 bg-black/40 p-1 rounded-xl border border-white/5">
+                                                                                <button onClick={async () => {
+                                                                                    const song = manualPreviewSong;
+                                                                                    const currentKeyToUse = song.sounding_key || song.song_key || 'C';
+                                                                                    try {
+                                                                                        const res = await fetch('http://localhost:8000/api/transpose', {
+                                                                                            method: 'POST',
+                                                                                            headers: { 'Content-Type': 'application/json' },
+                                                                                            body: JSON.stringify({ content: song.content, current_key: currentKeyToUse, semitones: -1 })
+                                                                                        });
+                                                                                        const data = await res.json();
+                                                                                        if (data.transposed_content) {
+                                                                                            setManualPreviewSong({ ...song, content: data.transposed_content, sounding_key: data.new_key });
+                                                                                        }
+                                                                                    } catch (err) { console.error(err); }
+                                                                                }} className="p-1.5 text-slate-500 hover:text-white transition-all"><ChevronDown className="w-3.5 h-3.5" /></button>
+                                                                                <span className="text-[10px] font-black text-white w-6 text-center italic">{manualPreviewSong.sounding_key || manualPreviewSong.song_key}</span>
+                                                                                <button onClick={async () => {
+                                                                                    const song = manualPreviewSong;
+                                                                                    const currentKeyToUse = song.sounding_key || song.song_key || 'C';
+                                                                                    try {
+                                                                                        const res = await fetch('http://localhost:8000/api/transpose', {
+                                                                                            method: 'POST',
+                                                                                            headers: { 'Content-Type': 'application/json' },
+                                                                                            body: JSON.stringify({ content: song.content, current_key: currentKeyToUse, semitones: 1 })
+                                                                                        });
+                                                                                        const data = await res.json();
+                                                                                        if (data.transposed_content) {
+                                                                                            setManualPreviewSong({ ...song, content: data.transposed_content, sounding_key: data.new_key });
+                                                                                        }
+                                                                                    } catch (err) { console.error(err); }
+                                                                                }} className="p-1.5 text-slate-500 hover:text-white transition-all"><ChevronUp className="w-3.5 h-3.5" /></button>
+                                                                            </div>
+                                                                        </div>
+
+                                                                        {/* Scroll Controls */}
+                                                                        <div className="flex items-center space-x-6 px-8 border-x border-white/5">
+                                                                            <button
+                                                                                onClick={() => setIsManualAutoScrolling(!isManualAutoScrolling)}
+                                                                                className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${isManualAutoScrolling ? 'bg-[#B87333] text-white shadow-xl shadow-[#B87333]/30 scale-105' : 'bg-white/5 text-slate-500 hover:text-white'}`}
+                                                                            >
+                                                                                {isManualAutoScrolling ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 ml-0.5" />}
+                                                                            </button>
+                                                                            <div className="w-28">
+                                                                                <div className="flex items-center justify-between mb-1.5">
+                                                                                    <span className="text-[8px] font-black text-slate-600 uppercase tracking-widest">Velocidade</span>
+                                                                                    <span className="text-[9px] font-black text-white italic">{manualScrollSpeed}x</span>
+                                                                                </div>
+                                                                                <input type="range" min="0.5" max="5" step="0.5" value={manualScrollSpeed} onChange={(e) => setManualScrollSpeed(parseFloat(e.target.value))} className="w-full h-1 bg-white/5 rounded-full appearance-none cursor-pointer accent-[#B87333]" />
+                                                                            </div>
+                                                                        </div>
+
+                                                                        {/* Action Button */}
+                                                                        <button
+                                                                            onClick={() => {
+                                                                                if (manualPreviewSong && !songs.some(s => s.song_name === manualPreviewSong.song_name && s.artist_name === manualPreviewSong.artist_name)) {
+                                                                                    setSongs(prev => [...prev, manualPreviewSong]);
+                                                                                }
+                                                                                // Keep the preview visible, just clear the search fields
+                                                                                setSongName('');
+                                                                                setArtistName('');
+                                                                            }}
+                                                                            className="px-8 py-4 bg-[#B87333] hover:bg-green-600 text-white font-black uppercase text-[10px] tracking-widest rounded-2xl transition-all shadow-xl shadow-[#B87333]/20 flex items-center space-x-3 group"
+                                                                        >
+                                                                            <Plus className="w-4 h-4 group-hover:rotate-90 transition-transform" />
+                                                                            <span>Adicionar à Lista</span>
+                                                                        </button>
+
+                                                                        <button onClick={() => setManualPreviewSong(null)} className="p-4 bg-white/5 hover:bg-red-900/40 text-slate-500 hover:text-red-500 rounded-2xl transition-all border border-white/5" title="Fechar preview"><X className="w-5 h-5" /></button>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+
+                                                            {/* Scrollable Chord Content */}
+                                                            <div ref={manualScrollContainerRef} className="overflow-y-auto p-10 scrollbar-none pb-10" style={{ maxHeight: isManualFullscreen ? 'calc(100vh - 120px)' : '500px' }}>
+                                                                <div className="max-w-3xl mx-auto">
+                                                                    {(manualPreviewSong?.content || "").split('\n').map((line, lIdx) => {
+                                                                        const isChordLine = line.match(/^[A-G][b#]?(maj|min|m|7|sus|dim|aug)?/i);
+                                                                        return (
+                                                                            <pre key={lIdx} className={`font-mono leading-relaxed whitespace-pre-wrap ${isChordLine ? 'text-[#B87333] font-black italic tracking-tight mb-0' : 'text-slate-300 font-medium mb-1'}`} style={{ fontSize: `${manualFontSize}px` }}>
+                                                                                {line || ' '}
+                                                                            </pre>
+                                                                        );
+                                                                    })}
+                                                                </div>
+                                                            </div>
                                                         </div>
-                                                    </div>
-                                                    <div className="space-y-6">
-                                                        <div className="grid grid-cols-2 gap-4">
-                                                            <div>
-                                                                <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2 ml-1">Tom Original</label>
-                                                                <select value={songKey} onChange={e => setSongKey(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-2xl px-5 py-5 text-white outline-none cursor-pointer font-bold">
-                                                                    {["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"].map(k => <option key={k} value={k} className="bg-[#1A1A1A]">{k}</option>)}
-                                                                </select>
+                                                    )}
+
+
+                                                    {/* Error display */}
+                                                    {manualError && (
+                                                        <div className="flex items-center space-x-3 p-4 bg-red-900/20 border border-red-500/30 rounded-2xl animate-in fade-in duration-300">
+                                                            <AlertCircle className="w-5 h-5 text-red-500 shrink-0" />
+                                                            <p className="text-xs font-bold text-red-400">{manualError}</p>
+                                                        </div>
+                                                    )}
+
+                                                    {/* LISTA DE MUSICAS SELECIONADAS */}
+                                                    {songs.length > 0 && (
+                                                        <div className="pt-8 border-t border-white/5 animate-in fade-in slide-in-from-bottom-8 duration-700">
+                                                            <div className="flex items-center justify-between mb-6">
+                                                                <div className="flex items-center space-x-4">
+                                                                    <div className="w-1.5 h-8 bg-[#B87333] rounded-full shadow-[0_0_15px_rgba(184,115,51,0.4)]"></div>
+                                                                    <h3 className="text-xl font-black text-white uppercase italic tracking-tighter">Pecas na Forja</h3>
+                                                                </div>
+                                                                <span className="text-xs font-black bg-[#B87333] text-white py-1.5 px-4 rounded-full shadow-lg shadow-[#B87333]/20 uppercase italic">{songs.length}</span>
                                                             </div>
-                                                            <div>
-                                                                <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2 ml-1">Capo</label>
-                                                                <select value={manualCapo} onChange={e => setManualCapo(Number(e.target.value))} className="w-full bg-black/40 border border-white/10 rounded-2xl px-5 py-5 text-white outline-none cursor-pointer font-bold">
-                                                                    {[...Array(13)].map((_, i) => <option key={i} value={i} className="bg-[#1A1A1A]">{i === 0 ? 'Sem Capo' : `${i}ª Casa`}</option>)}
-                                                                </select>
+                                                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                                                {songs.map((song, i) => (
+                                                                    <button
+                                                                        key={i}
+                                                                        onClick={() => {
+                                                                            setManualPreviewSong(song);
+                                                                            setSongName(song.song_name);
+                                                                            setArtistName(song.artist_name);
+                                                                            setSongKey(song.song_key);
+                                                                            setManualCapo(song.capo || 0);
+                                                                        }}
+                                                                        className={`bg-black/60 border p-5 rounded-[24px] group hover:border-[#B87333]/50 transition-all relative overflow-hidden flex flex-col justify-between text-left ${manualPreviewSong?.song_name === song.song_name && manualPreviewSong?.artist_name === song.artist_name ? 'border-[#B87333]/60' : 'border-white/5'}`}
+                                                                    >
+                                                                        <div className="absolute top-0 right-0 w-16 h-16 bg-[#B87333]/5 rounded-bl-[40px] -mr-4 -mt-4 group-hover:bg-[#B87333]/10 transition-all"></div>
+                                                                        <div className="mb-3 z-10">
+                                                                            <h4 className="font-black text-white text-sm uppercase italic tracking-tighter truncate group-hover:text-[#B87333] transition-colors">{song.song_name}</h4>
+                                                                            <p className="text-[9px] font-bold text-slate-500 uppercase tracking-[0.15em] mt-1 truncate">{song.artist_name}</p>
+                                                                        </div>
+                                                                        <div className="flex items-center justify-between pt-3 border-t border-white/5 z-10 w-full">
+                                                                            <span className="text-[10px] font-black text-white italic">{song.sounding_key || song.song_key}{song.capo > 0 && ` · Capo ${song.capo}`}</span>
+                                                                            <div className="flex items-center space-x-1.5" onClick={e => e.stopPropagation()}>
+                                                                                <button onClick={() => toggleChords(i)} className={`w-7 h-7 flex items-center justify-center rounded-lg border transition-all ${song.show_chords ? 'bg-[#B87333] text-white border-[#B87333]/30' : 'bg-white/5 text-slate-700 border-white/5 hover:text-[#B87333]'}`}><Guitar className="w-3 h-3" /></button>
+                                                                                <button onClick={() => removeSong(i)} className="w-7 h-7 flex items-center justify-center bg-white/5 hover:bg-red-900/40 text-slate-700 hover:text-red-500 rounded-lg border border-white/5 transition-all"><Trash2 className="w-3 h-3" /></button>
+                                                                            </div>
+                                                                        </div>
+                                                                    </button>
+                                                                ))}
                                                             </div>
                                                         </div>
-                                                        {availableVersions && availableVersions.length > 1 && (
-                                                            <div>
-                                                                <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2 ml-1">Versões Disponíveis</label>
-                                                                <select value={songVersion} onChange={e => setSongVersion(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-2xl px-5 py-5 text-white outline-none cursor-pointer font-bold">
-                                                                    {availableVersions.map(v => <option key={v.key} value={v.key} className="bg-[#1A1A1A]">{v.name}</option>)}
-                                                                </select>
-                                                            </div>
-                                                        )}
-                                                        <button type="submit" disabled={manualLoading} className="w-full py-5 bg-[#B87333] hover:bg-[#8B4513] text-white font-black uppercase tracking-widest rounded-2xl transition-all shadow-xl shadow-[#B87333]/20 active:scale-[0.98] mt-auto">
-                                                            {manualLoading ? <RefreshCw className="w-5 h-5 animate-spin mx-auto" /> : "Adicionar à Forja"}
-                                                        </button>
-                                                    </div>
-                                                </form>
+                                                    )}
+                                                </div>
                                             )}
 
                                             {activeTab === 'batch' && (
-                                                <div className="flex flex-col items-center justify-center py-10 space-y-8 animate-in fade-in duration-500">
-                                                    {!showMappingUI ? (
-                                                        <div onClick={() => fileInputRef.current?.click()} className="w-full max-w-2xl border-2 border-dashed border-white/10 hover:border-[#B87333]/50 bg-black/20 rounded-[40px] p-16 flex flex-col items-center justify-center cursor-pointer transition-all group">
+                                                <div className="flex flex-col items-center justify-center py-10 space-y-8 animate-in fade-in duration-500 relative">
+
+                                                    {batchError && (
+                                                        <div className="w-full max-w-2xl bg-red-900/20 border-l-4 border-red-500 p-4 rounded-r-2xl animate-in slide-in-from-top-4 flex items-start space-x-3">
+                                                            <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+                                                            <p className="text-xs font-bold text-red-400">{batchError}</p>
+                                                        </div>
+                                                    )}
+
+                                                    {!showMappingUI && !showBatchReview ? (
+                                                        <div onClick={() => !batchLoading && fileInputRef.current?.click()} className={`w-full max-w-2xl border-2 border-dashed border-white/10 bg-black/20 rounded-[40px] p-16 flex flex-col items-center justify-center transition-all group ${batchLoading ? 'opacity-50 cursor-not-allowed' : 'hover:border-[#B87333]/50 cursor-pointer'}`}>
                                                             <div className="w-20 h-20 bg-[#B87333]/10 rounded-3xl flex items-center justify-center mb-6 border border-[#B87333]/20 group-hover:scale-110 transition-transform">
-                                                                <UploadCloud className="w-10 h-10 text-[#B87333]" />
+                                                                {batchLoading ? <RefreshCw className="w-10 h-10 text-[#B87333] animate-spin" /> : <UploadCloud className="w-10 h-10 text-[#B87333]" />}
                                                             </div>
-                                                            <h3 className="text-xl font-black text-white uppercase tracking-widest">Importação em Massa</h3>
+                                                            <h3 className="text-xl font-black text-white uppercase tracking-widest">{batchLoading ? 'Processando Arquivo...' : 'Importação em Massa'}</h3>
                                                             <p className="text-xs text-slate-500 uppercase font-bold mt-3">PDF, XLSX ou CSV</p>
                                                             <input type="file" ref={fileInputRef} onChange={handleBatchFileSelect} className="hidden" />
                                                         </div>
-                                                    ) : (
+
+                                                    ) : showMappingUI && !showBatchReview ? (
                                                         <div className="w-full max-w-xl bg-black/40 p-8 rounded-[32px] border border-white/5 space-y-6">
                                                             <h4 className="text-xs font-black text-[#B87333] uppercase tracking-widest text-center">Mapear Colunas</h4>
                                                             <div className="space-y-4">
@@ -1028,7 +1426,205 @@ export default function App() {
                                                             </div>
                                                             <div className="flex space-x-4 pt-4">
                                                                 <button onClick={() => setShowMappingUI(false)} className="flex-1 py-4 bg-white/5 text-slate-500 font-black uppercase text-[10px] rounded-xl hover:bg-white/10 transition-all">Voltar</button>
-                                                                <button onClick={handleBatchProcess} className="flex-[2] py-4 bg-[#B87333] text-white font-black uppercase text-[10px] rounded-xl shadow-lg shadow-[#B87333]/20">Processar Lote</button>
+                                                                <button onClick={handleBatchProcess} disabled={batchLoading} className="flex-[2] py-4 bg-[#B87333] hover:bg-[#8B4513] text-white font-black uppercase text-[10px] rounded-xl shadow-lg shadow-[#B87333]/20 flex items-center justify-center disabled:opacity-50">
+                                                                    {batchLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : 'Processar Lote'}
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    ) : showBatchReview ? (
+                                                        <div className="w-full max-w-4xl bg-black/40 p-8 rounded-[32px] border border-white/5 space-y-6">
+                                                            <div className="flex items-center justify-between border-b border-white/10 pb-4">
+                                                                <div className="flex items-center space-x-4">
+                                                                    <div className="w-1.5 h-6 bg-[#B87333] rounded-full shadow-[0_0_15px_rgba(184,115,51,0.4)]"></div>
+                                                                    <h4 className="text-xl font-black text-white uppercase italic tracking-tighter">Revisão do Lote</h4>
+                                                                </div>
+                                                                <div className="flex items-center space-x-4">
+                                                                    <button onClick={() => {
+                                                                        setSongs([...songs, ...batchResults.filter(r => r.status === 'success')]);
+                                                                        setShowBatchReview(false);
+                                                                        setBatchResults([]);
+                                                                    }} className="px-6 py-3 bg-[#B87333] text-white font-black uppercase text-[10px] italic rounded-xl shadow-lg shadow-[#B87333]/20 hover:bg-[#8B4513] transition-all flex items-center">
+                                                                        <Zap className="w-3 h-3 mr-2 inline" /> Integrar à Forja ({batchResults.filter(r => r.status === 'success').length})
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+
+                                                            <div className="grid grid-cols-1 gap-4 max-h-[500px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-[#B87333]/20">
+                                                                {batchResults.map((item, idx) => (
+                                                                    <div key={idx} className={`p-5 rounded-[24px] border ${item.status === 'success' ? 'bg-black/40 border-[#B87333]/30' : 'bg-red-900/10 border-red-500/30'} flex flex-col justify-between transition-all relative overflow-hidden`}>
+                                                                        {item.status === 'success' && <div className="absolute top-0 right-0 w-16 h-16 bg-[#B87333]/5 rounded-bl-[40px] -mr-4 -mt-4 pointer-events-none"></div>}
+                                                                        <div className="flex items-start justify-between relative z-10">
+                                                                            <div className="flex items-center space-x-4 w-1/2">
+                                                                                <div className={`w-12 h-12 rounded-xl flex shrink-0 items-center justify-center border ${item.status === 'success' ? 'bg-[#B87333]/10 border-[#B87333]/20' : 'bg-red-500/10 border-red-500/20'}`}>
+                                                                                    {item.status === 'success' ? <CheckCircle className="w-6 h-6 text-[#B87333]" /> : <AlertCircle className="w-6 h-6 text-red-500" />}
+                                                                                </div>
+                                                                                <div className="min-w-0 flex-1">
+                                                                                    <h5 className="font-black text-white uppercase italic tracking-tighter text-lg truncate">{item.song_name}</h5>
+                                                                                    <div className="flex items-center space-x-3 mt-1">
+                                                                                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest truncate">{item.artist_name}</p>
+                                                                                        {item.in_acervo && <span className="text-[8px] font-black bg-blue-600/20 text-blue-400 px-2 py-0.5 rounded border border-blue-600/30 uppercase whitespace-nowrap" title="Detectado no Acervo Local">Acervo</span>}
+                                                                                    </div>
+                                                                                </div>
+                                                                            </div>
+                                                                            <div className="flex items-center">
+                                                                                {item.status === 'success' ? (
+                                                                                    <div className="flex items-center space-x-4">
+                                                                                        <div className="flex items-center space-x-1.5 bg-black/60 p-2 rounded-xl border border-white/5">
+                                                                                            <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest mr-2">Tom</span>
+                                                                                            <button onClick={() => transposeBatchSong(idx, -1)} className="p-1 hover:text-[#B87333] transition-all"><ChevronDown className="w-3.5 h-3.5" /></button>
+                                                                                            <span className="font-mono font-black text-xs w-8 text-center text-white">{item.sounding_key || item.requested_key}</span>
+                                                                                            <button onClick={() => transposeBatchSong(idx, 1)} className="p-1 hover:text-[#B87333] transition-all"><ChevronUp className="w-3.5 h-3.5" /></button>
+                                                                                        </div>
+                                                                                        <div className="flex items-center space-x-3 bg-black/60 px-3 py-1.5 rounded-xl border border-white/5">
+                                                                                            <span className="text-[9px] font-black text-[#B87333] uppercase">Capo</span>
+                                                                                            <select value={item.capo || 0} onChange={(e) => {
+                                                                                                const next = [...batchResults];
+                                                                                                const c_capo = Number(e.target.value);
+                                                                                                next[idx].capo = c_capo;
+
+                                                                                                let s_key = next[idx].requested_key || next[idx].original_key;
+                                                                                                if (c_capo > 0 && s_key) {
+                                                                                                    const NOTES_ARR = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+                                                                                                    let baseMatch = s_key.match(/([A-G][b#]?)/i);
+                                                                                                    let base = baseMatch ? baseMatch[1] : null;
+                                                                                                    if (base) {
+                                                                                                        let idxx = NOTES_ARR.indexOf(base);
+                                                                                                        if (idxx !== -1) {
+                                                                                                            let final_idx = (idxx + c_capo) % 12;
+                                                                                                            s_key = s_key.replace(base, NOTES_ARR[final_idx]);
+                                                                                                        }
+                                                                                                    }
+                                                                                                }
+                                                                                                next[idx].sounding_key = s_key;
+                                                                                                setBatchResults(next);
+                                                                                            }} className="bg-transparent text-[10px] font-black text-white outline-none cursor-pointer">
+                                                                                                {[...Array(13)].map((_, c) => <option key={c} value={c} className="bg-[#1A1A1A]">{c === 0 ? 'Off' : `${c}ª`}</option>)}
+                                                                                            </select>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                ) : (
+                                                                                    <div className="flex items-center space-x-4">
+                                                                                        <span className="text-[10px] font-bold text-red-500 uppercase tracking-widest">Não Encontrada</span>
+                                                                                        <button onClick={() => setBatchFixData({ idx, song_name: item.song_name, artist_name: item.artist_name, song_key: item.requested_key || 'C', content: '', link: '' })} className="px-4 py-2 bg-red-600/20 text-red-500 hover:bg-red-600 hover:text-white border border-red-500/30 font-black uppercase text-[10px] rounded-lg transition-all flex items-center space-x-2">
+                                                                                            <Edit3 className="w-3 h-3" />
+                                                                                            <span>Inserir / Link</span>
+                                                                                        </button>
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    ) : null}
+
+                                                    {/* Batch Manual Fix Modal */}
+                                                    {batchFixData && (
+                                                        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-[#070709]/90 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-300">
+                                                            <div className="bg-[#16161D] border border-white/10 p-8 rounded-[32px] shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+                                                                <div className="flex items-center justify-between mb-6 shrink-0">
+                                                                    <div className="flex items-center space-x-4">
+                                                                        <div className="w-1.5 h-6 bg-red-500 rounded-full shadow-[0_0_15px_rgba(239,68,68,0.4)]"></div>
+                                                                        <h3 className="text-xl font-black text-white uppercase italic tracking-tighter">Inserção Manual - Lote</h3>
+                                                                    </div>
+                                                                    <button onClick={() => setBatchFixData(null)} className="p-2 bg-white/5 hover:bg-white/10 rounded-xl transition-all border border-white/5"><X className="w-5 h-5 text-slate-400" /></button>
+                                                                </div>
+
+                                                                <div className="space-y-4 flex-1 overflow-y-auto pr-2 scrollbar-thin">
+
+                                                                    <div className="bg-black/20 p-4 rounded-2xl border border-white/5 flex flex-col space-y-3">
+                                                                        <label className="block text-[10px] font-black uppercase text-[#B87333] tracking-widest ml-1">Importar via Link (Opcional)</label>
+                                                                        <div className="flex items-center space-x-3">
+                                                                            <input type="text" placeholder="Cole a URL do CifraClub aqui..." value={batchFixData.link || ''} onChange={e => setBatchFixData({ ...batchFixData, link: e.target.value })} className="flex-1 bg-black/60 border border-white/10 rounded-xl px-4 py-3 text-xs text-white font-mono outline-none focus:border-[#B87333]/50 transition-all" />
+                                                                            <button
+                                                                                disabled={!batchFixData.link || batchLinkLoading}
+                                                                                onClick={async () => {
+                                                                                    setBatchLinkLoading(true);
+                                                                                    try {
+                                                                                        const res = await fetch('http://localhost:8000/api/music/scrape-link', {
+                                                                                            method: 'POST',
+                                                                                            headers: { 'Content-Type': 'application/json' },
+                                                                                            body: JSON.stringify({ url: batchFixData.link })
+                                                                                        });
+                                                                                        const data = await res.json();
+                                                                                        if (res.ok) {
+                                                                                            setBatchFixData(prev => ({
+                                                                                                ...prev,
+                                                                                                song_name: data.song_name,
+                                                                                                artist_name: data.artist_name,
+                                                                                                song_key: data.key,
+                                                                                                content: data.content
+                                                                                            }));
+                                                                                        } else {
+                                                                                            alert(data.detail || "Erro ao importar link");
+                                                                                        }
+                                                                                    } catch (err) { alert("Erro na requisição."); }
+                                                                                    finally { setBatchLinkLoading(false); }
+                                                                                }}
+                                                                                className={`px-6 py-3 font-black uppercase text-[10px] rounded-xl flex items-center transition-all shadow-lg ${(!batchFixData.link || batchLinkLoading) ? 'bg-white/5 text-slate-500 cursor-not-allowed shadow-none' : 'bg-[#B87333] text-white hover:bg-[#8B4513] shadow-[#B87333]/20'}`}>
+                                                                                {batchLinkLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <><Zap className="w-3 h-3 mr-2" /> Extrair</>}
+                                                                            </button>
+                                                                        </div>
+                                                                    </div>
+
+                                                                    <div className="grid grid-cols-2 gap-4">
+                                                                        <div>
+                                                                            <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Artista</label>
+                                                                            <input type="text" value={batchFixData.artist_name} onChange={e => setBatchFixData({ ...batchFixData, artist_name: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white font-bold outline-none" />
+                                                                        </div>
+                                                                        <div>
+                                                                            <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Música</label>
+                                                                            <input type="text" value={batchFixData.song_name} onChange={e => setBatchFixData({ ...batchFixData, song_name: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white font-bold outline-none" />
+                                                                        </div>
+                                                                    </div>
+                                                                    <div>
+                                                                        <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Tom Original da Cifra</label>
+                                                                        <select value={batchFixData.song_key} onChange={e => setBatchFixData({ ...batchFixData, song_key: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white font-bold outline-none">
+                                                                            {["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"].map(k => <option key={k} value={k} className="bg-[#1A1A1A]">{k}</option>)}
+                                                                        </select>
+                                                                    </div>
+                                                                    <div className="flex-1 flex flex-col">
+                                                                        <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Cifra Bruta</label>
+                                                                        <textarea value={batchFixData.content} onChange={e => setBatchFixData({ ...batchFixData, content: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white outline-none font-mono text-xs leading-relaxed min-h-[250px] resize-none scrollbar-thin" placeholder="Cole a cifra estruturada aqui..."></textarea>
+                                                                    </div>
+                                                                </div>
+
+                                                                <button onClick={async () => {
+                                                                    if (!batchFixData.content.trim()) return;
+                                                                    try {
+                                                                        await fetch('http://localhost:8000/api/chords', {
+                                                                            method: 'POST',
+                                                                            headers: { 'Content-Type': 'application/json' },
+                                                                            body: JSON.stringify({
+                                                                                song_name: batchFixData.song_name,
+                                                                                artist_name: batchFixData.artist_name,
+                                                                                song_key: batchFixData.song_key,
+                                                                                content: batchFixData.content,
+                                                                                capo: 0
+                                                                            })
+                                                                        });
+                                                                        // Update acervo list so it shows 'No Acervo' optionally globally
+                                                                        fetchAcervo();
+                                                                    } catch (e) { console.error(e); }
+
+                                                                    const next = [...batchResults];
+                                                                    next[batchFixData.idx] = {
+                                                                        ...next[batchFixData.idx],
+                                                                        song_name: batchFixData.song_name,
+                                                                        artist_name: batchFixData.artist_name,
+                                                                        requested_key: batchFixData.song_key,
+                                                                        original_key: batchFixData.song_key,
+                                                                        sounding_key: batchFixData.song_key,
+                                                                        content: batchFixData.content,
+                                                                        status: 'success',
+                                                                        in_acervo: true
+                                                                    };
+                                                                    setBatchResults(next);
+                                                                    setBatchFixData(null);
+                                                                }} className="w-full mt-6 py-4 bg-[#B87333] hover:bg-[#8B4513] text-white font-black uppercase tracking-widest rounded-xl transition-all shadow-xl shadow-[#B87333]/20 shrink-0">
+                                                                    Salvar no Banco e Lote
+                                                                </button>
                                                             </div>
                                                         </div>
                                                     )}
@@ -1057,47 +1653,6 @@ export default function App() {
                                             )}
                                         </div>
 
-                                        {/* LISTA DE MÚSICAS SELECIONADAS (INTEGRADA NO PASSO 1) */}
-                                        {songs.length > 0 && (
-                                            <div className="mt-12 pt-12 border-t border-white/5 animate-in fade-in slide-in-from-bottom-8 duration-700">
-                                                <div className="flex items-center justify-between mb-8">
-                                                    <div className="flex items-center space-x-4">
-                                                        <div className="w-1.5 h-8 bg-[#B87333] rounded-full shadow-[0_0_15px_rgba(184,115,51,0.4)]"></div>
-                                                        <h3 className="text-xl font-black text-white uppercase italic tracking-tighter">Peças na Forja</h3>
-                                                    </div>
-                                                    <div className="flex items-center space-x-3">
-                                                        <span className="text-[9px] font-black text-slate-500 uppercase tracking-[0.2em]">Total</span>
-                                                        <span className="text-xs font-black bg-[#B87333] text-white py-1.5 px-4 rounded-full shadow-lg shadow-[#B87333]/20 uppercase italic">{songs.length}</span>
-                                                    </div>
-                                                </div>
-
-                                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                                                    {songs.map((song, i) => (
-                                                        <div key={i} className="bg-black/60 border border-white/5 p-5 rounded-[28px] group hover:border-[#B87333]/40 transition-all relative overflow-hidden flex flex-col justify-between">
-                                                            <div className="absolute top-0 right-0 w-20 h-20 bg-[#B87333]/5 rounded-bl-[40px] -mr-6 -mt-6 group-hover:bg-[#B87333]/10 transition-all"></div>
-                                                            <div className="flex-1 min-w-0 mb-4 z-10">
-                                                                <h4 className="font-black text-white text-md uppercase italic tracking-tighter truncate leading-tight group-hover:text-[#B87333] transition-colors">{song.song_name}</h4>
-                                                                <p className="text-[9px] font-bold text-slate-500 uppercase tracking-[0.15em] mt-1 truncate">{song.artist_name}</p>
-                                                            </div>
-                                                            <div className="flex items-center justify-between pt-3 border-t border-white/5 z-10">
-                                                                <div className="flex items-baseline space-x-2">
-                                                                    <span className="text-[10px] font-black text-white italic">{song.sounding_key || song.song_key}</span>
-                                                                    {song.capo > 0 && <span className="text-[8px] text-[#B87333] font-black uppercase tracking-tighter opacity-80">Capo {song.capo}</span>}
-                                                                </div>
-                                                                <div className="flex items-center space-x-1.5">
-                                                                    <button onClick={() => toggleChords(i)} className={`w-8 h-8 flex items-center justify-center rounded-lg border transition-all ${song.show_chords ? 'bg-[#B87333] text-white border-[#B87333]/30' : 'bg-white/5 text-slate-700 border-white/5 hover:text-[#B87333]'}`}>
-                                                                        <Guitar className="w-3 h-3" />
-                                                                    </button>
-                                                                    <button onClick={() => removeSong(i)} className="w-8 h-8 flex items-center justify-center bg-white/5 hover:bg-red-900/40 text-slate-700 hover:text-red-500 rounded-lg border border-white/5 transition-all">
-                                                                        <Trash2 className="w-3 h-3" />
-                                                                    </button>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        )}
                                     </div>
                                 </div>
                             )}
@@ -1196,10 +1751,11 @@ export default function App() {
                                                     <Monitor className="w-10 h-10 text-[#B87333]" />
                                                 </div>
                                                 <h3 className="text-xl font-black text-white uppercase tracking-widest mb-4">Performance ao Vivo</h3>
-                                                <p className="text-sm text-slate-500 font-medium leading-relaxed mb-8 max-w-xs">Interface otimizada para palcos, com autoscroll e fontes industriais de alta visibilidade.</p>
+                                                <p className="text-sm text-slate-500 font-medium leading-relaxed mb-8 max-w-xs">{songs.length === 0 ? "Adicione músicas para ativar o player." : "Interface otimizada para palcos, com autoscroll e fontes industriais de alta visibilidade."}</p>
                                                 <button
                                                     onClick={() => { setActiveTab('player'); setCurrentStep(3); setSelectedManualIndex(songs.length > 0 ? 0 : null); }}
-                                                    className="px-10 py-5 bg-[#B87333] hover:bg-[#8B4513] text-white font-black uppercase tracking-widest rounded-2xl transition-all shadow-xl shadow-[#B87333]/20 active:scale-95"
+                                                    className={`px-10 py-5 font-black uppercase tracking-widest rounded-2xl transition-all shadow-xl active:scale-95 ${songs.length === 0 ? 'bg-white/5 text-slate-600 border border-white/5 cursor-not-allowed shadow-none' : 'bg-[#B87333] hover:bg-[#8B4513] text-white shadow-[#B87333]/20'}`}
+                                                    disabled={songs.length === 0}
                                                 >
                                                     Ativar Player
                                                 </button>
@@ -1400,10 +1956,11 @@ export default function App() {
                                 </div>
                             )}
                         </div>
-                    </>
-                )}
-            </main>
-        </div>
+                    </div >
+                )
+                }
+            </main >
+        </div >
     );
 }
 
