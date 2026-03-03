@@ -3,6 +3,300 @@ import { Music, UploadCloud, Plus, FileText, CheckCircle, AlertCircle, FileAudio
 import * as XLSX from 'xlsx';
 import { SVGuitarChord } from 'svguitar';
 
+// -------------------------------------------------------------------
+// CHORD DICTIONARY  (ported from chord_drawer.py)
+// Format: each chord maps to one or more voicings.
+// Each voicing is an array of 6 finger positions (strings 1-6, low-E first).
+// -1 = muted (X), 0 = open, 1-5 = fret number
+// -------------------------------------------------------------------
+const CHORD_DICT = {
+    // Major
+    C: [[-1, 3, 2, 0, 1, 0]],
+    'C#': [[-1, 4, 6, 6, 6, 4]], Db: [[-1, 4, 6, 6, 6, 4]],
+    D: [[-1, -1, 0, 2, 3, 2]],
+    'D#': [[-1, -1, 1, 3, 4, 3]], Eb: [[-1, -1, 1, 3, 4, 3]],
+    E: [[0, 2, 2, 1, 0, 0]],
+    F: [[1, 3, 3, 2, 1, 1]],
+    'F#': [[2, 4, 4, 3, 2, 2]], Gb: [[2, 4, 4, 3, 2, 2]],
+    G: [[3, 2, 0, 0, 0, 3]],
+    'G#': [[4, 6, 6, 5, 4, 4]], Ab: [[4, 6, 6, 5, 4, 4]],
+    A: [[-1, 0, 2, 2, 2, 0]],
+    'A#': [[-1, 1, 3, 3, 3, 1]], Bb: [[-1, 1, 3, 3, 3, 1]],
+    B: [[-1, 2, 4, 4, 4, 2]],
+    // Minor
+    Cm: [[-1, 3, 5, 5, 4, 3]],
+    'C#m': [[-1, 4, 6, 6, 5, 4]], Dbm: [[-1, 4, 6, 6, 5, 4]],
+    Dm: [[-1, -1, 0, 2, 3, 1]],
+    'D#m': [[-1, -1, 1, 3, 4, 2]], Ebm: [[-1, -1, 1, 3, 4, 2]],
+    Em: [[0, 2, 2, 0, 0, 0]],
+    Fm: [[1, 3, 3, 1, 1, 1]],
+    'F#m': [[2, 4, 4, 2, 2, 2]], Gbm: [[2, 4, 4, 2, 2, 2]],
+    Gm: [[3, 5, 5, 3, 3, 3]],
+    'G#m': [[4, 6, 6, 4, 4, 4]], Abm: [[4, 6, 6, 4, 4, 4]],
+    Am: [[-1, 0, 2, 2, 1, 0]],
+    'A#m': [[-1, 1, 3, 3, 2, 1]], Bbm: [[-1, 1, 3, 3, 2, 1]],
+    Bm: [[-1, 2, 4, 4, 3, 2]],
+    // 7th
+    C7: [[-1, 3, 2, 3, 1, 0]],
+    D7: [[-1, -1, 0, 2, 1, 2]],
+    E7: [[0, 2, 0, 1, 0, 0]],
+    F7: [[1, 3, 1, 2, 1, 1]],
+    G7: [[3, 2, 0, 0, 0, 1]],
+    A7: [[-1, 0, 2, 0, 2, 0]],
+    B7: [[-1, 2, 1, 2, 0, 2]],
+    // Minor 7th
+    Cm7: [[-1, 3, 5, 3, 4, 3]],
+    Dm7: [[-1, -1, 0, 2, 1, 1]],
+    Em7: [[0, 2, 2, 0, 3, 0]],
+    Fm7: [[1, 3, 1, 1, 1, 1]],
+    Gm7: [[3, 5, 3, 3, 3, 3]],
+    Am7: [[-1, 0, 2, 0, 1, 0]],
+    Bm7: [[-1, 2, 4, 2, 3, 2]],
+    // Major 7th
+    Cmaj7: [[-1, 3, 2, 0, 0, 0]],
+    Dmaj7: [[-1, -1, 0, 2, 2, 2]],
+    Emaj7: [[0, 2, 1, 1, 0, 0]],
+    Fmaj7: [[1, -1, 2, 2, 1, 0]],
+    Gmaj7: [[3, -1, 4, 4, 3, -1]],
+    Amaj7: [[-1, 0, 2, 1, 2, 0]],
+    Bmaj7: [[-1, 2, 4, 3, 4, 2]],
+    // sus4
+    Dsus4: [[-1, -1, 0, 2, 3, 3]],
+    Esus4: [[0, 2, 2, 2, 0, 0]],
+    Asus4: [[-1, 0, 2, 2, 3, 0]],
+    // sus2
+    Dsus2: [[-1, -1, 0, 2, 3, 0]],
+    Asus2: [[-1, 0, 2, 2, 0, 0]],
+    // dim
+    Cdim: [[-1, 3, 4, 5, 4, 3]],
+    Ddim: [[-1, -1, 0, 1, 0, 1]],
+    Edim: [[0, 1, 2, 3, 2, 0]],
+    Gdim: [[3, 4, 5, 3, 2, 3]],
+    Adim: [[-1, 0, 1, 2, 1, 0]],
+    Bdim: [[-1, 2, 3, 4, 3, 2]],
+    // aug
+    Caug: [[-1, 3, 2, 1, 1, 0]],
+    Daug: [[-1, -1, 0, 3, 3, 2]],
+    Eaug: [[0, 3, 2, 1, 1, 0]],
+    Faug: [[1, 4, 3, 2, 2, 1]],
+    Gaug: [[3, 2, 1, 0, 0, 3]],
+    Aaug: [[-1, 0, 3, 2, 2, 1]],
+    Baug: [[-1, 2, 1, 0, 0, 3]],
+};
+
+// Parse chord name to find a valid dictionary key (handles minor b# etc.)
+function findChordVoicings(rawChord) {
+    // strip bass note (e.g. G/B → G)
+    const name = rawChord.split('/')[0];
+    if (CHORD_DICT[name]) return CHORD_DICT[name];
+    // Try case-normalised root + suffix
+    const m = name.match(/^([A-Ga-g][b#]?)(.*)$/);
+    if (!m) return null;
+    const root = m[1].charAt(0).toUpperCase() + m[1].slice(1);
+    const suffix = m[2];
+    const key = root + suffix;
+    return CHORD_DICT[key] || null;
+}
+
+// -------------------------------------------------------------------
+// ChordTooltip – floating SVG diagram popup
+// -------------------------------------------------------------------
+const CHORD_TOOLTIP_SIZE = 170; // px width of tooltip
+
+function ChordTooltip({ chord, anchor, onClose }) {
+    const containerRef = useRef(null);
+    const svgRef = useRef(null);
+    const chartRef = useRef(null);
+    const [voiceIdx, setVoiceIdx] = useState(0);
+
+    const voicings = findChordVoicings(chord) || [[0, 0, 0, 0, 0, 0]];
+    const total = voicings.length;
+
+    // Position tooltip above the anchor element, smart edge detection
+    const [pos, setPos] = useState({ top: 0, left: 0 });
+    useEffect(() => {
+        if (!anchor) return;
+
+        const updatePosition = () => {
+            const rect = anchor.getBoundingClientRect();
+            const tooltipH = 220;
+            const tooltipW = CHORD_TOOLTIP_SIZE + 16;
+
+            // fixed positioning matches rect directly (viewport relative)
+            let top = rect.top - tooltipH - 12;
+            let left = rect.left + rect.width / 2 - tooltipW / 2;
+
+            // Flip to bottom if clipping top
+            if (top < 10) {
+                top = rect.bottom + 12;
+            }
+
+            // Clamp horizontal
+            left = Math.max(10, Math.min(left, window.innerWidth - tooltipW - 10));
+
+            setPos({ top, left });
+        };
+
+        updatePosition();
+        window.addEventListener('resize', updatePosition);
+        window.addEventListener('scroll', updatePosition, true); // true for capturing sub-element scrolls
+        return () => {
+            window.removeEventListener('resize', updatePosition);
+            window.removeEventListener('scroll', updatePosition, true);
+        };
+    }, [anchor]);
+
+    // Close on Escape
+    useEffect(() => {
+        const handler = (e) => { if (e.key === 'Escape') onClose(); };
+        window.addEventListener('keydown', handler);
+        return () => window.removeEventListener('keydown', handler);
+    }, [onClose]);
+
+    // Draw SVG diagram whenever voicing changes
+    useEffect(() => {
+        if (!svgRef.current) return;
+        svgRef.current.innerHTML = '';
+        chartRef.current = null;
+        const voicing = voicings[voiceIdx];
+        // Build fingers array for svguitar [string(1=high-e,6=low-E), fret]
+        // Our dict order: [lowE, A, D, G, B, highE] = strings [6,5,4,3,2,1]
+        const fingers = [];
+        let minFret = 99;
+        voicing.forEach(f => { if (f > 0) minFret = Math.min(minFret, f); });
+        const position = minFret === 99 ? 1 : minFret;
+        voicing.forEach((fret, i) => {
+            const str = 6 - i; // string number (6=lowE, 1=highE)
+            if (fret === -1) {
+                // muted – no finger entry, handled by barres/muted
+            } else if (fret === 0) {
+                // open string – add as 0
+                fingers.push([str, 0]);
+            } else {
+                fingers.push([str, fret - position + 1]);
+            }
+        });
+        // Muted strings
+        const barres = [];
+        const mutedStrings = voicing
+            .map((f, i) => f === -1 ? 6 - i : null)
+            .filter(Boolean);
+
+        try {
+            const guitar = new SVGuitarChord(svgRef.current)
+                .configure({
+                    strings: 6,
+                    frets: 4,
+                    position: position === 99 ? 1 : position,
+                    strokeColor: '#94a3b8',
+                    color: '#B87333',
+                    backgroundColor: 'transparent',
+                    fretLabelFontSize: 38,
+                    tunings: [],
+                    fingerSize: 0.3,
+                    fingerColor: '#B87333',
+                    fingerTextColor: '#000',
+                    fretSize: 1.5,
+                    barreChordRadius: 0.25,
+                    barreChordStrokeColor: '#B87333',
+                    barreChordStrokeWidth: 1,
+                    nutColor: '#B87333',
+                    nutSize: 0.3,
+                    sidePadding: 0.2,
+                    topPadding: 0.15,
+                    fontFamily: 'inherit',
+                })
+                .chord({
+                    fingers,
+                    barres,
+                    mutedStrings,
+                })
+                .draw();
+            chartRef.current = guitar;
+        } catch (e) {
+            console.warn('ChordTooltip SVG error:', e);
+        }
+    }, [voiceIdx, chord]);
+
+    return (
+        <div
+            style={{
+                position: 'fixed',
+                top: pos.top,
+                left: pos.left,
+                zIndex: 9999,
+                width: CHORD_TOOLTIP_SIZE + 16,
+                pointerEvents: 'auto',
+            }}
+            className="bg-[#12121A] border border-[#B87333]/40 rounded-2xl shadow-[0_8px_40px_rgba(0,0,0,0.8)] overflow-hidden animate-in fade-in zoom-in-95 duration-200"
+        >
+            {/* Header */}
+            <div className="flex items-center justify-between px-3 py-2 border-b border-white/10">
+                <span className="text-[#B87333] font-black text-sm italic tracking-tight">{chord}</span>
+                {total > 1 && (
+                    <div className="flex items-center space-x-1">
+                        <button
+                            onClick={() => setVoiceIdx(i => (i - 1 + total) % total)}
+                            className="p-0.5 text-slate-600 hover:text-[#B87333] transition-all"
+                        >
+                            <ChevronLeft className="w-3.5 h-3.5" />
+                        </button>
+                        <span className="text-[9px] font-black text-slate-600 w-8 text-center">{voiceIdx + 1}/{total}</span>
+                        <button
+                            onClick={() => setVoiceIdx(i => (i + 1) % total)}
+                            className="p-0.5 text-slate-600 hover:text-[#B87333] transition-all"
+                        >
+                            <ChevronRight className="w-3.5 h-3.5" />
+                        </button>
+                    </div>
+                )}
+                <button onClick={onClose} className="p-0.5 text-slate-700 hover:text-white transition-all">
+                    <X className="w-3 h-3" />
+                </button>
+            </div>
+            {/* SVG Diagram */}
+            <div ref={svgRef} style={{ width: CHORD_TOOLTIP_SIZE, height: 160, margin: '0 auto' }} />
+            {/* Unknown chord fallback */}
+            {!findChordVoicings(chord) && (
+                <p className="text-center text-[9px] text-slate-600 pb-2">diagrama não disponível</p>
+            )}
+        </div>
+    );
+}
+
+// -------------------------------------------------------------------
+// renderChordLine – splits a chord-line string into clickable spans
+// Returns an array of React nodes (spans and strings)
+// onChordClick(chordName, anchorElement) is called on hover/tap
+// -------------------------------------------------------------------
+const CHORD_TOKEN_RE = /([A-G][b#]?(?:maj7?|min7?|m7?|7|sus[24]?|dim7?|aug|add9|6|9|11|13)?(?:\/[A-G][b#]?)?)/g;
+
+function renderChordLine(line, onChordClick) {
+    const parts = [];
+    let last = 0;
+    let match;
+    CHORD_TOKEN_RE.lastIndex = 0;
+    while ((match = CHORD_TOKEN_RE.exec(line)) !== null) {
+        // text before this match
+        if (match.index > last) {
+            parts.push(line.slice(last, match.index));
+        }
+        const chord = match[0];
+        parts.push(
+            <span
+                key={match.index}
+                className="cursor-pointer underline decoration-[#B87333]/40 underline-offset-2 hover:text-amber-300 hover:decoration-amber-300 transition-colors"
+                onMouseEnter={e => onChordClick(chord, e.currentTarget)}
+                onClick={e => { e.stopPropagation(); onChordClick(chord, e.currentTarget); }}
+            >{chord}</span>
+        );
+        last = match.index + match[0].length;
+    }
+    if (last < line.length) parts.push(line.slice(last));
+    return parts;
+}
+
+
 const MoltenLoading = ({ message = "Forjando conteúdo...", current = 0, total = 0 }) => {
     const progress = total > 0 ? (current / total) * 100 : 0;
 
@@ -172,6 +466,7 @@ export default function App() {
     const [manualFontSize, setManualFontSize] = useState(18);
     const [isManualFullscreen, setIsManualFullscreen] = useState(false);
     const [chordDiagramOverlay, setChordDiagramOverlay] = useState(null);
+    const [chordTooltip, setChordTooltip] = useState(null); // { chord, anchor }
     const manualScrollContainerRef = useRef(null);
 
     // Batch Form State
@@ -879,6 +1174,23 @@ export default function App() {
     return (
         <div className="min-h-screen bg-[#070709] bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] text-slate-300 font-sans selection:bg-[#B87333]/30 selection:text-white overflow-x-hidden">
             {isGenerating && <MoltenLoading message={forgeMessage} current={batchProgress.current} total={batchProgress.total} />}
+
+            {/* Chord Tooltip Overlay */}
+            {chordTooltip && (
+                <>
+                    {/* Transparent backdrop to close on click-away */}
+                    <div
+                        className="fixed inset-0 z-[9998]"
+                        onClick={() => setChordTooltip(null)}
+                    />
+                    <ChordTooltip
+                        chord={chordTooltip.chord}
+                        anchor={chordTooltip.anchor}
+                        onClose={() => setChordTooltip(null)}
+                    />
+                </>
+            )}
+
             <main className="max-w-7xl mx-auto px-6 pt-32 pb-20 relative">
                 {/* Visual Header */}
                 <div className="absolute top-10 left-1/2 -translate-x-1/2 flex flex-col items-center space-y-4">
@@ -975,7 +1287,7 @@ export default function App() {
                                 <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-16 scroll-smooth scrollbar-none pb-48">
                                     <div className="max-w-4xl mx-auto space-y-1">
                                         {(currentSong?.content || "").split('\n').map((line, lIdx) => {
-                                            const isChordLine = line.match(/^[A-G][b#]?(maj|min|m|7|sus|dim|aug)?/i);
+                                            const isChordLine = !!(line && line.match(/^[A-G][b#]?(maj|min|m|7|sus|dim|aug)?/i));
                                             const isActive = currentLineIndex === lIdx;
                                             return (
                                                 <div
@@ -986,7 +1298,11 @@ export default function App() {
                                                     style={{ fontSize: `${playerFontSize}px` }}
                                                 >
                                                     {isActive && <div className="absolute left-0 w-1.5 h-full bg-[#B87333] rounded-full shadow-[0_0_15px_rgba(184,115,51,0.5)]"></div>}
-                                                    <pre className={`font-mono leading-relaxed whitespace-pre-wrap ${isChordLine ? 'text-[#B87333] font-black italic tracking-tight' : 'text-slate-200 font-medium'}`}>{line || ' '}</pre>
+                                                    <pre className={`font-mono leading-relaxed whitespace-pre-wrap ${isChordLine ? 'text-[#B87333] font-black italic tracking-tight' : 'text-slate-200 font-medium'}`}>
+                                                        {isChordLine
+                                                            ? renderChordLine(line, (chord, anchor) => setChordTooltip({ chord, anchor }))
+                                                            : (line || ' ')}
+                                                    </pre>
                                                 </div>
                                             );
                                         })}
@@ -1326,10 +1642,12 @@ export default function App() {
                                                             <div ref={manualScrollContainerRef} className="overflow-y-auto p-10 scrollbar-none pb-10" style={{ maxHeight: isManualFullscreen ? 'calc(100vh - 120px)' : '500px' }}>
                                                                 <div className="max-w-3xl mx-auto">
                                                                     {(manualPreviewSong?.content || "").split('\n').map((line, lIdx) => {
-                                                                        const isChordLine = line.match(/^[A-G][b#]?(maj|min|m|7|sus|dim|aug)?/i);
+                                                                        const isChordLine = !!(line && line.match(/^[A-G][b#]?(maj|min|m|7|sus|dim|aug)?/i));
                                                                         return (
                                                                             <pre key={lIdx} className={`font-mono leading-relaxed whitespace-pre-wrap ${isChordLine ? 'text-[#B87333] font-black italic tracking-tight mb-0' : 'text-slate-300 font-medium mb-1'}`} style={{ fontSize: `${manualFontSize}px` }}>
-                                                                                {line || ' '}
+                                                                                {isChordLine
+                                                                                    ? renderChordLine(line, (chord, anchor) => setChordTooltip({ chord, anchor }))
+                                                                                    : (line || ' ')}
                                                                             </pre>
                                                                         );
                                                                     })}
@@ -1965,18 +2283,3 @@ export default function App() {
 }
 
 
-const ChordDiagram = ({ chordName, chordsMap }) => {
-    const containerRef = useRef(null);
-    const chart = useRef(null);
-    useEffect(() => {
-        if (!containerRef.current) return;
-        const pos = chordsMap[chordName] || [-1, -1, -1, -1, -1, -1];
-        const fingers = pos.map((p, idx) => [6 - idx, p === -1 ? 'x' : p]);
-        if (!chart.current) {
-            chart.current = new SVGuitarChord(containerRef.current)
-                .configure({ position: 1, strings: 6, frets: 5, color: '#1e293b' })
-                .chord({ fingers }).draw();
-        }
-    }, [chordName, chordsMap]);
-    return <div ref={containerRef} className="w-full h-40" />;
-};
