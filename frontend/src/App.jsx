@@ -1,5 +1,5 @@
 ﻿import React, { useState, useRef, useEffect } from 'react';
-import { Music, UploadCloud, Plus, FileText, CheckCircle, AlertCircle, FileAudio, Info, X, Guitar, Settings2, Image as ImageIcon, Database, Edit3, Trash2, ArrowRight, Play, Maximize, Maximize2, Pause, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Download, ArrowLeft, SkipBack, SkipForward, Save, FolderHeart, Flame, Hammer, Sparkles, RefreshCw, Zap, ShieldCheck, Monitor, Tv, Check, LayoutList, Mic } from 'lucide-react';
+import { Music, UploadCloud, Plus, FileText, CheckCircle, AlertCircle, FileAudio, Info, X, Guitar, Settings2, Image as ImageIcon, Database, Edit3, Trash2, ArrowRight, Play, Maximize, Maximize2, Pause, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Download, ArrowLeft, SkipBack, SkipForward, Save, FolderHeart, Flame, Hammer, Sparkles, RefreshCw, Zap, ShieldCheck, Monitor, Tv, Check, LayoutList, Mic, Search } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { SVGuitarChord } from 'svguitar';
 
@@ -490,13 +490,47 @@ export default function App() {
 
     // Filter Suggestions State
     const [editingChord, setEditingChord] = useState(null);
-    const [editFormData, setEditFormData] = useState({ song_name: '', artist_name: '', song_key: '', content: '' });
+    const [editFormData, setEditFormData] = useState({ song_name: '', artist_name: '', song_key: '', content: '', capo: 0 });
+    const [acervoSearchTerm, setAcervoSearchTerm] = useState('');
 
     // Presentation Mode State
     const [presenterSongIndex, setPresenterSongIndex] = useState(0);
     const [isAutoScrolling, setIsAutoScrolling] = useState(false);
     const [scrollSpeed, setScrollSpeed] = useState(1);
     const scrollContainerRef = useRef(null);
+
+    // Save List State
+    const [saveListModalOpen, setSaveListModalOpen] = useState(false);
+    const [saveListName, setSaveListName] = useState('');
+    const [showSaveSuccess, setShowSaveSuccess] = useState(false);
+
+    const handleSaveList = () => {
+        const songsToSave = activeTab === 'batch' && showBatchReview
+            ? batchResults.filter(r => r.status === 'success')
+            : songs;
+
+        if (!saveListName.trim() || songsToSave.length === 0) return;
+        const listToSave = {
+            id: Date.now().toString(),
+            name: saveListName,
+            songs: songsToSave.map(s => ({
+                id: s.id || null,
+                song_name: s.song_name,
+                artist_name: s.artist_name,
+                song_key: s.sounding_key || s.requested_key || s.song_key,
+                sounding_key: s.sounding_key || s.requested_key || s.song_key,
+                original_key: s.original_key || s.song_key,
+                capo: s.capo || 0,
+                content: s.content || ''
+            }))
+        };
+        const existing = JSON.parse(localStorage.getItem('iron_chords_playlists') || '[]');
+        localStorage.setItem('iron_chords_playlists', JSON.stringify([...existing, listToSave]));
+        setSaveListModalOpen(false);
+        setSaveListName('');
+        setShowSaveSuccess(true);
+        setTimeout(() => setShowSaveSuccess(false), 2500);
+    };
 
     const [micEnabled, setMicEnabled] = useState(false);
     const [micLevel, setMicLevel] = useState(0);
@@ -947,7 +981,7 @@ export default function App() {
             const res = await fetch(`http://localhost:8000/api/chords/${id}`);
             const data = await res.json();
             setEditingChord(data.id);
-            setEditFormData({ song_name: data.song_name, artist_name: data.artist_name, song_key: data.song_key, content: data.content });
+            setEditFormData({ song_name: data.song_name, artist_name: data.artist_name, song_key: data.song_key, content: data.content, capo: data.capo || 0 });
         } catch (err) { alert(err); }
     };
 
@@ -1423,7 +1457,7 @@ export default function App() {
                     </div>
                 ) : (
                     <div className="selection-branch-root">
-                        <StepIndicator currentStep={currentStep} steps={["Estoque", "Seleção", "Projeção", "Engrenagens", "Finalizar"]} />
+                        <StepIndicator currentStep={currentStep} steps={["Escolha de peças", "Revisão", "Player", "Configurações", "Finalização"]} />
                         <div className="min-h-[600px] flex flex-col">
 
                             {/* STEP 1: SELEÇÃO DE MÚSICAS */}
@@ -1726,7 +1760,13 @@ export default function App() {
                                                                     <div className="w-1.5 h-8 bg-[#B87333] rounded-full shadow-[0_0_15px_rgba(184,115,51,0.4)]"></div>
                                                                     <h3 className="text-xl font-black text-white uppercase italic tracking-tighter">Pecas na Forja</h3>
                                                                 </div>
-                                                                <span className="text-xs font-black bg-[#B87333] text-white py-1.5 px-4 rounded-full shadow-lg shadow-[#B87333]/20 uppercase italic">{songs.length}</span>
+                                                                <div className="flex items-center space-x-3">
+                                                                    <span className="text-xs font-black bg-[#B87333] text-white py-1.5 px-4 rounded-full shadow-lg shadow-[#B87333]/20 uppercase italic">{songs.length}</span>
+                                                                    <button onClick={() => setSaveListModalOpen(true)} className="px-4 py-1.5 bg-white/5 hover:bg-[#B87333] text-[#B87333] hover:text-white border border-[#B87333]/30 rounded-full font-black uppercase text-[10px] italic transition-all shadow-lg flex items-center space-x-2">
+                                                                        <Save className="w-3 h-3" />
+                                                                        <span>Salvar Lista</span>
+                                                                    </button>
+                                                                </div>
                                                             </div>
                                                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                                                                 {songs.map((song, i) => (
@@ -1816,6 +1856,10 @@ export default function App() {
                                                                         setBatchResults([]);
                                                                     }} className="px-6 py-3 bg-[#B87333] text-white font-black uppercase text-[10px] italic rounded-xl shadow-lg shadow-[#B87333]/20 hover:bg-[#8B4513] transition-all flex items-center">
                                                                         <Zap className="w-3 h-3 mr-2 inline" /> Integrar à Forja ({batchResults.filter(r => r.status === 'success').length})
+                                                                    </button>
+                                                                    <button onClick={() => setSaveListModalOpen(true)} className="px-6 py-3 bg-white/5 hover:bg-[#B87333] text-[#B87333] hover:text-white border border-[#B87333]/30 rounded-xl font-black uppercase text-[10px] italic transition-all shadow-lg flex items-center space-x-2">
+                                                                        <Save className="w-3 h-3" />
+                                                                        <span>Salvar Lista</span>
                                                                     </button>
                                                                 </div>
                                                             </div>
@@ -2027,19 +2071,39 @@ export default function App() {
 
                                             {activeTab === 'acervo' && (
                                                 <div className="space-y-6 animate-in fade-in duration-500">
+                                                    {/* Search Bar */}
+                                                    <div className="relative mb-6 text-white text-sm">
+                                                        <Search className="absolute left-6 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
+                                                        <input
+                                                            type="text"
+                                                            placeholder="Buscar música ou artista no acervo..."
+                                                            value={acervoSearchTerm}
+                                                            onChange={e => setAcervoSearchTerm(e.target.value)}
+                                                            className="w-full bg-black/40 border border-white/10 rounded-[28px] pl-16 pr-6 py-5 text-white font-bold outline-none focus:border-[#B87333]/50 transition-all placeholder:text-slate-700 shadow-inner"
+                                                        />
+                                                    </div>
+
                                                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 max-h-[450px] overflow-y-auto pr-4 scrollbar-thin">
                                                         {acervoLoading ? (
                                                             <div className="col-span-full py-20 text-center"><RefreshCw className="w-10 h-10 animate-spin text-[#B87333] mx-auto mb-4" /><p className="text-[10px] font-black text-slate-600 uppercase tracking-widest">Sincronizando Banco...</p></div>
-                                                        ) : acervo.map((item, idx) => (
-                                                            <div key={idx} className="bg-black/40 border border-white/5 p-6 rounded-[28px] flex items-center justify-between hover:border-[#B87333]/30 transition-all group relative overflow-hidden">
+                                                        ) : acervo.filter(item => item.song_name.toLowerCase().includes(acervoSearchTerm.toLowerCase()) || item.artist_name.toLowerCase().includes(acervoSearchTerm.toLowerCase())).map((item, idx) => (
+                                                            <div key={idx} className="bg-black/40 border border-white/5 p-6 rounded-[28px] flex items-center justify-between hover:border-[#B87333]/30 transition-all group relative overflow-hidden flex-col sm:flex-row gap-4">
                                                                 <div className="absolute top-0 left-0 w-1 h-full bg-[#B87333]/20 group-hover:bg-[#B87333] transition-all"></div>
-                                                                <div className="flex-1 min-w-0 pr-4">
+                                                                <div className="flex-1 min-w-0 pr-4 w-full text-left">
                                                                     <p className="text-sm font-black text-white uppercase italic truncate">{item.song_name}</p>
                                                                     <p className="text-[10px] font-bold text-slate-600 mt-1 uppercase transition-colors group-hover:text-[#B87333]/60">{item.artist_name} • {item.song_key}</p>
                                                                 </div>
-                                                                <button onClick={() => setSongs([...songs, { ...item, requested_key: item.song_key, sounding_key: item.song_key, capo: 0, show_chords: true }])} className="w-10 h-10 bg-white/5 hover:bg-[#B87333] text-slate-600 hover:text-white rounded-xl flex items-center justify-center transition-all shadow-xl active:scale-90 flex-shrink-0">
-                                                                    <Plus className="w-5 h-5" />
-                                                                </button>
+                                                                <div className="flex items-center space-x-2 w-full sm:w-auto justify-end">
+                                                                    <button onClick={() => setSongs([...songs, { ...item, requested_key: item.song_key, sounding_key: item.song_key, capo: item.capo || 0, show_chords: true }])} className="w-10 h-10 bg-white/5 hover:bg-[#B87333] text-slate-600 hover:text-white rounded-xl flex items-center justify-center transition-all shadow-xl active:scale-90 flex-shrink-0" title="Adicionar à Forja">
+                                                                        <Plus className="w-4 h-4" />
+                                                                    </button>
+                                                                    <button onClick={() => handleEditOpen(item.id)} className="w-10 h-10 bg-white/5 hover:bg-blue-600 text-slate-600 hover:text-white rounded-xl flex items-center justify-center transition-all shadow-xl active:scale-90 flex-shrink-0" title="Editar">
+                                                                        <Edit3 className="w-4 h-4" />
+                                                                    </button>
+                                                                    <button onClick={() => handleDeleteAcervo(item.id)} className="w-10 h-10 bg-white/5 hover:bg-red-600 text-slate-600 hover:text-white rounded-xl flex items-center justify-center transition-all shadow-xl active:scale-90 flex-shrink-0" title="Excluir">
+                                                                        <Trash2 className="w-4 h-4" />
+                                                                    </button>
+                                                                </div>
                                                             </div>
                                                         ))}
                                                     </div>
@@ -2068,7 +2132,7 @@ export default function App() {
                                                 <div className="py-20 text-center border-2 border-dashed border-white/5 rounded-[40px] bg-black/20">
                                                     <FileAudio className="w-16 h-16 text-slate-800 mx-auto mb-6 opacity-20" />
                                                     <p className="text-xs font-black text-slate-600 uppercase tracking-[0.3em]">Nenhuma peça selecionada</p>
-                                                    <button onClick={() => setCurrentStep(1)} className="mt-8 px-8 py-3 bg-[#B87333]/10 text-[#B87333] border border-[#B87333]/20 rounded-xl hover:bg-[#B87333] hover:text-white transition-all text-[10px] font-black uppercase tracking-widest">Voltar para o estoque</button>
+                                                    <button onClick={() => setCurrentStep(1)} className="mt-8 px-8 py-3 bg-[#B87333]/10 text-[#B87333] border border-[#B87333]/20 rounded-xl hover:bg-[#B87333] hover:text-white transition-all text-[10px] font-black uppercase tracking-widest">Voltar para a Escolha de peças</button>
                                                 </div>
                                             ) : songs.map((song, i) => (
                                                 <div key={i} className="p-6 rounded-[32px] border flex items-center justify-between transition-all bg-black/40 border-white/5 hover:border-[#B87333]/30 group">
@@ -2354,6 +2418,119 @@ export default function App() {
                 )
                 }
             </main >
+
+            {/* Save List Modal */}
+            {saveListModalOpen && (
+                <div className="fixed inset-0 z-[200] flex items-center justify-center bg-[#070709]/90 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-300">
+                    <div className="bg-[#16161D] border border-white/10 p-8 rounded-[32px] shadow-2xl w-full max-w-md flex flex-col">
+                        <div className="flex items-center justify-between mb-8">
+                            <div className="flex items-center space-x-4">
+                                <div className="w-1.5 h-6 bg-[#B87333] rounded-full shadow-[0_0_15px_rgba(184,115,51,0.4)]"></div>
+                                <h3 className="text-xl font-black text-white uppercase italic tracking-tighter">Salvar Lista</h3>
+                            </div>
+                            <button onClick={() => { setSaveListModalOpen(false); setSaveListName(''); }} className="p-2 bg-white/5 hover:bg-white/10 rounded-xl transition-all border border-white/5"><X className="w-5 h-5 text-slate-400" /></button>
+                        </div>
+                        <div className="space-y-6">
+                            <div>
+                                <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Nome da Lista</label>
+                                <input
+                                    type="text"
+                                    autoFocus
+                                    placeholder="Ex: Culto de Domingo, Setlist Rock..."
+                                    value={saveListName}
+                                    onChange={e => setSaveListName(e.target.value)}
+                                    className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-4 text-white font-bold outline-none focus:border-[#B87333]/50 transition-all placeholder:text-slate-700"
+                                    onKeyDown={e => e.key === 'Enter' && handleSaveList()}
+                                />
+                            </div>
+                            <button
+                                onClick={handleSaveList}
+                                disabled={!saveListName.trim()}
+                                className="w-full py-4 bg-[#B87333] hover:bg-[#8B4513] text-white font-black uppercase tracking-widest rounded-xl transition-all shadow-xl shadow-[#B87333]/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+                            >
+                                <Save className="w-4 h-4" />
+                                <span>Confirmar Salvamento</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Save Success Animation */}
+            {showSaveSuccess && (
+                <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/40 backdrop-blur-sm animate-in fade-in duration-300 pointer-events-none">
+                    <div className="bg-green-500/10 border border-green-500/20 p-10 rounded-[40px] shadow-[0_0_50px_rgba(34,197,94,0.3)] flex flex-col items-center animate-in zoom-in-50 duration-500 spring-gentle">
+                        <div className="w-24 h-24 bg-green-500/20 rounded-full flex items-center justify-center relative mb-6">
+                            <div className="absolute inset-0 bg-green-500/20 rounded-full animate-ping"></div>
+                            <CheckCircle className="w-12 h-12 text-green-400 drop-shadow-[0_0_15px_rgba(34,197,94,0.8)]" />
+                        </div>
+                        <h2 className="text-3xl font-black text-white uppercase italic tracking-tighter drop-shadow-md">Lista Forjada</h2>
+                        <p className="text-green-400/80 font-bold uppercase tracking-[0.2em] text-xs mt-2">Salva com Sucesso no Acervo Local</p>
+                    </div>
+                </div>
+            )}
+
+            {/* Edit Acervo Modal */}
+            {editingChord && (
+                <div className="fixed inset-0 z-[250] flex items-center justify-center bg-[#070709]/90 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-300 p-4">
+                    <div className="bg-[#16161D] border border-[#B87333]/30 p-8 rounded-[32px] shadow-[0_0_50px_rgba(0,0,0,0.8)] w-full max-w-4xl flex flex-col max-h-[90vh]">
+                        <div className="flex items-center justify-between mb-8 shrink-0">
+                            <div className="flex items-center space-x-4">
+                                <div className="w-1.5 h-6 bg-[#B87333] rounded-full shadow-[0_0_15px_rgba(184,115,51,0.4)]"></div>
+                                <h3 className="text-2xl font-black text-white uppercase italic tracking-tighter">Editar Cifra</h3>
+                            </div>
+                            <button onClick={() => setEditingChord(null)} className="p-2 bg-white/5 hover:bg-white/10 rounded-xl transition-all border border-white/5"><X className="w-5 h-5 text-slate-400" /></button>
+                        </div>
+
+                        <div className="overflow-y-auto pr-4 space-y-6 scrollbar-thin scrollbar-thumb-white/10">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div>
+                                    <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Música</label>
+                                    <input type="text" value={editFormData.song_name} onChange={e => setEditFormData({ ...editFormData, song_name: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-4 text-white font-bold outline-none focus:border-[#B87333]/50 transition-all" />
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Artista</label>
+                                    <input type="text" value={editFormData.artist_name} onChange={e => setEditFormData({ ...editFormData, artist_name: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-4 text-white font-bold outline-none focus:border-[#B87333]/50 transition-all" />
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-6">
+                                <div>
+                                    <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Tom Original</label>
+                                    <select value={editFormData.song_key} onChange={e => setEditFormData({ ...editFormData, song_key: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-4 text-white font-bold outline-none focus:border-[#B87333]/50 transition-all">
+                                        {["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"].map(k => <option key={k} value={k} className="bg-[#1A1A1A]">{k}</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Capo</label>
+                                    <select value={editFormData.capo} onChange={e => setEditFormData({ ...editFormData, capo: parseInt(e.target.value) })} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-4 text-white font-bold outline-none focus:border-[#B87333]/50 transition-all">
+                                        <option value={0} className="bg-[#1A1A1A]">Sem Capo</option>
+                                        {[...Array(12)].map((_, i) => <option key={i + 1} value={i + 1} className="bg-[#1A1A1A]">Casa {i + 1}</option>)}
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Cifra</label>
+                                <textarea
+                                    value={editFormData.content}
+                                    onChange={e => setEditFormData({ ...editFormData, content: e.target.value })}
+                                    className="w-full bg-black/60 border border-white/10 rounded-2xl px-6 py-6 text-white outline-none font-mono text-xs leading-relaxed min-h-[400px] hover:border-white/20 focus:border-[#B87333]/50 transition-all scrollbar-thin shadow-inner"
+                                    spellCheck="false"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="mt-8 shrink-0">
+                            <button onClick={handleEditSave} className="w-full py-5 bg-[#B87333] hover:bg-[#8B4513] text-white font-black uppercase tracking-[0.2em] rounded-xl transition-all shadow-xl shadow-[#B87333]/20 flex items-center justify-center space-x-3 group">
+                                <Save className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                                <span>Salvar Alterações no Acervo</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
         </div >
     );
 }

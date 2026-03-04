@@ -449,7 +449,7 @@ def scrape_link_endpoint(request: ScrapeLinkRequest):
         raise HTTPException(status_code=400, detail="Não foi possível extrair a cifra deste link. Verifique se é uma URL válida do CifraClub.")
     return data
 
-class ChordUpdate(BaseModel):
+class ChordEdit(BaseModel):
     song_name: str
     artist_name: str
     song_key: str
@@ -462,10 +462,10 @@ def get_chords():
     return {"chords": chords}
 
 @app.post("/api/chords")
-def create_chord(data: ChordUpdate):
+def create_chord(data: ChordEdit):
     try:
         from database import save_chord
-        save_chord(data.song_name, data.artist_name, data.song_key, data.content, "manual")
+        save_chord(data.song_name, data.artist_name, data.song_key, data.content, "manual", data.capo or 0)
         return {"status": "ok"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -483,13 +483,23 @@ def get_single_chord(chord_id: int):
     return dict(chord)
 
 @app.put("/api/chords/{chord_id}")
-def update_chord(chord_id: int, req: ChordUpdate):
+async def update_chord(chord_id: int, chord: ChordEdit):
     conn = get_db_connection()
-    conn.execute("UPDATE chords SET song_name=?, artist_name=?, song_key=?, content=? WHERE id=?", 
-                 (req.song_name, req.artist_name, req.song_key, req.content, chord_id))
-    conn.commit()
-    conn.close()
-    return {"status": "ok"}
+    cursor = conn.cursor()
+    try:
+        cursor.execute('''
+            UPDATE chords
+            SET song_name=?, artist_name=?, song_key=?, content=?, capo=?
+            WHERE id=?
+        ''', (chord.song_name, chord.artist_name, chord.song_key, chord.content, chord.capo, chord_id))
+        conn.commit()
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Cifra não encontrada no banco local.")
+        return {"status": "success"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        conn.close()
 
 @app.delete("/api/chords/{chord_id}")
 def delete_chord(chord_id: int):
