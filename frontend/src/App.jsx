@@ -86,16 +86,27 @@ const CHORD_DICT = {
 
 // Parse chord name to find a valid dictionary key (handles minor b# etc.)
 function findChordVoicings(rawChord) {
-    // strip bass note (e.g. G/B → G)
-    const name = rawChord.split('/')[0];
-    if (CHORD_DICT[name]) return CHORD_DICT[name];
-    // Try case-normalised root + suffix
-    const m = name.match(/^([A-Ga-g][b#]?)(.*)$/);
-    if (!m) return null;
-    const root = m[1].charAt(0).toUpperCase() + m[1].slice(1);
-    const suffix = m[2];
-    const key = root + suffix;
-    return CHORD_DICT[key] || null;
+    if (!rawChord || typeof rawChord !== 'string') return null;
+    try {
+        // strip bass note (e.g. G/B → G)
+        const name = rawChord.split('/')[0];
+        if (!name) return null;
+
+        const result = CHORD_DICT[name] || null;
+        if (result) return result;
+
+        // Try case-normalised root + suffix
+        const m = name.match(/^([A-Ga-g][b#]?)(.*)$/);
+        if (!m) return null;
+
+        const root = m[1].charAt(0).toUpperCase() + m[1].slice(1);
+        const suffix = m[2] || '';
+        const key = root + suffix;
+        return CHORD_DICT[key] || null;
+    } catch (err) {
+        console.error('findChordVoicings FATAL error for chord:', rawChord, err);
+        return null;
+    }
 }
 
 // -------------------------------------------------------------------
@@ -108,14 +119,14 @@ function ChordTooltip({ chord, anchor, onClose }) {
     const svgRef = useRef(null);
     const chartRef = useRef(null);
     const [voiceIdx, setVoiceIdx] = useState(0);
+    const [pos, setPos] = useState({ top: 0, left: 0 });
 
-    const voicings = findChordVoicings(chord) || [[0, 0, 0, 0, 0, 0]];
-    const total = voicings.length;
+    const voicings = findChordVoicings(chord);
+    const total = voicings ? voicings.length : 0;
 
     // Position tooltip above the anchor element, smart edge detection
-    const [pos, setPos] = useState({ top: 0, left: 0 });
     useEffect(() => {
-        if (!anchor) return;
+        if (!anchor || !chord) return;
 
         const updatePosition = () => {
             const rect = anchor.getBoundingClientRect();
@@ -158,6 +169,7 @@ function ChordTooltip({ chord, anchor, onClose }) {
         if (!svgRef.current) return;
         svgRef.current.innerHTML = '';
         chartRef.current = null;
+        if (!voicings || voicings.length === 0) return;
         const voicing = voicings[voiceIdx];
         // Build fingers array for svguitar [string(1=high-e,6=low-E), fret]
         // Our dict order: [lowE, A, D, G, B, highE] = strings [6,5,4,3,2,1]
@@ -269,7 +281,10 @@ function ChordTooltip({ chord, anchor, onClose }) {
 // Returns an array of React nodes (spans and strings)
 // onChordClick(chordName, anchorElement) is called on hover/tap
 // -------------------------------------------------------------------
-const CHORD_TOKEN_RE = /([A-G][b#]?(?:maj7?|min7?|m7?|7|sus[24]?|dim7?|aug|add9|6|9|11|13)?(?:\/[A-G][b#]?)?)/g;
+// Improved Regex: enforces word boundaries so words like 'Deus' don't get 'D' captured unless standalone.
+// Added (^|\s) and (?!\w) to ensure it only captures the chord if it's isolated.
+// Improved Regex: enforces word boundaries and also ensures no accented letters follow the chord.
+const CHORD_TOKEN_RE = /(?:^|\s)([A-G][b#]?(?:maj7?|min7?|m7?|7|sus[24]?|dim7?|aug|add9|6|9|11|13)?(?:\/[A-G][b#]?)?)(?![a-zA-ZáàâãéèêíïóôõöúçñÁÀÂÃÉÈÊÍÏÓÔÕÖÚÇÑ])/g;
 
 function renderChordLine(line, onChordClick) {
     const parts = [];
@@ -277,20 +292,40 @@ function renderChordLine(line, onChordClick) {
     let match;
     CHORD_TOKEN_RE.lastIndex = 0;
     while ((match = CHORD_TOKEN_RE.exec(line)) !== null) {
-        // text before this match
-        if (match.index > last) {
-            parts.push(line.slice(last, match.index));
+        // match.index is the start of the entire match, which might include the leading space
+        const fullMatch = match[0];
+        const chord = match[1];
+        const chordIndex = match.index + (fullMatch.length - chord.length);
+
+        if (chordIndex > last) {
+            parts.push(line.slice(last, chordIndex));
         }
-        const chord = match[0];
+
         parts.push(
             <span
-                key={match.index}
-                className="cursor-pointer underline decoration-[#B87333]/40 underline-offset-2 hover:text-amber-300 hover:decoration-amber-300 transition-colors"
-                onMouseEnter={e => onChordClick(chord, e.currentTarget)}
-                onClick={e => { e.stopPropagation(); onChordClick(chord, e.currentTarget); }}
+                key={chordIndex}
+                className="cursor-pointer underline decoration-[#B87333]/40 underline-offset-2 text-[#B87333] hover:text-amber-300 hover:decoration-amber-300 transition-colors inline-block"
+                onMouseEnter={(e) => {
+                    // Only trigger hover on desktop (not touch)
+                    if (window.matchMedia("(hover: hover)").matches) {
+                        onChordClick(chord, e.currentTarget, false);
+                    }
+                }}
+                onMouseLeave={(e) => {
+                    if (window.matchMedia("(hover: hover)").matches) {
+                        onChordClick(null, null, false);
+                    }
+                }}
+                onClick={(e) => {
+                    e.stopPropagation();
+                    // On touch devices (or explicit clicks), toggle it
+                    if (!window.matchMedia("(hover: hover)").matches) {
+                        onChordClick(chord, e.currentTarget, true);
+                    }
+                }}
             >{chord}</span>
         );
-        last = match.index + match[0].length;
+        last = chordIndex + chord.length;
     }
     if (last < line.length) parts.push(line.slice(last));
     return parts;
@@ -397,36 +432,31 @@ const MoltenLoading = ({ message = "Forjando conteúdo...", current = 0, total =
 };
 
 
-const StepIndicator = ({ currentStep, steps }) => (
-    <div className="flex items-center justify-between mb-12 w-full max-w-4xl mx-auto px-4">
-        {steps.map((step, idx) => {
-            const stepNum = idx + 1;
-            const isCompleted = stepNum < currentStep;
-            const isActive = stepNum === currentStep;
-            return (
-                <div key={idx} className="flex items-center flex-1 last:flex-none group">
-                    <div className="flex flex-col items-center relative">
-                        <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-500 border-2 ${isActive ? 'bg-[#B87333] border-[#B87333] shadow-[0_0_20px_rgba(184,115,51,0.4)] scale-110' :
-                            isCompleted ? 'bg-blue-600 border-blue-600 shadow-[0_0_15px_rgba(37,99,235,0.3)]' :
-                                'bg-black/40 border-white/10 text-slate-600'
-                            }`}>
-                            {isCompleted ? <CheckCircle className="w-6 h-6 text-white" /> :
-                                <span className={`text-sm font-black ${isActive ? 'text-white' : 'text-slate-600'}`}>{stepNum}</span>}
-                        </div>
-                        <span className={`absolute -bottom-7 whitespace-nowrap text-[10px] font-black uppercase tracking-widest transition-all duration-500 ${isActive ? 'text-[#B87333] scale-105' : 'text-slate-500'
-                            }`}>
-                            {step}
-                        </span>
-                    </div>
-                    {idx < steps.length - 1 && (
-                        <div className="flex-1 h-[2px] mx-4 bg-white/5 relative overflow-hidden">
-                            <div className={`absolute inset-0 bg-gradient-to-r from-blue-600 to-[#B87333] transition-all duration-1000 transform origin-left ${isCompleted ? 'scale-x-100' : 'scale-x-0'
-                                }`}></div>
-                        </div>
-                    )}
-                </div>
-            );
-        })}
+const TopNav = ({ current, onChange }) => (
+    <div className="flex items-center justify-center p-4 mb-4 border-b border-white/5 bg-[#070709] sticky top-0 z-50">
+        <div className="flex bg-[#16161D] p-1.5 rounded-3xl border border-white/10 shadow-2xl">
+            <button
+                onClick={() => onChange('escolha')}
+                className={`flex items-center space-x-3 px-8 py-3.5 rounded-[20px] font-black uppercase tracking-widest text-[10px] italic transition-all duration-300 ${current === 'escolha' ? 'bg-[#B87333] text-white shadow-[0_0_20px_rgba(184,115,51,0.4)] scale-105' : 'text-slate-500 hover:text-white hover:bg-white/5'}`}
+            >
+                <Hammer className="w-4 h-4" />
+                <span>Escolha de Peças</span>
+            </button>
+            <button
+                onClick={() => onChange('listas')}
+                className={`flex items-center space-x-3 px-8 py-3.5 rounded-[20px] font-black uppercase tracking-widest text-[10px] italic transition-all duration-300 ${current === 'listas' ? 'bg-[#B87333] text-white shadow-[0_0_20px_rgba(184,115,51,0.4)] scale-105' : 'text-slate-500 hover:text-white hover:bg-white/5'}`}
+            >
+                <LayoutList className="w-4 h-4" />
+                <span>Listas</span>
+            </button>
+            <button
+                onClick={() => onChange('player')}
+                className={`flex items-center space-x-3 px-8 py-3.5 rounded-[20px] font-black uppercase tracking-widest text-[10px] italic transition-all duration-300 ${current === 'player' ? 'bg-blue-600 text-white shadow-[0_0_20px_rgba(37,99,235,0.4)] scale-105' : 'text-slate-500 hover:text-white hover:bg-white/5'}`}
+            >
+                <Play className="w-4 h-4" />
+                <span>Player da Forja</span>
+            </button>
+        </div>
     </div>
 );
 
@@ -440,8 +470,10 @@ export default function App() {
     const [forgeMessage, setForgeMessage] = useState("Forjando conteúdo...");
     const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0 });
     const [downloadUrl, setDownloadUrl] = useState(null);
-    const [currentStep, setCurrentStep] = useState(1);
-
+    const [mainNav, setMainNav] = useState('escolha');
+    const [showExportModal, setShowExportModal] = useState(false);
+    const [exportStep, setExportStep] = useState(1);
+    const [currentExportList, setCurrentExportList] = useState(null);
     // Settings
     const [exportFormat, setExportFormat] = useState('docx');
     const [coverImage, setCoverImage] = useState(null);
@@ -486,12 +518,13 @@ export default function App() {
     // Acervo State
     const [acervo, setAcervo] = useState([]);
     const [acervoLoading, setAcervoLoading] = useState(false);
+    const [acervoSearchTerm, setAcervoSearchTerm] = useState('');
+    const [selectedAcervoItems, setSelectedAcervoItems] = useState([]);
     const [batchLinkLoading, setBatchLinkLoading] = useState(false);
 
     // Filter Suggestions State
     const [editingChord, setEditingChord] = useState(null);
     const [editFormData, setEditFormData] = useState({ song_name: '', artist_name: '', song_key: '', content: '', capo: 0 });
-    const [acervoSearchTerm, setAcervoSearchTerm] = useState('');
 
     // Presentation Mode State
     const [presenterSongIndex, setPresenterSongIndex] = useState(0);
@@ -503,6 +536,10 @@ export default function App() {
     const [saveListModalOpen, setSaveListModalOpen] = useState(false);
     const [saveListName, setSaveListName] = useState('');
     const [showSaveSuccess, setShowSaveSuccess] = useState(false);
+
+    // Deletion Modal State
+    const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+    const [deleteTarget, setDeleteTarget] = useState({ type: '', id: null, name: '' });
 
     const handleSaveList = () => {
         const songsToSave = activeTab === 'batch' && showBatchReview
@@ -968,12 +1005,34 @@ export default function App() {
         finally { setAcervoLoading(false); }
     };
 
-    const handleDeleteAcervo = async (id) => {
-        if (!confirm('Tem certeza?')) return;
-        try {
-            await fetch(`http://localhost:8000/api/chords/${id}`, { method: 'DELETE' });
-            fetchAcervo();
-        } catch (err) { alert(err); }
+    const handleDeleteAcervo = (idOrIds, name) => {
+        setDeleteTarget({ type: Array.isArray(idOrIds) ? 'acervo_multi' : 'acervo', id: idOrIds, name });
+        setDeleteModalOpen(true);
+    };
+
+    const confirmDelete = async () => {
+        if (deleteTarget.type === 'acervo') {
+            try {
+                await fetch(`http://localhost:8000/api/chords/${deleteTarget.id}`, { method: 'DELETE' });
+                fetchAcervo();
+                setSelectedAcervoItems(prev => prev.filter(id => id !== deleteTarget.id));
+            } catch (err) { alert(err); }
+        } else if (deleteTarget.type === 'acervo_multi') {
+            try {
+                // Delete sequentially (or via possible bulk endpoint if added in backend)
+                for (const id of deleteTarget.id) {
+                    await fetch(`http://localhost:8000/api/chords/${id}`, { method: 'DELETE' });
+                }
+                fetchAcervo();
+                setSelectedAcervoItems([]);
+            } catch (err) { alert(err); }
+        } else if (deleteTarget.type === 'lista') {
+            const existing = JSON.parse(localStorage.getItem('iron_chords_playlists') || '[]');
+            existing.splice(deleteTarget.id, 1);
+            localStorage.setItem('iron_chords_playlists', JSON.stringify(existing));
+            setSavedPlaylists(existing);
+        }
+        setDeleteModalOpen(false);
     };
 
     const handleEditOpen = async (id) => {
@@ -1117,6 +1176,28 @@ export default function App() {
         // Process one by one to show progress
         for (let i = 0; i < songsToProcess.length; i++) {
             const song = songsToProcess[i];
+
+            // 1. Check if it already exists in Acervo
+            const localMatch = acervo.find(a =>
+                a.song_name.toLowerCase() === song.song_name.toLowerCase() &&
+                // Optional: require artist match if artist was provided in the batch row
+                (!song.artist_name || a.artist_name.toLowerCase() === song.artist_name.toLowerCase())
+            );
+
+            if (localMatch) {
+                // Use local data instead of fetching from API
+                finalResults.push({
+                    ...localMatch,
+                    requested_key: song.key,
+                    sounding_key: localMatch.song_key, // Default to its original key
+                    status: 'success',
+                    in_acervo: true
+                });
+                setBatchProgress({ current: i + 1, total: songsToProcess.length });
+                continue;
+            }
+
+            // 2. If not in Acervo, fetch from API
             try {
                 const res = await fetch('http://localhost:8000/api/music/manual', {
                     method: 'POST',
@@ -1126,16 +1207,12 @@ export default function App() {
 
                 if (res.ok) {
                     const data = await res.json();
-                    const inAcervo = acervo.some(a =>
-                        a.song_name.toLowerCase() === data.song_name.toLowerCase() &&
-                        a.artist_name.toLowerCase() === data.artist_name.toLowerCase()
-                    );
 
                     finalResults.push({
                         ...data,
                         status: 'success',
                         show_chords: true,
-                        in_acervo: inAcervo
+                        in_acervo: false
                     });
                 } else {
                     const errorData = await res.json().catch(() => ({}));
@@ -1185,19 +1262,14 @@ export default function App() {
 
             if (res.ok) {
                 const data = await res.json();
-                const inAcervo = acervo.some(a =>
-                    a.song_name.toLowerCase() === data.song_name.toLowerCase() &&
-                    a.artist_name.toLowerCase() === data.artist_name.toLowerCase()
-                );
-
-                const next = [...batchResults];
-                next[idx] = {
-                    ...data,
-                    status: 'success',
-                    show_chords: true,
-                    in_acervo: inAcervo
-                };
-                setBatchResults(next);
+                // Open for review/evaluation before adding
+                setBatchFixData({
+                    idx,
+                    song_name: data.song_name,
+                    artist_name: data.artist_name,
+                    song_key: data.song_key,
+                    content: data.content
+                });
             } else {
                 const errorData = await res.json().catch(() => ({}));
                 const next = [...batchResults];
@@ -1263,13 +1335,15 @@ export default function App() {
             {isGenerating && <MoltenLoading message={forgeMessage} current={batchProgress.current} total={batchProgress.total} />}
 
             {/* Chord Tooltip Overlay */}
-            {chordTooltip && (
+            {chordTooltip && chordTooltip.chord && (
                 <>
-                    {/* Transparent backdrop to close on click-away */}
-                    <div
-                        className="fixed inset-0 z-[9998]"
-                        onClick={() => setChordTooltip(null)}
-                    />
+                    {/* Transparent backdrop only on persistent (mobile/tap) mode */}
+                    {chordTooltip.isPersistent && (
+                        <div
+                            className="fixed inset-0 z-[9998]"
+                            onClick={() => setChordTooltip(null)}
+                        />
+                    )}
                     <ChordTooltip
                         chord={chordTooltip.chord}
                         anchor={chordTooltip.anchor}
@@ -1374,7 +1448,7 @@ export default function App() {
                                 <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-16 scroll-smooth scrollbar-none pb-48">
                                     <div className="max-w-4xl mx-auto space-y-1">
                                         {(currentSong?.content || "").split('\n').map((line, lIdx) => {
-                                            const isChordLine = !!(line && line.match(/^[A-G][b#]?(maj|min|m|7|sus|dim|aug)?/i));
+                                            const isChordLine = !!(line && line.trim().length > 0 && (line.match(CHORD_TOKEN_RE) || []).length > 0 && line.replace(CHORD_TOKEN_RE, '').replace(/[\s|()\-xX0-9:]/g, '').length < Math.max(2, line.trim().length * 0.25));
                                             const isActive = currentLineIndex === lIdx;
                                             return (
                                                 <div
@@ -1387,7 +1461,7 @@ export default function App() {
                                                     {isActive && <div className="absolute left-0 w-1.5 h-full bg-[#B87333] rounded-full shadow-[0_0_15px_rgba(184,115,51,0.5)]"></div>}
                                                     <pre className={`font-mono leading-relaxed whitespace-pre-wrap ${isChordLine ? 'text-[#B87333] font-black italic tracking-tight' : 'text-slate-200 font-medium'}`}>
                                                         {isChordLine
-                                                            ? renderChordLine(line, (chord, anchor) => setChordTooltip({ chord, anchor }))
+                                                            ? renderChordLine(line, (chord, anchor, isPersistent) => setChordTooltip({ chord, anchor, isPersistent }))
                                                             : (line || ' ')}
                                                     </pre>
                                                 </div>
@@ -1456,12 +1530,12 @@ export default function App() {
                         <button onClick={() => setActiveTab('manual')} className="absolute top-10 right-10 p-5 bg-white/5 hover:bg-white/10 rounded-2xl text-white opacity-0 hover:opacity-100 transition-all"><X className="w-8 h-8" /></button>
                     </div>
                 ) : (
-                    <div className="selection-branch-root">
-                        <StepIndicator currentStep={currentStep} steps={["Escolha de peças", "Revisão", "Player", "Configurações", "Finalização"]} />
-                        <div className="min-h-[600px] flex flex-col">
+                    <div className="selection-branch-root flex flex-col min-h-[600px] h-full">
+                        <TopNav current={mainNav} onChange={setMainNav} />
+                        <div className="flex-1 overflow-y-auto w-full max-w-6xl mx-auto px-4 pb-20">
 
-                            {/* STEP 1: SELEÇÃO DE MÚSICAS */}
-                            {currentStep === 1 && (
+                            {/* ABA 1: ESCOLHA DE PEÇAS */}
+                            {mainNav === 'escolha' && (
                                 <div className="flex-1 animate-in fade-in slide-in-from-right-8 duration-700">
                                     <div className="bg-[#16161D]/80 backdrop-blur-xl border border-white/5 rounded-[40px] p-8 shadow-2xl">
                                         <div className="flex items-center justify-between mb-10">
@@ -1489,7 +1563,7 @@ export default function App() {
                                                                     onChange={e => { setSongName(e.target.value); setShowSuggestions(true); }}
                                                                     onFocus={() => setShowSuggestions(true)}
                                                                     onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
-                                                                    className="w-full bg-black/60 border border-white/10 rounded-2xl px-5 py-5 text-white focus:ring-2 focus:ring-[#B87333]/40 outline-none transition-all font-bold placeholder:text-slate-700" placeholder="Ex: Mil Acasos"
+                                                                    className="w-full bg-black/60 border border-white/10 rounded-2xl px-5 py-5 text-white focus:ring-2 focus:ring-[#B87333]/40 outline-none transition-all font-bold placeholder:text-slate-700" placeholder="Ex: Missa de Domingo"
                                                                 />
                                                                 {showSuggestions && suggestions.length > 0 && (
                                                                     <div className="absolute z-[100] w-full mt-2 bg-[#16161D] border border-white/10 rounded-[24px] shadow-[0_20px_50px_rgba(0,0,0,0.5)] overflow-hidden backdrop-blur-3xl animate-in fade-in zoom-in-95 duration-300">
@@ -1729,11 +1803,11 @@ export default function App() {
                                                             <div ref={manualScrollContainerRef} className="overflow-y-auto p-10 scrollbar-none pb-10" style={{ maxHeight: isManualFullscreen ? 'calc(100vh - 120px)' : '500px' }}>
                                                                 <div className="max-w-3xl mx-auto">
                                                                     {(manualPreviewSong?.content || "").split('\n').map((line, lIdx) => {
-                                                                        const isChordLine = !!(line && line.match(/^[A-G][b#]?(maj|min|m|7|sus|dim|aug)?/i));
+                                                                        const isChordLine = !!(line && line.trim().length > 0 && (line.match(CHORD_TOKEN_RE) || []).length > 0 && line.replace(CHORD_TOKEN_RE, '').replace(/[\s|()\-xX0-9:]/g, '').length < Math.max(2, line.trim().length * 0.25));
                                                                         return (
                                                                             <pre key={lIdx} className={`font-mono leading-relaxed whitespace-pre-wrap ${isChordLine ? 'text-[#B87333] font-black italic tracking-tight mb-0' : 'text-slate-300 font-medium mb-1'}`} style={{ fontSize: `${manualFontSize}px` }}>
                                                                                 {isChordLine
-                                                                                    ? renderChordLine(line, (chord, anchor) => setChordTooltip({ chord, anchor }))
+                                                                                    ? renderChordLine(line, (chord, anchor, isPersistent) => setChordTooltip({ chord, anchor, isPersistent }))
                                                                                     : (line || ' ')}
                                                                             </pre>
                                                                         );
@@ -1837,7 +1911,7 @@ export default function App() {
                                                             </div>
                                                             <div className="flex space-x-4 pt-4">
                                                                 <button onClick={() => setShowMappingUI(false)} className="flex-1 py-4 bg-white/5 text-slate-500 font-black uppercase text-[10px] rounded-xl hover:bg-white/10 transition-all">Voltar</button>
-                                                                <button onClick={handleBatchProcess} disabled={batchLoading} className="flex-[2] py-4 bg-[#B87333] hover:bg-[#8B4513] text-white font-black uppercase text-[10px] rounded-xl shadow-lg shadow-[#B87333]/20 flex items-center justify-center disabled:opacity-50">
+                                                                <button onClick={handleBatchProcess} disabled={batchLoading || !batchMapping.song_name || !batchMapping.artist_name} className="flex-[2] py-4 bg-[#B87333] hover:bg-[#8B4513] text-white font-black uppercase text-[10px] rounded-xl shadow-lg shadow-[#B87333]/20 flex items-center justify-center disabled:opacity-50 transition-opacity">
                                                                     {batchLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : 'Processar Lote'}
                                                                 </button>
                                                             </div>
@@ -1874,7 +1948,17 @@ export default function App() {
                                                                                     {item.status === 'success' ? <CheckCircle className="w-6 h-6 text-[#B87333]" /> : <AlertCircle className="w-6 h-6 text-red-500" />}
                                                                                 </div>
                                                                                 <div className="min-w-0 flex-1">
-                                                                                    <h5 className="font-black text-white uppercase italic tracking-tighter text-lg truncate">{item.song_name}</h5>
+                                                                                    {item.status === 'success' ? (
+                                                                                        <button
+                                                                                            onClick={() => setBatchFixData({ idx, song_name: item.song_name, artist_name: item.artist_name, song_key: item.sounding_key || item.requested_key, content: item.content })}
+                                                                                            className="text-left w-full hover:underline decoration-[#B87333] decoration-2 underline-offset-4 outline-none group"
+                                                                                            title="Clique para analisar a cifra"
+                                                                                        >
+                                                                                            <h5 className="font-black text-white uppercase italic tracking-tighter text-lg truncate group-hover:text-[#B87333] transition-colors">{item.song_name}</h5>
+                                                                                        </button>
+                                                                                    ) : (
+                                                                                        <h5 className="font-black text-slate-400 uppercase italic tracking-tighter text-lg truncate">{item.song_name}</h5>
+                                                                                    )}
                                                                                     <div className="flex items-center space-x-3 mt-1">
                                                                                         <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest truncate">{item.artist_name}</p>
                                                                                         {item.in_acervo && <span className="text-[8px] font-black bg-blue-600/20 text-blue-400 px-2 py-0.5 rounded border border-blue-600/30 uppercase whitespace-nowrap" title="Detectado no Acervo Local">Acervo</span>}
@@ -2071,27 +2155,81 @@ export default function App() {
 
                                             {activeTab === 'acervo' && (
                                                 <div className="space-y-6 animate-in fade-in duration-500">
-                                                    {/* Search Bar */}
-                                                    <div className="relative mb-6 text-white text-sm">
-                                                        <Search className="absolute left-6 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
-                                                        <input
-                                                            type="text"
-                                                            placeholder="Buscar música ou artista no acervo..."
-                                                            value={acervoSearchTerm}
-                                                            onChange={e => setAcervoSearchTerm(e.target.value)}
-                                                            className="w-full bg-black/40 border border-white/10 rounded-[28px] pl-16 pr-6 py-5 text-white font-bold outline-none focus:border-[#B87333]/50 transition-all placeholder:text-slate-700 shadow-inner"
-                                                        />
+                                                    {/* Search and Bulk Actions */}
+                                                    <div className="flex flex-col sm:flex-row gap-4 mb-6">
+                                                        <div className="relative flex-1 text-white text-sm">
+                                                            <Search className="absolute left-6 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
+                                                            <input
+                                                                type="text"
+                                                                placeholder="Buscar música ou artista no acervo..."
+                                                                value={acervoSearchTerm}
+                                                                onChange={e => setAcervoSearchTerm(e.target.value)}
+                                                                className="w-full bg-black/40 border border-white/10 rounded-[28px] pl-16 pr-6 py-5 text-white font-bold outline-none focus:border-[#B87333]/50 transition-all placeholder:text-slate-700 shadow-inner"
+                                                            />
+                                                        </div>
+                                                        {selectedAcervoItems.length > 0 && (
+                                                            <div className="flex items-center gap-2 animate-in fade-in zoom-in duration-300">
+                                                                <button onClick={() => setSelectedAcervoItems([])} className="px-6 py-5 bg-white/5 border border-white/10 hover:bg-white/10 rounded-[28px] text-slate-400 font-bold text-xs uppercase transition-all shadow-inner hover:text-white">Cancelar</button>
+                                                                <button onClick={() => handleDeleteAcervo(selectedAcervoItems, `${selectedAcervoItems.length} músicas selecionadas`)} className="px-6 py-5 bg-red-600/20 border border-red-500/30 hover:bg-red-600 rounded-[28px] text-red-500 font-bold text-xs uppercase transition-all shadow-xl hover:text-white flex items-center shadow-red-900/20 gap-2"><Trash2 className="w-4 h-4" /> Excluir ({selectedAcervoItems.length})</button>
+                                                            </div>
+                                                        )}
                                                     </div>
 
-                                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 max-h-[450px] overflow-y-auto pr-4 scrollbar-thin">
+                                                    {/* Select All Toggle */}
+                                                    {acervo.length > 0 && !acervoLoading && (
+                                                        <div className="mb-4 flex items-center justify-between px-2">
+                                                            <label className="flex items-center space-x-3 cursor-pointer group">
+                                                                <div className="relative flex items-center justify-center">
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        className="peer sr-only"
+                                                                        checked={selectedAcervoItems.length > 0 && selectedAcervoItems.length === acervo.filter(item => item.song_name.toLowerCase().includes(acervoSearchTerm.toLowerCase()) || item.artist_name.toLowerCase().includes(acervoSearchTerm.toLowerCase())).length}
+                                                                        onChange={(e) => {
+                                                                            const filtered = acervo.filter(item => item.song_name.toLowerCase().includes(acervoSearchTerm.toLowerCase()) || item.artist_name.toLowerCase().includes(acervoSearchTerm.toLowerCase()));
+                                                                            if (e.target.checked) setSelectedAcervoItems(filtered.map(i => i.id));
+                                                                            else setSelectedAcervoItems([]);
+                                                                        }}
+                                                                    />
+                                                                    <div className="w-5 h-5 border-2 border-white/20 rounded-md peer-checked:bg-[#B87333] peer-checked:border-[#B87333] transition-all flex items-center justify-center group-hover:border-[#B87333]/50">
+                                                                        <Check className="w-3.5 h-3.5 text-white opacity-0 peer-checked:opacity-100 transition-opacity" />
+                                                                    </div>
+                                                                </div>
+                                                                <span className="text-xs font-bold text-slate-500 uppercase tracking-widest group-hover:text-slate-300 transition-colors">Selecionar Todos Visíveis</span>
+                                                            </label>
+                                                        </div>
+                                                    )}
+
+                                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 max-h-[450px] overflow-y-auto pr-4 scrollbar-thin pb-10">
                                                         {acervoLoading ? (
                                                             <div className="col-span-full py-20 text-center"><RefreshCw className="w-10 h-10 animate-spin text-[#B87333] mx-auto mb-4" /><p className="text-[10px] font-black text-slate-600 uppercase tracking-widest">Sincronizando Banco...</p></div>
                                                         ) : acervo.filter(item => item.song_name.toLowerCase().includes(acervoSearchTerm.toLowerCase()) || item.artist_name.toLowerCase().includes(acervoSearchTerm.toLowerCase())).map((item, idx) => (
-                                                            <div key={idx} className="bg-black/40 border border-white/5 p-6 rounded-[28px] flex items-center justify-between hover:border-[#B87333]/30 transition-all group relative overflow-hidden flex-col sm:flex-row gap-4">
-                                                                <div className="absolute top-0 left-0 w-1 h-full bg-[#B87333]/20 group-hover:bg-[#B87333] transition-all"></div>
-                                                                <div className="flex-1 min-w-0 pr-4 w-full text-left">
+                                                            <div key={idx} className={`bg-black/40 border p-6 rounded-[28px] flex items-center justify-between transition-all group relative overflow-hidden flex-col sm:flex-row gap-4 ${selectedAcervoItems.includes(item.id) ? 'border-[#B87333]/50 bg-[#B87333]/5' : 'border-white/5 hover:border-[#B87333]/30'}`}>
+                                                                <div className={`absolute top-0 left-0 w-1 h-full transition-all ${selectedAcervoItems.includes(item.id) ? 'bg-[#B87333]' : 'bg-[#B87333]/20 group-hover:bg-[#B87333]"'}`}></div>
+
+                                                                {/* Checkbox */}
+                                                                <div className="absolute top-4 left-4 z-10 w-full flex justify-start sm:w-auto sm:relative sm:top-0 sm:left-0 sm:h-full sm:items-center sm:pr-2">
+                                                                    <label className="cursor-pointer relative flex items-center justify-center p-2 -m-2">
+                                                                        <input
+                                                                            type="checkbox"
+                                                                            className="peer sr-only"
+                                                                            checked={selectedAcervoItems.includes(item.id)}
+                                                                            onChange={(e) => {
+                                                                                if (e.target.checked) setSelectedAcervoItems([...selectedAcervoItems, item.id]);
+                                                                                else setSelectedAcervoItems(selectedAcervoItems.filter(id => id !== item.id));
+                                                                            }}
+                                                                        />
+                                                                        <div className="w-5 h-5 border-2 border-white/20 rounded-md peer-checked:bg-[#B87333] peer-checked:border-[#B87333] transition-all flex items-center justify-center hover:border-[#B87333]/50">
+                                                                            <Check className="w-3.5 h-3.5 text-white opacity-0 peer-checked:opacity-100 transition-opacity" />
+                                                                        </div>
+                                                                    </label>
+                                                                </div>
+
+                                                                <div className="flex-1 min-w-0 px-2 w-full text-left mt-6 sm:mt-0 sm:pr-4">
                                                                     <p className="text-sm font-black text-white uppercase italic truncate">{item.song_name}</p>
-                                                                    <p className="text-[10px] font-bold text-slate-600 mt-1 uppercase transition-colors group-hover:text-[#B87333]/60">{item.artist_name} • {item.song_key}</p>
+                                                                    <p className="text-[10px] font-bold text-slate-600 mt-1 uppercase transition-colors group-hover:text-[#B87333]/60">
+                                                                        {item.artist_name} • {item.song_key}
+                                                                        {item.capo > 0 && <span className="ml-3 px-2 py-0.5 bg-[#B87333]/20 text-[#B87333] rounded-md font-bold tracking-widest text-[8px] animate-pulse whitespace-nowrap">CAPO NA {item.capo}ª CASA</span>}
+                                                                    </p>
                                                                 </div>
                                                                 <div className="flex items-center space-x-2 w-full sm:w-auto justify-end">
                                                                     <button onClick={() => setSongs([...songs, { ...item, requested_key: item.song_key, sounding_key: item.song_key, capo: item.capo || 0, show_chords: true }])} className="w-10 h-10 bg-white/5 hover:bg-[#B87333] text-slate-600 hover:text-white rounded-xl flex items-center justify-center transition-all shadow-xl active:scale-90 flex-shrink-0" title="Adicionar à Forja">
@@ -2100,7 +2238,7 @@ export default function App() {
                                                                     <button onClick={() => handleEditOpen(item.id)} className="w-10 h-10 bg-white/5 hover:bg-blue-600 text-slate-600 hover:text-white rounded-xl flex items-center justify-center transition-all shadow-xl active:scale-90 flex-shrink-0" title="Editar">
                                                                         <Edit3 className="w-4 h-4" />
                                                                     </button>
-                                                                    <button onClick={() => handleDeleteAcervo(item.id)} className="w-10 h-10 bg-white/5 hover:bg-red-600 text-slate-600 hover:text-white rounded-xl flex items-center justify-center transition-all shadow-xl active:scale-90 flex-shrink-0" title="Excluir">
+                                                                    <button onClick={() => handleDeleteAcervo(item.id, item.song_name)} className="w-10 h-10 bg-white/5 hover:bg-red-600 text-slate-600 hover:text-white rounded-xl flex items-center justify-center transition-all shadow-xl active:scale-90 flex-shrink-0" title="Excluir">
                                                                         <Trash2 className="w-4 h-4" />
                                                                     </button>
                                                                 </div>
@@ -2115,275 +2253,106 @@ export default function App() {
                                 </div>
                             )}
 
-                            {/* STEP 2: REVISÃO DA SELEÇÃO (PASSO VAZIO OU REDIRECIONADO) */}
-                            {currentStep === 2 && (
-                                <div className="flex-1 animate-in fade-in slide-in-from-right-8 duration-700">
-                                    <div className="bg-[#16161D]/80 backdrop-blur-xl border border-white/5 rounded-[40px] p-8 shadow-2xl">
-                                        <div className="flex items-center justify-between mb-10">
-                                            <div className="flex items-center space-x-4">
-                                                <div className="w-2 h-10 bg-[#B87333] rounded-full shadow-[0_0_15px_rgba(184,115,51,0.4)]"></div>
-                                                <h2 className="text-2xl font-black text-white uppercase italic tracking-tighter">Revisão da Forja</h2>
-                                            </div>
-                                            <span className="text-[10px] font-black bg-white/5 text-[#B87333] py-2.5 px-6 rounded-full border border-white/5 uppercase tracking-widest italic">{songs.length} Itens Selecionados</span>
-                                        </div>
 
-                                        <div className="grid grid-cols-1 gap-4 max-h-[600px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-[#B87333]/20">
-                                            {songs.length === 0 ? (
-                                                <div className="py-20 text-center border-2 border-dashed border-white/5 rounded-[40px] bg-black/20">
-                                                    <FileAudio className="w-16 h-16 text-slate-800 mx-auto mb-6 opacity-20" />
-                                                    <p className="text-xs font-black text-slate-600 uppercase tracking-[0.3em]">Nenhuma peça selecionada</p>
-                                                    <button onClick={() => setCurrentStep(1)} className="mt-8 px-8 py-3 bg-[#B87333]/10 text-[#B87333] border border-[#B87333]/20 rounded-xl hover:bg-[#B87333] hover:text-white transition-all text-[10px] font-black uppercase tracking-widest">Voltar para a Escolha de peças</button>
-                                                </div>
-                                            ) : songs.map((song, i) => (
-                                                <div key={i} className="p-6 rounded-[32px] border flex items-center justify-between transition-all bg-black/40 border-white/5 hover:border-[#B87333]/30 group">
-                                                    <div className="flex items-center space-x-6">
-                                                        <div className="w-14 h-14 rounded-2xl bg-white/5 flex items-center justify-center text-[#B87333] border border-white/5 group-hover:bg-[#B87333] group-hover:text-white transition-all shadow-inner">
-                                                            <Music className="w-6 h-6" />
-                                                        </div>
-                                                        <div>
-                                                            <h4 className="font-black text-white text-lg line-clamp-1 uppercase italic tracking-tighter">{song.song_name}</h4>
-                                                            <div className="flex items-center space-x-4 mt-1">
-                                                                <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">{song.artist_name}</p>
-                                                                <div className="h-1 w-1 bg-slate-700 rounded-full"></div>
-                                                                <p className="text-[10px] text-[#B87333] font-black uppercase tracking-widest">Tom: {song.sounding_key || song.song_key}</p>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                    <div className="flex items-center space-x-4">
-                                                        <div className="flex flex-col items-center mr-6">
-                                                            <span className="text-[8px] font-black text-slate-600 uppercase tracking-widest mb-2">Ajuste de Tom</span>
-                                                            <div className="flex items-center space-x-1.5 bg-black/60 p-1 rounded-xl border border-white/5">
-                                                                <button onClick={() => transposeSong(i, -1)} className="p-2 hover:text-[#B87333] transition-all"><ChevronDown className="w-4 h-4" /></button>
-                                                                <span className="font-mono font-black text-xs w-8 text-center text-white">{song.sounding_key || song.song_key || 'C'}</span>
-                                                                <button onClick={() => transposeSong(i, 1)} className="p-2 hover:text-[#B87333] transition-all"><ChevronUp className="w-4 h-4" /></button>
-                                                            </div>
-                                                        </div>
-                                                        <div className="flex flex-col items-center mr-6">
-                                                            <span className="text-[8px] font-black text-slate-600 uppercase tracking-widest mb-2">Capo</span>
-                                                            <select
-                                                                value={song.capo || 0}
-                                                                onChange={(e) => {
-                                                                    const newCapo = Number(e.target.value);
-                                                                    const oldCapo = song.capo || 0;
-                                                                    transposeSong(i, oldCapo - newCapo);
-                                                                    const next = [...songs];
-                                                                    next[i].capo = newCapo;
-                                                                    setSongs(next);
-                                                                }}
-                                                                className="bg-black/60 border border-white/5 rounded-xl px-3 py-2 text-[10px] font-black text-[#B87333] outline-none"
-                                                            >
-                                                                {[...Array(13)].map((_, c) => <option key={c} value={c} className="bg-[#1A1A1A]">{c === 0 ? 'Off' : `${c}ª`}</option>)}
-                                                            </select>
-                                                        </div>
-                                                        <div className="flex items-center space-x-2 border-l border-white/5 pl-6">
-                                                            <button
-                                                                onClick={() => toggleChords(i)}
-                                                                className={`w-12 h-12 rounded-2xl flex items-center justify-center border transition-all ${song.show_chords ? 'bg-[#B87333] text-white border-[#B87333]/30 shadow-lg shadow-[#B87333]/20' : 'bg-white/5 text-slate-700 border-white/5 hover:text-[#B87333]'}`}
-                                                            >
-                                                                <Guitar className="w-5 h-5" />
-                                                            </button>
-                                                            <button onClick={() => removeSong(i)} className="w-12 h-12 rounded-2xl flex items-center justify-center bg-white/5 hover:bg-red-900/40 text-slate-700 hover:text-red-500 border border-white/5 transition-all">
-                                                                <Trash2 className="w-5 h-5" />
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* STEP 3: MODO PROJEÇÃO */}
-                            {currentStep === 3 && (
+                            {/* ABA 2: LISTAS */}
+                            {mainNav === 'listas' && (
                                 <div className="flex-1 animate-in fade-in slide-in-from-right-8 duration-700">
-                                    <div className="bg-[#16161D]/80 backdrop-blur-xl border border-white/5 rounded-[40px] p-8 shadow-2xl">
+                                    <div className="bg-[#16161D]/80 backdrop-blur-xl border border-white/5 rounded-[40px] p-8 shadow-2xl min-h-[500px]">
                                         <div className="flex items-center space-x-4 mb-10">
                                             <div className="w-2 h-10 bg-[#B87333] rounded-full shadow-[0_0_15px_rgba(184,115,51,0.4)]"></div>
-                                            <h2 className="text-2xl font-black text-white uppercase italic tracking-tighter">Modo Projeção</h2>
+                                            <h2 className="text-2xl font-black text-white uppercase italic tracking-tighter">Listas Salvas</h2>
                                         </div>
 
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-                                            <div className="bg-black/40 border border-white/5 rounded-[40px] p-10 flex flex-col items-center text-center group hover:border-[#B87333]/40 transition-all">
-                                                <div className="w-24 h-24 bg-[#B87333]/10 rounded-[32px] flex items-center justify-center mb-8 border border-[#B87333]/20 group-hover:scale-110 transition-all shadow-2xl shadow-[#B87333]/5">
-                                                    <Monitor className="w-10 h-10 text-[#B87333]" />
-                                                </div>
-                                                <h3 className="text-xl font-black text-white uppercase tracking-widest mb-4">Performance ao Vivo</h3>
-                                                <p className="text-sm text-slate-500 font-medium leading-relaxed mb-8 max-w-xs">{songs.length === 0 ? "Adicione músicas para ativar o player." : "Interface otimizada para palcos, com autoscroll e fontes industriais de alta visibilidade."}</p>
-                                                <button
-                                                    onClick={() => { setActiveTab('player'); setCurrentStep(3); setSelectedManualIndex(songs.length > 0 ? 0 : null); }}
-                                                    className={`px-10 py-5 font-black uppercase tracking-widest rounded-2xl transition-all shadow-xl active:scale-95 ${songs.length === 0 ? 'bg-white/5 text-slate-600 border border-white/5 cursor-not-allowed shadow-none' : 'bg-[#B87333] hover:bg-[#8B4513] text-white shadow-[#B87333]/20'}`}
-                                                    disabled={songs.length === 0}
-                                                >
-                                                    Ativar Player
-                                                </button>
-                                            </div>
-
-                                            <div className="bg-black/40 border border-white/5 rounded-[40px] p-10 flex flex-col items-center text-center opacity-40 grayscale group cursor-not-allowed">
-                                                <div className="w-24 h-24 bg-white/5 rounded-[32px] flex items-center justify-center mb-8 border border-white/5">
-                                                    <Tv className="w-10 h-10 text-slate-700" />
-                                                </div>
-                                                <h3 className="text-xl font-black text-slate-400 uppercase tracking-widest mb-4">Display Externo</h3>
-                                                <p className="text-sm text-slate-700 font-medium leading-relaxed mb-8 max-w-xs">Espelhamento wireless para telas auxiliares e projetores. Em desenvolvimento.</p>
-                                                <span className="px-8 py-4 bg-white/5 text-slate-700 font-black uppercase tracking-widest rounded-2xl border border-white/5 text-xs">Indisponível</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* STEP 4: CONFIGURAÇÕES DA FORJA */}
-                            {currentStep === 4 && (
-                                <div className="flex-1 animate-in fade-in slide-in-from-right-8 duration-700">
-                                    <div className="bg-[#16161D]/80 backdrop-blur-xl border border-white/5 rounded-[40px] p-8 shadow-2xl">
-                                        <div className="flex items-center space-x-4 mb-10">
-                                            <div className="w-2 h-10 bg-[#B87333] rounded-full shadow-[0_0_15px_rgba(184,115,51,0.4)]"></div>
-                                            <h2 className="text-2xl font-black text-white uppercase italic tracking-tighter">Engrenagens da Forja</h2>
-                                        </div>
-
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-                                            <div className="space-y-8">
-                                                <div className="bg-black/40 border border-white/5 rounded-[32px] p-8">
-                                                    <div className="flex items-center space-x-3 mb-6">
-                                                        <Settings2 className="w-5 h-5 text-[#B87333]" />
-                                                        <h3 className="text-xs font-black text-white uppercase tracking-widest italic">Saída de Dados</h3>
-                                                    </div>
-                                                    <div className="grid grid-cols-1 gap-4">
-                                                        {['docx', 'pdf', 'both'].map(fmt => (
-                                                            <button
-                                                                key={fmt}
-                                                                onClick={() => setExportFormat(fmt)}
-                                                                className={`p-6 rounded-2xl border transition-all text-left flex items-center justify-between group ${exportFormat === fmt ? 'bg-[#B87333] border-[#B87333] shadow-lg shadow-[#B87333]/20' : 'bg-white/5 border-white/5 hover:border-[#B87333]/40'}`}
-                                                            >
-                                                                <div>
-                                                                    <p className={`text-sm font-black uppercase tracking-widest transition-colors ${exportFormat === fmt ? 'text-white' : 'text-slate-400 group-hover:text-white'}`}>
-                                                                        {fmt === 'docx' ? 'Microsoft Word (.docx)' : fmt === 'pdf' ? 'Adobe PDF (.pdf)' : 'Arquivo Mestre (.ZIP)'}
-                                                                    </p>
-                                                                    <p className={`text-[10px] font-bold mt-1 uppercase ${exportFormat === fmt ? 'text-white/60' : 'text-slate-600'}`}>
-                                                                        {fmt === 'both' ? 'Inclui PDF e DOCX em um único pacote' : 'Otimizado para edição e impressão'}
-                                                                    </p>
-                                                                </div>
-                                                                <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${exportFormat === fmt ? 'bg-white border-white text-[#B87333]' : 'border-white/10'}`}>
-                                                                    {exportFormat === fmt && <Check className="w-4 h-4 stroke-[4]" />}
-                                                                </div>
-                                                            </button>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            <div className="space-y-8">
-                                                <div className="bg-black/40 border border-white/5 rounded-[32px] p-8">
-                                                    <div className="flex items-center space-x-3 mb-6">
-                                                        <ImageIcon className="w-5 h-5 text-[#B87333]" />
-                                                        <h3 className="text-xs font-black text-white uppercase tracking-widest italic">Identidade Visual</h3>
-                                                    </div>
-                                                    <div
-                                                        onClick={() => coverInputRef.current?.click()}
-                                                        className={`relative overflow-hidden border-2 border-dashed rounded-[32px] aspect-video flex flex-col items-center justify-center cursor-pointer transition-all ${coverImage ? 'border-[#B87333]' : 'border-white/10 hover:border-[#B87333]/40 bg-white/5'}`}
-                                                    >
-                                                        {coverImage ? (
-                                                            <div className="absolute inset-0 w-full h-full p-4">
-                                                                <div className="w-full h-full rounded-2xl bg-black/40 flex flex-col items-center justify-center border border-white/10">
-                                                                    <CheckCircle className="w-10 h-10 text-[#B87333] mb-4" />
-                                                                    <p className="text-[10px] font-black text-white uppercase tracking-widest px-8 text-center truncate w-full">{coverImage.name}</p>
-                                                                    <button
-                                                                        onClick={(e) => { e.stopPropagation(); setCoverImage(null); }}
-                                                                        className="mt-6 px-6 py-2 bg-white/5 hover:bg-red-900/40 text-slate-500 hover:text-red-500 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all border border-white/5"
-                                                                    >
-                                                                        Remover
-                                                                    </button>
-                                                                </div>
-                                                            </div>
-                                                        ) : (
-                                                            <>
-                                                                <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mb-4">
-                                                                    <UploadCloud className="w-8 h-8 text-slate-700" />
-                                                                </div>
-                                                                <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest">Upload de Capa Customizada</p>
-                                                                <p className="text-[9px] font-bold text-slate-700 mt-2 uppercase tracking-tighter">JPEG, PNG • Max 5MB</p>
-                                                            </>
-                                                        )}
-                                                        <input type="file" ref={coverInputRef} onChange={handleCoverUpload} accept="image/*" className="hidden" />
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* STEP 5: FINALIZAÇÃO */}
-                            {currentStep === 5 && (
-                                <div className="flex-1 animate-in fade-in slide-in-from-right-8 duration-700">
-                                    <div className="bg-[#16161D]/80 backdrop-blur-xl border border-white/5 rounded-[40px] p-12 shadow-2xl flex flex-col items-center justify-center text-center">
-                                        {!downloadUrl ? (
-                                            <div className="max-w-xl space-y-10">
-                                                <div className="relative">
-                                                    <div className="w-32 h-32 bg-[#B87333]/10 rounded-[40px] flex items-center justify-center mx-auto border border-[#B87333]/20 relative z-10">
-                                                        <FileText className={`w-14 h-14 text-[#B87333] ${isGenerating ? 'animate-pulse' : ''}`} />
-                                                    </div>
-                                                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 bg-[#B87333]/5 rounded-full blur-3xl animate-pulse"></div>
-                                                </div>
-
-                                                <div className="space-y-4">
-                                                    <h2 className="text-3xl font-black text-white uppercase italic tracking-tighter">A Forja está Pronta</h2>
-                                                    <p className="text-sm text-slate-500 font-medium leading-relaxed uppercase tracking-widest">
-                                                        Todas as suas {songs.length} peças foram ajustadas e cronometradas. <br />
-                                                        Clique abaixo para iniciar a geração do seu material exclusivo.
-                                                    </p>
-                                                </div>
-
-                                                <button
-                                                    disabled={songs.length === 0 || isGenerating}
-                                                    onClick={handleGenerateDocument}
-                                                    className="w-full py-6 bg-[#B87333] hover:bg-[#8B4513] text-white font-black uppercase tracking-[0.3em] rounded-[24px] shadow-2xl shadow-[#B87333]/20 transition-all flex items-center justify-center group active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed text-lg italic"
-                                                >
-                                                    {isGenerating ? (
-                                                        <>
-                                                            <RefreshCw className="w-7 h-7 mr-4 animate-spin" />
-                                                            <span>TRABALHANDO NO METAL...</span>
-                                                        </>
-                                                    ) : (
-                                                        <>
-                                                            <Zap className="w-7 h-7 mr-4 group-hover:scale-125 transition-transform" />
-                                                            <span>BATER O MARTELO</span>
-                                                        </>
-                                                    )}
-                                                </button>
+                                        {Object.keys(savedPlaylists).length === 0 && JSON.parse(localStorage.getItem('iron_chords_playlists') || '[]').length === 0 ? (
+                                            <div className="py-20 flex col-span-3 items-center justify-center flex-col text-center border-2 border-dashed border-white/5 rounded-[40px] bg-black/20 w-full min-h-[300px]">
+                                                <LayoutList className="w-16 h-16 text-slate-800 mx-auto mb-6 opacity-20" />
+                                                <p className="text-xs font-black text-slate-600 uppercase tracking-[0.3em]">Nenhuma lista salva ainda.</p>
                                             </div>
                                         ) : (
-                                            <div className="max-w-xl space-y-10 animate-in zoom-in-95 duration-700">
-                                                <div className="relative">
-                                                    <div className="w-32 h-32 bg-green-500/10 rounded-[40px] flex items-center justify-center mx-auto border border-green-500/20 relative z-10">
-                                                        <ShieldCheck className="w-14 h-14 text-green-500" />
+                                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                                {JSON.parse(localStorage.getItem('iron_chords_playlists') || '[]').map((pl, idx) => (
+                                                    <div key={idx} className="bg-black/40 border border-white/5 hover:border-[#B87333]/30 rounded-[32px] p-6 transition-all group flex flex-col h-[380px]">
+                                                        <div className="flex items-center justify-between mb-4">
+                                                            <h3 className="text-xl font-black text-white uppercase italic tracking-tighter line-clamp-2">{pl.name}</h3>
+                                                            <button onClick={() => {
+                                                                setDeleteTarget({ type: 'lista', id: idx, name: pl.name });
+                                                                setDeleteModalOpen(true);
+                                                            }} className="p-2 bg-white/5 hover:bg-red-600/20 text-slate-500 hover:text-red-500 rounded-lg transition-all border border-white/5 flex items-center justify-center"><Trash2 className="w-3.5 h-3.5" /></button>
+                                                        </div>
+                                                        <div className="mb-4">
+                                                            <span className="text-[10px] font-black bg-white/5 text-[#B87333] py-1 px-3 rounded-full border border-white/5 uppercase tracking-widest">{pl.songs?.length || 0} Peças</span>
+                                                        </div>
+                                                        <div className="flex-1 overflow-y-auto mb-6 pr-2 scrollbar-thin scrollbar-thumb-white/10 space-y-2 bg-[#1A1A1A] p-4 rounded-2xl border border-white/5">
+                                                            {(pl.songs || []).map((s, i) => (
+                                                                <div key={i} className="flex flex-col border-b border-white/5 last:border-0 pb-2 last:pb-0">
+                                                                    <span className="text-xs text-slate-300 uppercase font-bold truncate tracking-tight">{i + 1}. {s.song_name}</span>
+                                                                    <span className="text-[9px] text-slate-500 uppercase tracking-widest">{s.artist_name}</span>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                        <div className="flex items-center justify-between mt-auto space-x-3 pt-4 border-t border-white/5">
+                                                            <button
+                                                                onClick={() => {
+                                                                    setSongs(pl.songs || []);
+                                                                    setMainNav('player');
+                                                                    setSelectedManualIndex(0);
+                                                                }}
+                                                                className="flex-1 bg-white/5 hover:bg-white/10 text-white border border-white/10 py-4 rounded-xl transition-all shadow-lg text-[10px] font-black uppercase tracking-widest flex justify-center items-center space-x-2"
+                                                            >
+                                                                <Play className="w-4 h-4" />
+                                                                <span>Tocar Lista</span>
+                                                            </button>
+                                                            <button
+                                                                onClick={() => {
+                                                                    setSongs(pl.songs || []);
+                                                                    setCurrentExportList(pl);
+                                                                    setExportStep(1);
+                                                                    setDownloadUrl(null);
+                                                                    setExportFormat('docx');
+                                                                    setCoverImage(null);
+                                                                    setShowExportModal(true);
+                                                                }}
+                                                                className="flex-1 bg-[#B87333]/10 hover:bg-[#B87333] text-[#B87333] hover:text-white border border-[#B87333]/20 py-4 rounded-xl transition-all shadow-lg text-[10px] font-black uppercase tracking-widest flex justify-center items-center space-x-2"
+                                                            >
+                                                                <FileText className="w-4 h-4" />
+                                                                <span>Gerar Livreto</span>
+                                                            </button>
+                                                        </div>
                                                     </div>
-                                                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 bg-green-500/5 rounded-full blur-3xl"></div>
-                                                </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
 
-                                                <div className="space-y-4">
-                                                    <h2 className="text-3xl font-black text-white uppercase italic tracking-tighter">Missão Cumprida</h2>
-                                                    <p className="text-sm text-slate-500 font-medium leading-relaxed uppercase tracking-widest">
-                                                        Seu documento foi forjado com sucesso no calor industrial. <br />
-                                                        Utilize o acesso abaixo para resgatar sua peça.
-                                                    </p>
-                                                </div>
-
-                                                <div className="grid grid-cols-1 gap-4">
-                                                    <a
-                                                        href={downloadUrl}
-                                                        download={exportFormat === 'pdf' ? "IronChords_Book.pdf" : exportFormat === 'both' ? "IronChords_Forged.zip" : "IronChords_Book.docx"}
-                                                        className="w-full py-6 bg-green-600 hover:bg-green-700 text-white text-center text-lg font-black uppercase tracking-[0.3em] rounded-[24px] transition-all shadow-xl shadow-green-900/20 italic flex items-center justify-center"
-                                                    >
-                                                        <Download className="w-7 h-7 mr-4" />
-                                                        RECOLHER PEÇA
-                                                    </a>
-                                                    <button
-                                                        onClick={() => { setDownloadUrl(null); setCurrentStep(1); setSongs([]); }}
-                                                        className="w-full py-4 bg-white/5 hover:bg-white/10 text-slate-500 hover:text-white font-black uppercase tracking-widest rounded-2xl text-[10px] italic transition-all border border-white/5"
-                                                    >
-                                                        Iniciar Nova Forja
-                                                    </button>
+                            {/* ABA 3: PLAYER DA FORJA */}
+                            {mainNav === 'player' && (
+                                <div className="flex-1 animate-in fade-in slide-in-from-right-8 duration-700">
+                                    <div className="bg-[#16161D]/80 backdrop-blur-xl border border-white/5 rounded-[40px] p-8 shadow-2xl min-h-[500px] flex flex-col items-center justify-center text-center">
+                                        <div className="w-24 h-24 bg-[#B87333]/10 rounded-[32px] flex items-center justify-center mb-8 border border-[#B87333]/20 shadow-2xl shadow-[#B87333]/5 mx-auto transition-transform hover:scale-110">
+                                            <Monitor className="w-10 h-10 text-[#B87333]" />
+                                        </div>
+                                        <h3 className="text-xl font-black text-white uppercase tracking-widest mb-4">Player da Forja</h3>
+                                        <p className="text-sm text-slate-400 font-medium leading-relaxed mb-8 max-w-sm mx-auto">{songs.length === 0 ? "Vá em 'Escolha de Peças' ou em 'Listas' para carregar músicas para tocar." : (songs.length + " peças carregadas e prontas para execução ao vivo.")}</p>
+                                        <button
+                                            onClick={() => { setIsFullScreenPlayer(true); setSelectedManualIndex(songs.length > 0 ? 0 : null); setCurrentLineIndex(0); }}
+                                            className={`px-12 py-6 font-black uppercase tracking-[0.2em] rounded-2xl transition-all shadow-2xl active:scale-95 flex items-center space-x-3 mx-auto ${songs.length === 0 ? 'bg-white/5 text-slate-600 border border-white/5 cursor-not-allowed shadow-none' : 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-900/40'}`}
+                                            disabled={songs.length === 0}
+                                        >
+                                            <Play className="w-6 h-6 inline mr-2" />
+                                            <span>Iniciar Apresentação</span>
+                                        </button>
+                                        {songs.length > 0 && (
+                                            <div className="mt-12 w-full max-w-2xl bg-black/40 border border-white/5 rounded-2xl p-6 text-left mx-auto">
+                                                <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4 border-b border-white/5 pb-2">Setlist Carregado</h4>
+                                                <div className="max-h-48 overflow-y-auto space-y-2 scrollbar-thin">
+                                                    {songs.map((s, idx) => (
+                                                        <div key={idx} className="flex items-center space-x-4">
+                                                            <span className="text-[10px] text-slate-600 font-black">{idx + 1}.</span>
+                                                            <span className="text-xs text-white font-bold uppercase truncate">{s.song_name}</span>
+                                                        </div>
+                                                    ))}
                                                 </div>
                                             </div>
                                         )}
@@ -2391,145 +2360,356 @@ export default function App() {
                                 </div>
                             )}
 
-                            {/* GLOBAL NAVIGATION CONTROLS */}
-                            {activeTab !== 'player' && activeTab !== 'presentation' && (
-                                <div className="mt-10 flex items-center justify-between px-4 pb-12">
-                                    <button
-                                        disabled={currentStep === 1}
-                                        onClick={() => setCurrentStep(prev => Math.max(1, prev - 1))}
-                                        className={`flex items-center space-x-3 px-8 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] italic transition-all border ${currentStep === 1 ? 'opacity-0 pointer-events-none' : 'bg-white/5 border-white/5 text-slate-500 hover:text-white hover:border-[#B87333]/40'}`}
-                                    >
-                                        <ArrowLeft className="w-4 h-4" />
-                                        <span>Voltar</span>
-                                    </button>
 
-                                    <button
-                                        disabled={currentStep === 5 || (currentStep === 1 && songs.length === 0)}
-                                        onClick={() => setCurrentStep(prev => Math.min(5, prev + 1))}
-                                        className={`flex items-center space-x-3 px-10 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] italic transition-all shadow-xl ${currentStep === 5 ? 'opacity-0 pointer-events-none' : 'bg-[#B87333] text-white shadow-[#B87333]/20 hover:bg-[#8B4513] disabled:opacity-20'}`}
-                                    >
-                                        <span>{currentStep === 4 ? "Ir para Finalização" : "Próximo Passo"}</span>
-                                        <ArrowRight className="w-4 h-4" />
-                                    </button>
+                            {/* Export Livreto Modal */}
+                            {showExportModal && (
+                                <div className="fixed inset-0 z-[200] flex items-center justify-center bg-[#070709]/90 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-300 p-4">
+                                    <div className="bg-[#16161D] border border-white/10 rounded-[32px] shadow-2xl w-full max-w-5xl flex flex-col max-h-[90vh]">
+                                        <div className="flex items-center justify-between p-8 border-b border-white/5 shrink-0">
+                                            <div className="flex items-center space-x-4">
+                                                <div className="w-1.5 h-6 bg-[#B87333] rounded-full shadow-[0_0_15px_rgba(184,115,51,0.4)]"></div>
+                                                <h3 className="text-xl font-black text-white uppercase italic tracking-tighter">Gerar Livreto: {currentExportList?.name}</h3>
+                                            </div>
+                                            <button onClick={() => { setShowExportModal(false); setExportStep(1); setDownloadUrl(null); }} className="p-2 bg-white/5 hover:bg-white/10 rounded-xl transition-all border border-white/5 flex items-center justify-center">
+                                                <X className="w-5 h-5 text-slate-400" />
+                                            </button>
+                                        </div>
+                                        <div className="flex-1 overflow-y-auto p-4 scrollbar-thin scrollbar-thumb-white/10">
+                                            {/* STEP 4: CONFIGURAÇÕES DA FORJA */}
+                                            {exportStep === 1 && (
+                                                <div className="flex-1 animate-in fade-in slide-in-from-right-8 duration-700">
+                                                    <div className="bg-[#16161D]/80 backdrop-blur-xl border border-white/5 rounded-[40px] p-8 shadow-2xl">
+                                                        <div className="flex items-center space-x-4 mb-10">
+                                                            <div className="w-2 h-10 bg-[#B87333] rounded-full shadow-[0_0_15px_rgba(184,115,51,0.4)]"></div>
+                                                            <h2 className="text-2xl font-black text-white uppercase italic tracking-tighter">Engrenagens da Forja</h2>
+                                                        </div>
+
+                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+                                                            <div className="space-y-8">
+                                                                <div className="bg-black/40 border border-white/5 rounded-[32px] p-8">
+                                                                    <div className="flex items-center space-x-3 mb-6">
+                                                                        <Settings2 className="w-5 h-5 text-[#B87333]" />
+                                                                        <h3 className="text-xs font-black text-white uppercase tracking-widest italic">Saída de Dados</h3>
+                                                                    </div>
+                                                                    <div className="grid grid-cols-1 gap-4">
+                                                                        {['docx', 'pdf', 'both'].map(fmt => (
+                                                                            <button
+                                                                                key={fmt}
+                                                                                onClick={() => setExportFormat(fmt)}
+                                                                                className={`p-6 rounded-2xl border transition-all text-left flex items-center justify-between group ${exportFormat === fmt ? 'bg-[#B87333] border-[#B87333] shadow-lg shadow-[#B87333]/20' : 'bg-white/5 border-white/5 hover:border-[#B87333]/40'}`}
+                                                                            >
+                                                                                <div>
+                                                                                    <p className={`text-sm font-black uppercase tracking-widest transition-colors ${exportFormat === fmt ? 'text-white' : 'text-slate-400 group-hover:text-white'}`}>
+                                                                                        {fmt === 'docx' ? 'Microsoft Word (.docx)' : fmt === 'pdf' ? 'Adobe PDF (.pdf)' : 'Arquivo Mestre (.ZIP)'}
+                                                                                    </p>
+                                                                                    <p className={`text-[10px] font-bold mt-1 uppercase ${exportFormat === fmt ? 'text-white/60' : 'text-slate-600'}`}>
+                                                                                        {fmt === 'both' ? 'Inclui PDF e DOCX em um único pacote' : 'Otimizado para edição e impressão'}
+                                                                                    </p>
+                                                                                </div>
+                                                                                <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${exportFormat === fmt ? 'bg-white border-white text-[#B87333]' : 'border-white/10'}`}>
+                                                                                    {exportFormat === fmt && <Check className="w-4 h-4 stroke-[4]" />}
+                                                                                </div>
+                                                                            </button>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+
+                                                            <div className="space-y-8">
+                                                                <div className="bg-black/40 border border-white/5 rounded-[32px] p-8">
+                                                                    <div className="flex items-center space-x-3 mb-6">
+                                                                        <ImageIcon className="w-5 h-5 text-[#B87333]" />
+                                                                        <h3 className="text-xs font-black text-white uppercase tracking-widest italic">Identidade Visual</h3>
+                                                                    </div>
+                                                                    <div
+                                                                        onClick={() => coverInputRef.current?.click()}
+                                                                        className={`relative overflow-hidden border-2 border-dashed rounded-[32px] aspect-video flex flex-col items-center justify-center cursor-pointer transition-all ${coverImage ? 'border-[#B87333]' : 'border-white/10 hover:border-[#B87333]/40 bg-white/5'}`}
+                                                                    >
+                                                                        {coverImage ? (
+                                                                            <div className="absolute inset-0 w-full h-full p-4">
+                                                                                <div className="w-full h-full rounded-2xl bg-black/40 flex flex-col items-center justify-center border border-white/10">
+                                                                                    <CheckCircle className="w-10 h-10 text-[#B87333] mb-4" />
+                                                                                    <p className="text-[10px] font-black text-white uppercase tracking-widest px-8 text-center truncate w-full">{coverImage.name}</p>
+                                                                                    <button
+                                                                                        onClick={(e) => { e.stopPropagation(); setCoverImage(null); }}
+                                                                                        className="mt-6 px-6 py-2 bg-white/5 hover:bg-red-900/40 text-slate-500 hover:text-red-500 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all border border-white/5"
+                                                                                    >
+                                                                                        Remover
+                                                                                    </button>
+                                                                                </div>
+                                                                            </div>
+                                                                        ) : (
+                                                                            <>
+                                                                                <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mb-4">
+                                                                                    <UploadCloud className="w-8 h-8 text-slate-700" />
+                                                                                </div>
+                                                                                <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest">Upload de Capa Customizada</p>
+                                                                                <p className="text-[9px] font-bold text-slate-700 mt-2 uppercase tracking-tighter">JPEG, PNG • Max 5MB</p>
+                                                                            </>
+                                                                        )}
+                                                                        <input type="file" ref={coverInputRef} onChange={handleCoverUpload} accept="image/*" className="hidden" />
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* STEP 5: FINALIZAÇÃO */}
+                                            {exportStep === 2 && (
+                                                <div className="flex-1 animate-in fade-in slide-in-from-right-8 duration-700">
+                                                    <div className="bg-[#16161D]/80 backdrop-blur-xl border border-white/5 rounded-[40px] p-12 shadow-2xl flex flex-col items-center justify-center text-center">
+                                                        {!downloadUrl ? (
+                                                            <div className="max-w-xl space-y-10">
+                                                                <div className="relative">
+                                                                    <div className="w-32 h-32 bg-[#B87333]/10 rounded-[40px] flex items-center justify-center mx-auto border border-[#B87333]/20 relative z-10">
+                                                                        <FileText className={`w-14 h-14 text-[#B87333] ${isGenerating ? 'animate-pulse' : ''}`} />
+                                                                    </div>
+                                                                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 bg-[#B87333]/5 rounded-full blur-3xl animate-pulse"></div>
+                                                                </div>
+
+                                                                <div className="space-y-4">
+                                                                    <h2 className="text-3xl font-black text-white uppercase italic tracking-tighter">A Forja está Pronta</h2>
+                                                                    <p className="text-sm text-slate-500 font-medium leading-relaxed uppercase tracking-widest">
+                                                                        Todas as suas {songs.length} peças foram ajustadas e cronometradas. <br />
+                                                                        Clique abaixo para iniciar a geração do seu material exclusivo.
+                                                                    </p>
+                                                                </div>
+
+                                                                <button
+                                                                    disabled={songs.length === 0 || isGenerating}
+                                                                    onClick={handleGenerateDocument}
+                                                                    className="w-full py-6 bg-[#B87333] hover:bg-[#8B4513] text-white font-black uppercase tracking-[0.3em] rounded-[24px] shadow-2xl shadow-[#B87333]/20 transition-all flex items-center justify-center group active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed text-lg italic"
+                                                                >
+                                                                    {isGenerating ? (
+                                                                        <>
+                                                                            <RefreshCw className="w-7 h-7 mr-4 animate-spin" />
+                                                                            <span>TRABALHANDO NO METAL...</span>
+                                                                        </>
+                                                                    ) : (
+                                                                        <>
+                                                                            <Zap className="w-7 h-7 mr-4 group-hover:scale-125 transition-transform" />
+                                                                            <span>BATER O MARTELO</span>
+                                                                        </>
+                                                                    )}
+                                                                </button>
+                                                            </div>
+                                                        ) : (
+                                                            <div className="max-w-xl space-y-10 animate-in zoom-in-95 duration-700">
+                                                                <div className="relative">
+                                                                    <div className="w-32 h-32 bg-green-500/10 rounded-[40px] flex items-center justify-center mx-auto border border-green-500/20 relative z-10">
+                                                                        <ShieldCheck className="w-14 h-14 text-green-500" />
+                                                                    </div>
+                                                                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 bg-green-500/5 rounded-full blur-3xl"></div>
+                                                                </div>
+
+                                                                <div className="space-y-4">
+                                                                    <h2 className="text-3xl font-black text-white uppercase italic tracking-tighter">Missão Cumprida</h2>
+                                                                    <p className="text-sm text-slate-500 font-medium leading-relaxed uppercase tracking-widest">
+                                                                        Seu documento foi forjado com sucesso no calor industrial. <br />
+                                                                        Utilize o acesso abaixo para resgatar sua peça.
+                                                                    </p>
+                                                                </div>
+
+                                                                <div className="grid grid-cols-1 gap-4">
+                                                                    <a
+                                                                        href={downloadUrl}
+                                                                        download={exportFormat === 'pdf' ? "IronChords_Book.pdf" : exportFormat === 'both' ? "IronChords_Forged.zip" : "IronChords_Book.docx"}
+                                                                        className="w-full py-6 bg-green-600 hover:bg-green-700 text-white text-center text-lg font-black uppercase tracking-[0.3em] rounded-[24px] transition-all shadow-xl shadow-green-900/20 italic flex items-center justify-center"
+                                                                    >
+                                                                        <Download className="w-7 h-7 mr-4" />
+                                                                        RECOLHER PEÇA
+                                                                    </a>
+                                                                    <button
+                                                                        onClick={() => { setDownloadUrl(null); setCurrentStep(1); setSongs([]); }}
+                                                                        className="w-full py-4 bg-white/5 hover:bg-white/10 text-slate-500 hover:text-white font-black uppercase tracking-widest rounded-2xl text-[10px] italic transition-all border border-white/5"
+                                                                    >
+                                                                        Iniciar Nova Forja
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            )}
+
+
+                                        </div>
+                                        {exportStep === 1 && (
+                                            <div className="p-8 border-t border-white/5 flex justify-end">
+                                                <button
+                                                    onClick={() => setExportStep(2)}
+                                                    className="px-10 py-5 bg-[#B87333] text-white font-black uppercase tracking-widest text-[10px] italic transition-all shadow-xl shadow-[#B87333]/20 hover:bg-[#8B4513] rounded-2xl flex items-center space-x-3"
+                                                >
+                                                    <span>Ir para Finalização</span>
+                                                    <ArrowRight className="w-4 h-4" />
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                             )}
-                        </div>
-                    </div >
-                )
-                }
-            </main >
 
-            {/* Save List Modal */}
-            {saveListModalOpen && (
+                        </div>
+                    </div>
+                )}
+            </main>
+
+            {/* Delete Confirmation Modal */}
+            {deleteModalOpen && (
                 <div className="fixed inset-0 z-[200] flex items-center justify-center bg-[#070709]/90 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-300">
                     <div className="bg-[#16161D] border border-white/10 p-8 rounded-[32px] shadow-2xl w-full max-w-md flex flex-col">
                         <div className="flex items-center justify-between mb-8">
                             <div className="flex items-center space-x-4">
-                                <div className="w-1.5 h-6 bg-[#B87333] rounded-full shadow-[0_0_15px_rgba(184,115,51,0.4)]"></div>
-                                <h3 className="text-xl font-black text-white uppercase italic tracking-tighter">Salvar Lista</h3>
+                                <div className="w-1.5 h-6 bg-red-600 rounded-full shadow-[0_0_15px_rgba(220,38,38,0.4)]"></div>
+                                <h3 className="text-xl font-black text-white uppercase italic tracking-tighter">Confirmar Exclusão</h3>
                             </div>
-                            <button onClick={() => { setSaveListModalOpen(false); setSaveListName(''); }} className="p-2 bg-white/5 hover:bg-white/10 rounded-xl transition-all border border-white/5"><X className="w-5 h-5 text-slate-400" /></button>
+                            <button onClick={() => setDeleteModalOpen(false)} className="p-2 bg-white/5 hover:bg-white/10 rounded-xl transition-all border border-white/5"><X className="w-5 h-5 text-slate-400" /></button>
                         </div>
                         <div className="space-y-6">
-                            <div>
-                                <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Nome da Lista</label>
-                                <input
-                                    type="text"
-                                    autoFocus
-                                    placeholder="Ex: Culto de Domingo, Setlist Rock..."
-                                    value={saveListName}
-                                    onChange={e => setSaveListName(e.target.value)}
-                                    className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-4 text-white font-bold outline-none focus:border-[#B87333]/50 transition-all placeholder:text-slate-700"
-                                    onKeyDown={e => e.key === 'Enter' && handleSaveList()}
-                                />
+                            <p className="text-sm font-bold text-slate-400 uppercase tracking-widest leading-relaxed">
+                                Você tem certeza que deseja excluir permanentemente {deleteTarget.type === 'acervo' ? 'a música' : 'a lista'} <span className="text-white">"{deleteTarget.name}"</span>?
+                            </p>
+                            <p className="text-[10px] text-red-500/80 italic uppercase">Esta ação não poderá ser desfeita.</p>
+
+                            <div className="flex items-center space-x-4 mt-6">
+                                <button
+                                    onClick={() => setDeleteModalOpen(false)}
+                                    className="flex-1 py-4 bg-white/5 hover:bg-white/10 text-white font-black uppercase tracking-widest rounded-xl transition-all border border-white/5"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    onClick={confirmDelete}
+                                    className="flex-1 py-4 bg-red-600 hover:bg-red-700 text-white font-black uppercase tracking-widest rounded-xl transition-all shadow-xl shadow-red-900/20 flex items-center justify-center space-x-2"
+                                >
+                                    <Trash2 className="w-4 h-4" />
+                                    <span>Excluir</span>
+                                </button>
                             </div>
-                            <button
-                                onClick={handleSaveList}
-                                disabled={!saveListName.trim()}
-                                className="w-full py-4 bg-[#B87333] hover:bg-[#8B4513] text-white font-black uppercase tracking-widest rounded-xl transition-all shadow-xl shadow-[#B87333]/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
-                            >
-                                <Save className="w-4 h-4" />
-                                <span>Confirmar Salvamento</span>
-                            </button>
                         </div>
                     </div>
                 </div>
             )}
+
+            {/* Save List Modal */}
+            {
+                saveListModalOpen && (
+                    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-[#070709]/90 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-300">
+                        <div className="bg-[#16161D] border border-white/10 p-8 rounded-[32px] shadow-2xl w-full max-w-md flex flex-col">
+                            <div className="flex items-center justify-between mb-8">
+                                <div className="flex items-center space-x-4">
+                                    <div className="w-1.5 h-6 bg-[#B87333] rounded-full shadow-[0_0_15px_rgba(184,115,51,0.4)]"></div>
+                                    <h3 className="text-xl font-black text-white uppercase italic tracking-tighter">Salvar Lista</h3>
+                                </div>
+                                <button onClick={() => { setSaveListModalOpen(false); setSaveListName(''); }} className="p-2 bg-white/5 hover:bg-white/10 rounded-xl transition-all border border-white/5"><X className="w-5 h-5 text-slate-400" /></button>
+                            </div>
+                            <div className="space-y-6">
+                                <div>
+                                    <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Nome da Lista</label>
+                                    <input
+                                        type="text"
+                                        autoFocus
+                                        placeholder="Ex: Missa de Domingo, Setlist Rock..."
+                                        value={saveListName}
+                                        onChange={e => setSaveListName(e.target.value)}
+                                        className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-4 text-white font-bold outline-none focus:border-[#B87333]/50 transition-all placeholder:text-slate-700"
+                                        onKeyDown={e => e.key === 'Enter' && handleSaveList()}
+                                    />
+                                </div>
+                                <button
+                                    onClick={handleSaveList}
+                                    disabled={!saveListName.trim()}
+                                    className="w-full py-4 bg-[#B87333] hover:bg-[#8B4513] text-white font-black uppercase tracking-widest rounded-xl transition-all shadow-xl shadow-[#B87333]/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+                                >
+                                    <Save className="w-4 h-4" />
+                                    <span>Confirmar Salvamento</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )
+            }
 
             {/* Save Success Animation */}
-            {showSaveSuccess && (
-                <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/40 backdrop-blur-sm animate-in fade-in duration-300 pointer-events-none">
-                    <div className="bg-green-500/10 border border-green-500/20 p-10 rounded-[40px] shadow-[0_0_50px_rgba(34,197,94,0.3)] flex flex-col items-center animate-in zoom-in-50 duration-500 spring-gentle">
-                        <div className="w-24 h-24 bg-green-500/20 rounded-full flex items-center justify-center relative mb-6">
-                            <div className="absolute inset-0 bg-green-500/20 rounded-full animate-ping"></div>
-                            <CheckCircle className="w-12 h-12 text-green-400 drop-shadow-[0_0_15px_rgba(34,197,94,0.8)]" />
+            {
+                showSaveSuccess && (
+                    <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/40 backdrop-blur-sm animate-in fade-in duration-300 pointer-events-none">
+                        <div className="bg-green-500/10 border border-green-500/20 p-10 rounded-[40px] shadow-[0_0_50px_rgba(34,197,94,0.3)] flex flex-col items-center animate-in zoom-in-50 duration-500 spring-gentle">
+                            <div className="w-24 h-24 bg-green-500/20 rounded-full flex items-center justify-center relative mb-6">
+                                <div className="absolute inset-0 bg-green-500/20 rounded-full animate-ping"></div>
+                                <CheckCircle className="w-12 h-12 text-green-400 drop-shadow-[0_0_15px_rgba(34,197,94,0.8)]" />
+                            </div>
+                            <h2 className="text-3xl font-black text-white uppercase italic tracking-tighter drop-shadow-md">Lista Forjada</h2>
+                            <p className="text-green-400/80 font-bold uppercase tracking-[0.2em] text-xs mt-2">Salva com Sucesso no Acervo Local</p>
                         </div>
-                        <h2 className="text-3xl font-black text-white uppercase italic tracking-tighter drop-shadow-md">Lista Forjada</h2>
-                        <p className="text-green-400/80 font-bold uppercase tracking-[0.2em] text-xs mt-2">Salva com Sucesso no Acervo Local</p>
                     </div>
-                </div>
-            )}
+                )
+            }
 
             {/* Edit Acervo Modal */}
-            {editingChord && (
-                <div className="fixed inset-0 z-[250] flex items-center justify-center bg-[#070709]/90 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-300 p-4">
-                    <div className="bg-[#16161D] border border-[#B87333]/30 p-8 rounded-[32px] shadow-[0_0_50px_rgba(0,0,0,0.8)] w-full max-w-4xl flex flex-col max-h-[90vh]">
-                        <div className="flex items-center justify-between mb-8 shrink-0">
-                            <div className="flex items-center space-x-4">
-                                <div className="w-1.5 h-6 bg-[#B87333] rounded-full shadow-[0_0_15px_rgba(184,115,51,0.4)]"></div>
-                                <h3 className="text-2xl font-black text-white uppercase italic tracking-tighter">Editar Cifra</h3>
-                            </div>
-                            <button onClick={() => setEditingChord(null)} className="p-2 bg-white/5 hover:bg-white/10 rounded-xl transition-all border border-white/5"><X className="w-5 h-5 text-slate-400" /></button>
-                        </div>
-
-                        <div className="overflow-y-auto pr-4 space-y-6 scrollbar-thin scrollbar-thumb-white/10">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div>
-                                    <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Música</label>
-                                    <input type="text" value={editFormData.song_name} onChange={e => setEditFormData({ ...editFormData, song_name: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-4 text-white font-bold outline-none focus:border-[#B87333]/50 transition-all" />
+            {
+                editingChord && (
+                    <div className="fixed inset-0 z-[250] flex items-center justify-center bg-[#070709]/90 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-300 p-4">
+                        <div className="bg-[#16161D] border border-[#B87333]/30 p-8 rounded-[32px] shadow-[0_0_50px_rgba(0,0,0,0.8)] w-full max-w-4xl flex flex-col max-h-[90vh]">
+                            <div className="flex items-center justify-between mb-8 shrink-0">
+                                <div className="flex items-center space-x-4">
+                                    <div className="w-1.5 h-6 bg-[#B87333] rounded-full shadow-[0_0_15px_rgba(184,115,51,0.4)]"></div>
+                                    <h3 className="text-2xl font-black text-white uppercase italic tracking-tighter">Editar Cifra</h3>
                                 </div>
-                                <div>
-                                    <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Artista</label>
-                                    <input type="text" value={editFormData.artist_name} onChange={e => setEditFormData({ ...editFormData, artist_name: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-4 text-white font-bold outline-none focus:border-[#B87333]/50 transition-all" />
-                                </div>
+                                <button onClick={() => setEditingChord(null)} className="p-2 bg-white/5 hover:bg-white/10 rounded-xl transition-all border border-white/5"><X className="w-5 h-5 text-slate-400" /></button>
                             </div>
 
-                            <div className="grid grid-cols-2 gap-6">
-                                <div>
-                                    <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Tom Original</label>
-                                    <select value={editFormData.song_key} onChange={e => setEditFormData({ ...editFormData, song_key: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-4 text-white font-bold outline-none focus:border-[#B87333]/50 transition-all">
-                                        {["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"].map(k => <option key={k} value={k} className="bg-[#1A1A1A]">{k}</option>)}
-                                    </select>
+                            <div className="overflow-y-auto pr-4 space-y-6 scrollbar-thin scrollbar-thumb-white/10">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div>
+                                        <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Música</label>
+                                        <input type="text" value={editFormData.song_name} onChange={e => setEditFormData({ ...editFormData, song_name: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-4 text-white font-bold outline-none focus:border-[#B87333]/50 transition-all" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Artista</label>
+                                        <input type="text" value={editFormData.artist_name} onChange={e => setEditFormData({ ...editFormData, artist_name: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-4 text-white font-bold outline-none focus:border-[#B87333]/50 transition-all" />
+                                    </div>
                                 </div>
+
+                                <div className="grid grid-cols-2 gap-6">
+                                    <div>
+                                        <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Tom Original</label>
+                                        <select value={editFormData.song_key} onChange={e => setEditFormData({ ...editFormData, song_key: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-4 text-white font-bold outline-none focus:border-[#B87333]/50 transition-all">
+                                            {["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"].map(k => <option key={k} value={k} className="bg-[#1A1A1A]">{k}</option>)}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Capo</label>
+                                        <select value={editFormData.capo} onChange={e => setEditFormData({ ...editFormData, capo: parseInt(e.target.value) })} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-4 text-white font-bold outline-none focus:border-[#B87333]/50 transition-all">
+                                            <option value={0} className="bg-[#1A1A1A]">Sem Capo</option>
+                                            {[...Array(12)].map((_, i) => <option key={i + 1} value={i + 1} className="bg-[#1A1A1A]">Casa {i + 1}</option>)}
+                                        </select>
+                                    </div>
+                                </div>
+
                                 <div>
-                                    <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Capo</label>
-                                    <select value={editFormData.capo} onChange={e => setEditFormData({ ...editFormData, capo: parseInt(e.target.value) })} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-4 text-white font-bold outline-none focus:border-[#B87333]/50 transition-all">
-                                        <option value={0} className="bg-[#1A1A1A]">Sem Capo</option>
-                                        {[...Array(12)].map((_, i) => <option key={i + 1} value={i + 1} className="bg-[#1A1A1A]">Casa {i + 1}</option>)}
-                                    </select>
+                                    <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Cifra</label>
+                                    <textarea
+                                        value={editFormData.content}
+                                        onChange={e => setEditFormData({ ...editFormData, content: e.target.value })}
+                                        className="w-full bg-black/60 border border-white/10 rounded-2xl px-6 py-6 text-white outline-none font-mono text-xs leading-relaxed min-h-[400px] hover:border-white/20 focus:border-[#B87333]/50 transition-all scrollbar-thin shadow-inner"
+                                        spellCheck="false"
+                                    />
                                 </div>
                             </div>
 
-                            <div>
-                                <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Cifra</label>
-                                <textarea
-                                    value={editFormData.content}
-                                    onChange={e => setEditFormData({ ...editFormData, content: e.target.value })}
-                                    className="w-full bg-black/60 border border-white/10 rounded-2xl px-6 py-6 text-white outline-none font-mono text-xs leading-relaxed min-h-[400px] hover:border-white/20 focus:border-[#B87333]/50 transition-all scrollbar-thin shadow-inner"
-                                    spellCheck="false"
-                                />
+                            <div className="mt-8 shrink-0">
+                                <button onClick={handleEditSave} className="w-full py-5 bg-[#B87333] hover:bg-[#8B4513] text-white font-black uppercase tracking-[0.2em] rounded-xl transition-all shadow-xl shadow-[#B87333]/20 flex items-center justify-center space-x-3 group">
+                                    <Save className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                                    <span>Salvar Alterações no Acervo</span>
+                                </button>
                             </div>
-                        </div>
-
-                        <div className="mt-8 shrink-0">
-                            <button onClick={handleEditSave} className="w-full py-5 bg-[#B87333] hover:bg-[#8B4513] text-white font-black uppercase tracking-[0.2em] rounded-xl transition-all shadow-xl shadow-[#B87333]/20 flex items-center justify-center space-x-3 group">
-                                <Save className="w-5 h-5 group-hover:scale-110 transition-transform" />
-                                <span>Salvar Alterações no Acervo</span>
-                            </button>
                         </div>
                     </div>
-                </div>
-            )}
+                )
+            }
 
         </div >
     );
