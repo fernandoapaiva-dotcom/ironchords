@@ -132,32 +132,57 @@ def add_manual_music(request: ManualEntryRequest):
         if not req_key: # If original requested, use found key
             req_key = chord_data['key']
     
-    # If the user specifically changed the version or tabs, we should scrape again
-    if not chord_data or (request.version and request.version != "Principal") or not request.include_tabs:
+    # Define if we need to scrape based on Tablature cache mismatch
+    needs_scrape = False
+    if not chord_data:
+        needs_scrape = True
+    elif request.version and request.version != "Principal":
+        needs_scrape = True
+    else:
+        # Check if cache matches the requested tab state
+        has_tabs = "-|" in chord_data.get('content', '') or "|-" in chord_data.get('content', '')
+        if request.include_tabs and not has_tabs:
+            needs_scrape = True
+        elif not request.include_tabs and has_tabs:
+            needs_scrape = True
+
+    # If not in DB OR specific version requested, try scraping
+    if needs_scrape:
+        # Attempt 1: Full name
         scraped = find_chord_cascade(request.song_name, request.artist_name, version=request.version, include_tabs=request.include_tabs)
+        
+        # Attempt 2: Cleaned name (Removing fluff like (Live), [Remix], etc.)
+        if not scraped:
+            song_clean = clean_song_name(request.song_name)
+            if song_clean != request.song_name:
+                print(f"DEBUG REQ 7: Tentando nome limpo '{song_clean}'...")
+                scraped = find_chord_cascade(song_clean, request.artist_name, version=request.version, include_tabs=request.include_tabs)
+        
         if not scraped:
             if not chord_data:
-                # Try to get suggestions with the new logic
+                # If everything failed, try to return smart suggestions
                 song_clean = clean_song_name(request.song_name)
                 artist_clean = clean_song_name(request.artist_name)
                 
-                # 1. Try with the clean query (song + artist)
-                query_full = f"{song_clean} {artist_clean}".strip()
-                s_results_full = search_suggestions(query_full)
-                suggestions = s_results_full.get("suggestions", [])
+                # Try suggestions for clean name and full name
+                s_results_clean = search_suggestions(song_clean)
+                s_results_orig = search_suggestions(request.song_name)
                 
-                # 2. Try with just the clean song name (finds other artists)
-                s_results_song = search_suggestions(song_clean)
-                suggestions_song = s_results_song.get("suggestions", [])
-                
-                # If everything failed, at least return suggestions if possible
-                s_results = search_suggestions(request.song_name)
+                # Merge suggestions
+                all_s = []
+                seen = set()
+                for s in s_results_clean.get("suggestions", []) + s_results_orig.get("suggestions", []):
+                    key = (s['song'].lower(), s['artist'].lower())
+                    if key not in seen:
+                        seen.add(key)
+                        all_s.append(s)
+
                 raise HTTPException(
                     status_code=404, 
                     detail={
                         "error": "not_found",
                         "message": "Música não encontrada.",
-                        "suggestions": s_results.get("suggestions", [])
+                        "suggestions": all_s[:10]
                     }
                 )
         else:
@@ -172,27 +197,41 @@ def add_manual_music(request: ManualEntryRequest):
                 capo=chord_data.get('capo', 0)
             )
     
-    # Final check for key
+    # Final check for key (Requirement 2)
     if not req_key:
         req_key = chord_data['key']
 
-    final_content = process_chords(chord_data['content'], chord_data['key'], req_key)
+    # Se Capo for aplicado, a cifra bruta (visual_key) desce de tom para que o som mantenha-se igual ao req_key.
+    visual_key = req_key
+    if request.capo and request.capo > 0:
+        import re
+        from chord_utils import get_note_index, NOTES
+        match = re.search(r"([A-G][b#]?)", req_key, re.IGNORECASE)
+        if match:
+            base_note = match.group(1)
+            idx = get_note_index(base_note)
+            new_idx = (idx - request.capo) % 12
+            new_base = NOTES[new_idx]
+            rest = req_key[len(base_note):]
+            visual_key = f"{new_base}{rest}"
+
+    final_content = process_chords(chord_data['content'], chord_data['key'], visual_key)
     
-    # If requested key is different, save it too
-    if req_key.upper() != chord_data['key'].upper():
+    # If requested key or capo are different, save it too
+    if req_key.upper() != chord_data['key'].upper() or request.capo > 0:
         save_chord(
             song_name=chord_data['song_name'],
             artist_name=chord_data['artist_name'],
             song_key=req_key,
             content=final_content,
             source=chord_data['source'],
-            capo=chord_data.get('capo', 0)
+            capo=request.capo
         )
     
-    # Calcs sounding key
-    sounding_key = chord_utils.get_sounding_key(req_key, request.capo)
+    # Calcs sounding key: Since req_key dictates the sounding pitch, sounding_key = req_key.
+    sounding_key = req_key
     
-    # Save the specific entry being requested for the acervo
+    # Requirement 9: Save the specific entry being requested for the acervo with all user settings
     save_chord(
         song_name=chord_data['song_name'],
         artist_name=chord_data['artist_name'],
@@ -283,8 +322,21 @@ def add_batch_music(request: BatchRequest):
             # Try to find exactly this song version (name, artist, key)
             chord_data = get_chord(song_name, artist_name, req_key)
             
+            # Determine if we need to override cache based on tabs presence
+            needs_scrape = False
+            if not chord_data:
+                needs_scrape = True
+            elif row.version and row.version != "Principal":
+                needs_scrape = True
+            else:
+                has_tabs = "-|" in chord_data.get('content', '') or "|-" in chord_data.get('content', '')
+                if row.include_tabs and not has_tabs:
+                    needs_scrape = True
+                elif not row.include_tabs and has_tabs:
+                    needs_scrape = True
+
             # If specifically requested different version/tabs, override cache
-            if not chord_data or (row.version and row.version != "Principal") or not row.include_tabs:
+            if needs_scrape:
                 scraped = find_chord_cascade(song_name, artist_name, version=row.version, include_tabs=row.include_tabs)
                 if scraped:
                     chord_data = scraped
@@ -317,20 +369,38 @@ def add_batch_music(request: BatchRequest):
                     )
             
             if chord_data:
-                final_content = process_chords(chord_data['content'], chord_data['key'], req_key)
+                # Se não houver Tom mapeado, assume o tom original da música
+                if not req_key:
+                    req_key = chord_data['key']
+                    
+                visual_key = req_key
+                if row.capo and row.capo > 0:
+                    import re
+                    from chord_utils import get_note_index, NOTES
+                    match = re.search(r"([A-G][b#]?)", req_key, re.IGNORECASE)
+                    if match:
+                        base_note = match.group(1)
+                        idx = get_note_index(base_note)
+                        new_idx = (idx - row.capo) % 12
+                        new_base = NOTES[new_idx]
+                        rest = req_key[len(base_note):]
+                        visual_key = f"{new_base}{rest}"
+
+                final_content = process_chords(chord_data['content'], chord_data['key'], visual_key)
                 
-                # NEW: If requested key is different, save the transposed version
-                if req_key.upper() != chord_data['key'].upper():
+                # NEW: If requested key or capo changed, save the transposed version
+                if (req_key and chord_data.get('key') and req_key.upper() != chord_data['key'].upper()) or row.capo > 0:
                     save_chord(
                         song_name=chord_data['song_name'],
                         artist_name=chord_data['artist_name'],
                         song_key=req_key,
                         content=final_content,
-                        source=chord_data['source']
+                        source=chord_data.get('source', ''),
+                        capo=row.capo
                     )
 
                 # Calculate sounding key
-                sounding_key = chord_utils.get_sounding_key(req_key, row.capo)
+                sounding_key = req_key
                 
                 results.append({
                     "song_name": chord_data['song_name'],
