@@ -180,10 +180,16 @@ def add_manual_music(request: ManualEntryRequest):
         
         if suggestions:
             top = suggestions[0]
-            # If the top suggestion contains the normalized core of the requested song, use it
-            s_core = normalize_text(clean_song_name(request.song_name))
-            t_core = normalize_text(clean_song_name(top['song']))
-            if s_core in t_core or t_core in s_core:
+            # Normalize names to check if the top suggestion is actually what was requested
+            # but being more flexible (matching parts of the name)
+            s_name_norm = normalize_text(clean_song_name(request.song_name))
+            t_name_norm = normalize_text(clean_song_name(top['song']))
+            
+            # If the top suggestion overlaps significantly or artist matches exactly
+            artist_match = normalize_text(request.artist_name) in normalize_text(top['artist']) or normalize_text(top['artist']) in normalize_text(request.artist_name)
+            name_overlap = s_name_norm in t_name_norm or t_name_norm in s_name_norm
+            
+            if name_overlap and artist_match:
                 print(f"DEBUG SMART SEARCH: Resolvendo '{request.song_name}' -> '{top['song']}' por '{top['artist']}'")
                 suggested_song = top['song']
                 suggested_artist = top['artist']
@@ -207,7 +213,8 @@ def add_manual_music(request: ManualEntryRequest):
                 artist_first_words = " ".join(artist_clean.split()[:2])
                 
                 # Send artist first words alongside to vastly improve Solr match capability and bypass typos
-                s_results_clean = search_suggestions(f"{song_clean} {artist_first_words}".strip())
+                # Also include the original requested names to ensure we find what the user typed
+                s_results_clean = search_suggestions(f"{song_clean} {artist_first_words or artist_clean}".strip())
                 s_results_orig = search_suggestions(f"{request.song_name} {request.artist_name}".strip())
                 s_results_song_only = search_suggestions(song_clean)
                 
@@ -261,29 +268,8 @@ def add_manual_music(request: ManualEntryRequest):
 
     final_content = process_chords(chord_data['content'], chord_data['key'], visual_key)
     
-    # If requested key or capo are different, save it too
-    if req_key.upper() != chord_data['key'].upper() or request.capo > 0:
-        save_chord(
-            song_name=chord_data['song_name'],
-            artist_name=chord_data['artist_name'],
-            song_key=req_key,
-            content=final_content,
-            source=chord_data['source'],
-            capo=request.capo
-        )
-    
-    # Calcs sounding key: Since req_key dictates the sounding pitch, sounding_key = req_key.
+    # Requirement: Sounding key = requested key
     sounding_key = req_key
-    
-    # Requirement 9: Save the specific entry being requested for the acervo with all user settings
-    save_chord(
-        song_name=chord_data['song_name'],
-        artist_name=chord_data['artist_name'],
-        song_key=req_key,
-        content=final_content,
-        source=chord_data['source'],
-        capo=request.capo
-    )
     
     return {
         "song_name": chord_data['song_name'],
@@ -678,6 +664,7 @@ def search_suggestions(q: str):
                             "song": s_name,
                             "artist": a_name,
                             "key": None,
+                            "slug": doc.get("dns"),
                             "source": "cifraclub"
                         })
     except Exception as e:

@@ -239,36 +239,38 @@ def scrape_musicas_para_missa(song_name: str) -> Optional[Dict]:
     except: return None
 
 def find_chord_cascade(song_name: str, artist_name: str, version: Optional[str] = None, include_tabs: bool = True) -> Optional[Dict]:
-    # Clean up the song name to bypass url mismatches (e.g. removing " - Cover", "(Live)", etc)
-    import re
-    s_name = re.sub(r'[\(\[].*?[\)\]]', '', song_name)
-    parts = re.split(r'\s+[-–]\s*', s_name)
-    s_name = parts[0]
-    s_name = " ".join(s_name.split()).strip()
+    # Try multiple variations of the song name
+    s_clean = re.sub(r'[\(\[].*?[\)\]]', '', song_name)
+    parts = re.split(r'\s+[-–]\s*', s_clean)
+    s_clean = " ".join(parts[0].split()).strip()
+    
+    # Variations to try in order
+    name_variations = [song_name.strip()]
+    if s_clean.lower() != song_name.strip().lower():
+        name_variations.append(s_clean)
     
     a_name = artist_name.strip() if artist_name else ""
-    # Cascade priority:
-    # 1. User Artist on CC, Cifras, Banana
-    # 2. Musicas Para Missa (Slug attempt)
     
-    attempts = []
-    if a_name:
-        attempts.append(("cifraclub", a_name))
-        attempts.append(("cifras", a_name))
-        attempts.append(("bananacifras", a_name))
+    for s_variant in name_variations:
+        if not s_variant: continue
         
-    attempts.append(("musicasparamissa", ""))
+        attempts = []
+        if a_name:
+            attempts.append(("cifraclub", a_name))
+            attempts.append(("cifras", a_name))
+            attempts.append(("bananacifras", a_name))
+        attempts.append(("musicasparamissa", ""))
 
-    for site, artist in attempts:
-        print(f"Buscando '{s_name}' no {site} ({artist or 'Slug'})...")
-        result = None
-        if site == "cifraclub": result = scrape_cifraclub(s_name, get_slug(artist), version, include_tabs)
-        elif site == "cifras": result = scrape_cifras_com_br(s_name, artist)
-        elif site == "bananacifras": result = scrape_banana_cifras(s_name, artist)
-        elif site == "musicasparamissa": result = scrape_musicas_para_missa(s_name)
-        
-        if result:
-            print(f"ENCONTRADO em {site}!")
-            return result
+        for site, artist in attempts:
+            print(f"Buscando '{s_variant}' no {site} ({artist or 'Slug'})...")
+            result = None
+            if site == "cifraclub": result = scrape_cifraclub(s_variant, get_slug(artist), version, include_tabs)
+            elif site == "cifras": result = scrape_cifras_com_br(s_variant, artist)
+            elif site == "bananacifras": result = scrape_banana_cifras(s_variant, artist)
+            elif site == "musicasparamissa": result = scrape_musicas_para_missa(s_variant)
             
+            if result:
+                print(f"ENCONTRADO em {site}!")
+                return result
+                
     return None

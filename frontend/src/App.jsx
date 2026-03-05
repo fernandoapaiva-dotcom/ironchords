@@ -1,5 +1,5 @@
 ﻿import React, { useState, useRef, useEffect } from 'react';
-import { Music, UploadCloud, Plus, FileText, CheckCircle, AlertCircle, FileAudio, Info, X, Guitar, Settings2, Image as ImageIcon, Database, Edit3, Trash2, ArrowRight, Play, Maximize, Maximize2, Pause, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Download, ArrowLeft, SkipBack, SkipForward, Save, FolderHeart, Flame, Hammer, Sparkles, RefreshCw, Zap, ShieldCheck, Monitor, Tv, Check, LayoutList, Mic, Search, RotateCcw } from 'lucide-react';
+import { Music, UploadCloud, Plus, FileText, CheckCircle, AlertCircle, FileAudio, Info, X, Guitar, Settings2, Image as ImageIcon, Database, Edit3, Trash2, ArrowRight, Play, Maximize, Maximize2, Pause, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Download, ArrowLeft, SkipBack, SkipForward, Save, FolderHeart, Flame, Hammer, Sparkles, RefreshCw, Zap, ShieldCheck, Monitor, Tv, Check, LayoutList, Layout, Mic, Search, RotateCcw } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { SVGuitarChord } from 'svguitar';
 
@@ -486,9 +486,14 @@ export default function App() {
     const [includeTabs, setIncludeTabs] = useState(true);
     const [manualLoading, setManualLoading] = useState(false);
     const [manualError, setManualError] = useState('');
+    const [manualSuggestions, setManualSuggestions] = useState([]);
     const [suggestions, setSuggestions] = useState([]);
     const [showSuggestions, setShowSuggestions] = useState(false);
     const [availableVersions, setAvailableVersions] = useState([{ name: 'Principal', key: 'Principal' }]);
+    const [showPlayerControls, setShowPlayerControls] = useState(true);
+    const [scrollProgress, setScrollProgress] = useState(0);
+    const [isManualColumns, setIsManualColumns] = useState(false);
+    const playerControlsTimerRef = useRef(null);
     const [manualCapo, setManualCapo] = useState(0);
     const [manualPreviewSong, setManualPreviewSong] = useState(null);
     const [stagedSongs, setStagedSongs] = useState([]);
@@ -702,6 +707,58 @@ export default function App() {
         }
         return () => clearInterval(interval);
     }, [activeTab, isManualAutoScrolling, manualScrollSpeed]);
+
+    // Auto-hide controls in fullscreen (Stage View)
+    useEffect(() => {
+        const handleInteraction = () => {
+            if (!isManualFullscreen) return;
+            setShowPlayerControls(true);
+            if (playerControlsTimerRef.current) clearTimeout(playerControlsTimerRef.current);
+            playerControlsTimerRef.current = setTimeout(() => {
+                // Dim controls only if not interacting and autoscrolling (or idle)
+                setShowPlayerControls(false);
+            }, 3500);
+        };
+
+        if (isManualFullscreen) {
+            window.addEventListener('mousemove', handleInteraction);
+            window.addEventListener('mousedown', handleInteraction);
+            window.addEventListener('touchstart', handleInteraction);
+            window.addEventListener('keydown', handleInteraction);
+            handleInteraction(); // Initial hide cycle
+        } else {
+            setShowPlayerControls(true);
+        }
+
+        return () => {
+            window.removeEventListener('mousemove', handleInteraction);
+            window.removeEventListener('mousedown', handleInteraction);
+            window.removeEventListener('touchstart', handleInteraction);
+            window.removeEventListener('keydown', handleInteraction);
+            if (playerControlsTimerRef.current) clearTimeout(playerControlsTimerRef.current);
+        };
+    }, [isManualFullscreen]);
+
+    // Track scroll progress for the progress bar
+    useEffect(() => {
+        const container = manualScrollContainerRef.current;
+        if (!container) return;
+
+        const handleScroll = () => {
+            const max = container.scrollHeight - container.clientHeight;
+            if (max <= 0) {
+                setScrollProgress(0);
+                return;
+            }
+            const progress = (container.scrollTop / max) * 100;
+            setScrollProgress(progress);
+        };
+
+        container.addEventListener('scroll', handleScroll);
+        // Initial check
+        handleScroll();
+        return () => container.removeEventListener('scroll', handleScroll);
+    }, [manualPreviewSong, isManualFullscreen]);
 
     // Mic Level & Frequency Listener
     useEffect(() => {
@@ -1217,7 +1274,10 @@ export default function App() {
                 })
             });
             const data = await res.json();
-            if (!res.ok) throw new Error(data.detail || 'Erro ao buscar cifra.');
+            if (!res.ok) {
+                // Return original data as error message if not found to handle suggestions
+                throw new Error(JSON.stringify(data.detail || data));
+            }
             const newSong = {
                 ...data,
                 status: 'success',
@@ -1228,10 +1288,23 @@ export default function App() {
                 capo: data.capo || manualCapo
             };
             setManualPreviewSong(newSong);
+            setManualSuggestions([]);
             // Sync UI with found data
             if (newSong.song_key) setSongKey(newSong.song_key);
             if (newSong.capo !== undefined) setManualCapo(newSong.capo);
-        } catch (err) { setManualError(err.message); }
+        } catch (err) {
+            try {
+                const data = JSON.parse(err.message);
+                if (data.error === "not_found") {
+                    setManualError(data.message || "Música não encontrada.");
+                    setManualSuggestions(data.suggestions || []);
+                } else {
+                    setManualError(typeof data === 'string' ? data : "Erro ao buscar cifra.");
+                }
+            } catch (e) {
+                setManualError(err.message || "Erro de conexão.");
+            }
+        }
         finally { setManualLoading(false); }
     };
 
@@ -1708,7 +1781,7 @@ export default function App() {
                                                                     onChange={e => { setSongName(e.target.value); setShowSuggestions(true); }}
                                                                     onFocus={() => setShowSuggestions(true)}
                                                                     onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
-                                                                    className="w-full bg-black/60 border border-white/10 rounded-2xl px-5 py-5 text-white focus:ring-2 focus:ring-[#B87333]/40 outline-none transition-all font-bold placeholder:text-slate-700" placeholder="Ex: Missa de Domingo"
+                                                                    className="w-full bg-[#B87333] border border-[#B87333] rounded-2xl px-5 py-5 text-white outline-none focus:ring-4 focus:ring-[#B87333]/30 transition-all font-black placeholder:text-white/60 shadow-lg shadow-[#B87333]/20" placeholder="Ex: Missa de Domingo"
                                                                 />
                                                                 {showSuggestions && suggestions.length > 0 && (
                                                                     <div className="absolute z-[100] w-full mt-2 bg-[#16161D] border border-white/10 rounded-[24px] shadow-[0_20px_50px_rgba(0,0,0,0.5)] overflow-hidden backdrop-blur-3xl animate-in fade-in zoom-in-95 duration-300">
@@ -1758,28 +1831,13 @@ export default function App() {
                                                             </div>
                                                         </div>
                                                         <div className="space-y-6 relative z-10">
-                                                            <div className="grid grid-cols-2 gap-4">
+                                                            <div className="grid grid-cols-1 gap-4">
                                                                 <div>
                                                                     <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2 ml-1">Tom Original</label>
-                                                                    <select value={songKey} onChange={e => setSongKey(e.target.value)} className="w-full bg-black/60 border border-white/10 rounded-2xl px-5 py-5 text-white outline-none cursor-pointer font-bold appearance-none">
-                                                                        {["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"].map(k => <option key={k} value={k} className="bg-[#1A1A1A]">{k}</option>)}
-                                                                    </select>
-                                                                </div>
-                                                                <div>
-                                                                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2 ml-1">Capo</label>
-                                                                    <select value={manualCapo} onChange={e => setManualCapo(Number(e.target.value))} className="w-full bg-black/60 border border-white/10 rounded-2xl px-5 py-5 text-white outline-none cursor-pointer font-bold appearance-none">
-                                                                        {[...Array(13)].map((_, i) => <option key={i} value={i} className="bg-[#1A1A1A]">{i === 0 ? 'Sem Capo' : `${i}ª Casa`}</option>)}
-                                                                    </select>
-                                                                </div>
-                                                                <div className="flex flex-col justify-center">
-                                                                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2 ml-1">Tablaturas</label>
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => setIncludeTabs(!includeTabs)}
-                                                                        className={`w-full py-5 rounded-2xl border transition-all font-black uppercase text-[10px] tracking-widest ${includeTabs ? 'bg-[#B87333]/20 border-[#B87333] text-[#B87333]' : 'bg-black/60 border-white/10 text-slate-600'}`}
-                                                                    >
-                                                                        {includeTabs ? 'Ativadas' : 'Desativar'}
-                                                                    </button>
+                                                                    <input
+                                                                        type="text" readOnly value={songKey}
+                                                                        className="w-full bg-black/40 border border-white/5 rounded-2xl px-5 py-5 text-slate-400 outline-none transition-all font-bold cursor-not-allowed opacity-60" placeholder="Tom da cifra"
+                                                                    />
                                                                 </div>
                                                             </div>
                                                             {availableVersions && availableVersions.length > 1 && (
@@ -1802,153 +1860,219 @@ export default function App() {
                                                         </div>
                                                     </form>
 
-                                                    {/* Live Preview Area */}
+                                                    {/* Live Preview Area (Stage View) */}
                                                     {manualPreviewSong && (
-                                                        <div className={`${isManualFullscreen ? 'fixed inset-0 z-[9999] bg-[#0A0A0F]' : 'bg-[#16161D] border border-white/10 rounded-[40px] shadow-2xl'} animate-in fade-in slide-in-from-top-10 duration-700 overflow-hidden flex flex-col`}>
-                                                            {/* Preview Controls */}
-                                                            <div className="bg-black/60 border-b border-white/10 p-6 flex flex-wrap items-center justify-between gap-6 relative z-20">
-                                                                <div className="flex items-center space-x-6">
-                                                                    <div className="w-2 h-10 bg-[#B87333] rounded-full shadow-[0_0_15px_rgba(184,115,51,0.5)]"></div>
-                                                                    <div>
-                                                                        <div className="flex items-center space-x-3">
-                                                                            <h4 className="text-xl font-black text-white uppercase italic tracking-tighter line-clamp-1">{manualPreviewSong.song_name}</h4>
-                                                                            {manualPreviewSong.capo > 0 && (
-                                                                                <span className="bg-[#B87333]/20 text-[#B87333] text-[9px] font-black px-2 py-0.5 rounded border border-[#B87333]/30 uppercase tracking-widest">Capo {manualPreviewSong.capo}ª Casa</span>
-                                                                            )}
-                                                                        </div>
-                                                                        <p className="text-[10px] font-bold text-[#B87333] uppercase tracking-widest mt-1 opacity-60 italic">{manualPreviewSong.artist_name}</p>
-                                                                    </div>
+                                                        <div className={`
+                                                            ${isManualFullscreen
+                                                                ? 'fixed inset-0 z-[9999] bg-[#070709] bg-grid-white/[0.02]'
+                                                                : 'bg-[#16161D] border border-white/10 rounded-[40px] shadow-2xl mt-12'} 
+                                                            animate-in fade-in slide-in-from-top-10 duration-700 overflow-hidden flex flex-col transition-all
+                                                        `}>
+                                                            {/* Scroll Progress Bar (Top) */}
+                                                            {isManualFullscreen && (
+                                                                <div className="absolute top-0 left-0 w-full h-[6px] bg-white/5 z-[100]">
+                                                                    <div
+                                                                        className="h-full bg-gradient-to-r from-[#B87333] via-orange-400 to-[#B87333] transition-all duration-300"
+                                                                        style={{ width: `${scrollProgress}%` }}
+                                                                    />
                                                                 </div>
+                                                            )}
 
-                                                                <div className="flex items-center space-x-6">
-                                                                    {/* Navigation Arrows */}
-                                                                    {songs.length > 1 && (
-                                                                        <div className="flex items-center space-x-2 mr-4">
+                                                            {/* Floating Controller (Stage View) */}
+                                                            <div className={`
+                                                                ${isManualFullscreen
+                                                                    ? `fixed bottom-10 left-1/2 -translate-x-1/2 z-[100] transition-all duration-700 ${showPlayerControls ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-20 scale-95 pointer-events-none'}`
+                                                                    : 'bg-black/60 border-b border-white/10 p-4 flex flex-wrap items-center justify-between gap-4 relative z-20'}
+                                                            `}>
+                                                                <div className={`
+                                                                    flex items-center gap-6 
+                                                                    ${isManualFullscreen ? 'bg-[#12121A]/95 backdrop-blur-3xl px-8 py-4 rounded-[32px] border border-[#B87333]/30 shadow-[0_20px_80px_rgba(0,0,0,0.9)] ring-1 ring-white/10' : ''}
+                                                                `}>
+                                                                    {/* Left: Info & Nav */}
+                                                                    <div className="flex items-center space-x-4 border-r border-white/10 pr-6">
+                                                                        {songs.length > 1 && (
+                                                                            <div className="flex items-center space-x-1 mr-2">
+                                                                                <button
+                                                                                    onClick={() => {
+                                                                                        const idx = songs.findIndex(s => s.song_name === manualPreviewSong.song_name);
+                                                                                        const prevIdx = (idx - 1 + songs.length) % songs.length;
+                                                                                        setManualPreviewSong(songs[prevIdx]);
+                                                                                    }}
+                                                                                    className="w-10 h-10 bg-white/5 hover:bg-white/10 rounded-xl flex items-center justify-center text-white transition-all border border-white/5"
+                                                                                >
+                                                                                    <ChevronLeft className="w-5 h-5" />
+                                                                                </button>
+                                                                                <button
+                                                                                    onClick={() => {
+                                                                                        const idx = songs.findIndex(s => s.song_name === manualPreviewSong.song_name);
+                                                                                        const nextIdx = (idx + 1) % songs.length;
+                                                                                        setManualPreviewSong(songs[nextIdx]);
+                                                                                    }}
+                                                                                    className="w-10 h-10 bg-white/5 hover:bg-white/10 rounded-xl flex items-center justify-center text-white transition-all border border-white/5"
+                                                                                >
+                                                                                    <ChevronRight className="w-5 h-5" />
+                                                                                </button>
+                                                                            </div>
+                                                                        )}
+
+                                                                        {!isManualFullscreen && (
+                                                                            <div className="hidden sm:block whitespace-nowrap">
+                                                                                <h4 className="text-sm font-black text-white uppercase italic leading-tight">{manualPreviewSong.song_name}</h4>
+                                                                                <p className="text-[9px] font-bold text-[#B87333] uppercase opacity-60 leading-tight">{manualPreviewSong.artist_name}</p>
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+
+                                                                    {/* Center: Music Controls */}
+                                                                    <div className="flex items-center space-x-6">
+                                                                        {/* Tabs Toggle */}
+                                                                        <div className="flex flex-col items-center">
+                                                                            <span className="text-[7px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Tabs</span>
                                                                             <button
-                                                                                onClick={() => {
-                                                                                    const idx = songs.findIndex(s => s.song_name === manualPreviewSong.song_name);
-                                                                                    const prevIdx = (idx - 1 + songs.length) % songs.length;
-                                                                                    setManualPreviewSong(songs[prevIdx]);
-                                                                                }}
-                                                                                className="w-10 h-10 bg-white/5 hover:bg-white/10 rounded-xl flex items-center justify-center text-white transition-all border border-white/10"
+                                                                                onClick={() => setIncludeTabs(!includeTabs)}
+                                                                                className={`w-11 h-9 rounded-lg flex items-center justify-center transition-all border ${includeTabs ? 'bg-[#B87333]/20 border-[#B87333] text-[#B87333]' : 'bg-black/40 border-white/5 text-slate-600 hover:text-slate-400'}`}
                                                                             >
-                                                                                <ChevronLeft className="w-5 h-5" />
-                                                                            </button>
-                                                                            <button
-                                                                                onClick={() => {
-                                                                                    const idx = songs.findIndex(s => s.song_name === manualPreviewSong.song_name);
-                                                                                    const nextIdx = (idx + 1) % songs.length;
-                                                                                    setManualPreviewSong(songs[nextIdx]);
-                                                                                }}
-                                                                                className="w-10 h-10 bg-white/5 hover:bg-white/10 rounded-xl flex items-center justify-center text-white transition-all border border-white/10"
-                                                                            >
-                                                                                <ChevronRight className="w-5 h-5" />
+                                                                                <FileText className="w-4 h-4" />
                                                                             </button>
                                                                         </div>
-                                                                    )}
 
-                                                                    <div className="flex items-center space-x-8">
-                                                                        {/* Fullscreen Toggle */}
-                                                                        <button
-                                                                            onClick={() => setIsManualFullscreen(!isManualFullscreen)}
-                                                                            className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${isManualFullscreen ? 'bg-red-900/40 text-red-500 border-red-500/30' : 'bg-white/5 text-slate-500 hover:text-white border-white/10'} border`}
-                                                                        >
-                                                                            {isManualFullscreen ? <X className="w-6 h-6" /> : <Maximize2 className="w-5 h-5" />}
-                                                                        </button>
-
-                                                                        {/* Font Size */}
+                                                                        {/* Columns Toggle */}
                                                                         <div className="flex flex-col items-center">
-                                                                            <span className="text-[8px] font-black text-slate-600 uppercase tracking-widest mb-2">Fonte</span>
-                                                                            <div className="flex items-center space-x-2 bg-black/40 p-1 rounded-xl border border-white/5">
-                                                                                <button onClick={() => setManualFontSize(prev => Math.max(10, prev - 1))} className="p-1.5 text-slate-500 hover:text-white transition-all"><ChevronDown className="w-3.5 h-3.5" /></button>
-                                                                                <span className="text-[10px] font-black text-white w-5 text-center">{manualFontSize}</span>
-                                                                                <button onClick={() => setManualFontSize(prev => Math.min(40, prev + 1))} className="p-1.5 text-slate-500 hover:text-white transition-all"><ChevronUp className="w-3.5 h-3.5" /></button>
+                                                                            <span className="text-[7px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Layout</span>
+                                                                            <button
+                                                                                onClick={() => setIsManualColumns(!isManualColumns)}
+                                                                                className={`w-11 h-9 rounded-lg flex items-center justify-center transition-all border ${isManualColumns ? 'bg-[#B87333]/20 border-[#B87333] text-[#B87333]' : 'bg-black/40 border-white/5 text-slate-600 hover:text-slate-400'}`}
+                                                                                title={isManualColumns ? "Mudar para 1 coluna" : "Mudar para 2 colunas"}
+                                                                            >
+                                                                                <Layout className="w-4 h-4" />
+                                                                            </button>
+                                                                        </div>
+
+                                                                        {/* Capo */}
+                                                                        <div className="flex flex-col items-center">
+                                                                            <span className="text-[7px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Capo</span>
+                                                                            <div className="flex items-center space-x-1.5 bg-black/40 p-1 rounded-lg border border-white/5">
+                                                                                <button onClick={() => setManualCapo(prev => Math.max(0, prev - 1))} className="p-1 text-slate-500 hover:text-white transition-all"><ChevronDown className="w-3 h-3" /></button>
+                                                                                <span className="text-[10px] font-black text-white w-4 text-center">{manualCapo}</span>
+                                                                                <button onClick={() => setManualCapo(prev => Math.min(12, prev + 1))} className="p-1 text-slate-500 hover:text-white transition-all"><ChevronUp className="w-3 h-3" /></button>
                                                                             </div>
                                                                         </div>
 
-                                                                        {/* Transpose */}
+                                                                        {/* Tom */}
                                                                         <div className="flex flex-col items-center">
-                                                                            <span className="text-[8px] font-black text-slate-600 uppercase tracking-widest mb-2">Tom</span>
-                                                                            <div className="flex items-center space-x-2 bg-black/40 p-1 rounded-xl border border-white/5">
+                                                                            <span className="text-[7px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Tom</span>
+                                                                            <div className="flex items-center space-x-1.5 bg-black/40 p-1 rounded-lg border border-white/5">
                                                                                 <button onClick={async () => {
-                                                                                    const song = manualPreviewSong;
-                                                                                    const currentKeyToUse = song.sounding_key || song.song_key || 'C';
+                                                                                    const currentKeyToUse = manualPreviewSong.sounding_key || manualPreviewSong.song_key || 'C';
                                                                                     try {
                                                                                         const res = await fetch('http://127.0.0.1:8000/api/transpose', {
                                                                                             method: 'POST',
                                                                                             headers: { 'Content-Type': 'application/json' },
-                                                                                            body: JSON.stringify({ content: song.content, current_key: currentKeyToUse, semitones: -1 })
+                                                                                            body: JSON.stringify({ content: manualPreviewSong.content, current_key: currentKeyToUse, semitones: -1 })
                                                                                         });
                                                                                         const data = await res.json();
                                                                                         if (data.transposed_content) {
-                                                                                            setManualPreviewSong({ ...song, content: data.transposed_content, sounding_key: data.new_key });
+                                                                                            setManualPreviewSong({ ...manualPreviewSong, content: data.transposed_content, sounding_key: data.new_key });
+                                                                                            setSongKey(data.new_key);
                                                                                         }
                                                                                     } catch (err) { console.error(err); }
-                                                                                }} className="p-1.5 text-slate-500 hover:text-white transition-all"><ChevronDown className="w-3.5 h-3.5" /></button>
+                                                                                }} className="p-1 text-slate-500 hover:text-white transition-all"><ChevronDown className="w-3 h-3" /></button>
                                                                                 <span className="text-[10px] font-black text-white w-6 text-center italic">{manualPreviewSong.sounding_key || manualPreviewSong.song_key}</span>
                                                                                 <button onClick={async () => {
-                                                                                    const song = manualPreviewSong;
-                                                                                    const currentKeyToUse = song.sounding_key || song.song_key || 'C';
+                                                                                    const currentKeyToUse = manualPreviewSong.sounding_key || manualPreviewSong.song_key || 'C';
                                                                                     try {
                                                                                         const res = await fetch('http://127.0.0.1:8000/api/transpose', {
                                                                                             method: 'POST',
                                                                                             headers: { 'Content-Type': 'application/json' },
-                                                                                            body: JSON.stringify({ content: song.content, current_key: currentKeyToUse, semitones: 1 })
+                                                                                            body: JSON.stringify({ content: manualPreviewSong.content, current_key: currentKeyToUse, semitones: 1 })
                                                                                         });
                                                                                         const data = await res.json();
                                                                                         if (data.transposed_content) {
-                                                                                            setManualPreviewSong({ ...song, content: data.transposed_content, sounding_key: data.new_key });
+                                                                                            setManualPreviewSong({ ...manualPreviewSong, content: data.transposed_content, sounding_key: data.new_key });
+                                                                                            setSongKey(data.new_key);
                                                                                         }
                                                                                     } catch (err) { console.error(err); }
-                                                                                }} className="p-1.5 text-slate-500 hover:text-white transition-all"><ChevronUp className="w-3.5 h-3.5" /></button>
+                                                                                }} className="p-1 text-slate-500 hover:text-white transition-all"><ChevronUp className="w-3 h-3" /></button>
                                                                             </div>
                                                                         </div>
 
-                                                                        {/* Scroll Controls */}
-                                                                        <div className="flex items-center space-x-6 px-8 border-x border-white/5">
+                                                                        {/* Scroll */}
+                                                                        <div className="flex items-center space-x-4 border-l border-white/5 pl-6">
                                                                             <button
                                                                                 onClick={() => setIsManualAutoScrolling(!isManualAutoScrolling)}
-                                                                                className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${isManualAutoScrolling ? 'bg-[#B87333] text-white shadow-xl shadow-[#B87333]/30 scale-105' : 'bg-white/5 text-slate-500 hover:text-white'}`}
+                                                                                className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${isManualAutoScrolling ? 'bg-[#B87333] text-white shadow-lg shadow-[#B87333]/40' : 'bg-white/5 text-slate-500 hover:text-white'}`}
                                                                             >
-                                                                                {isManualAutoScrolling ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 ml-0.5" />}
+                                                                                {isManualAutoScrolling ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
                                                                             </button>
-                                                                            <div className="w-28">
-                                                                                <div className="flex items-center justify-between mb-1.5">
-                                                                                    <span className="text-[8px] font-black text-slate-600 uppercase tracking-widest">Velocidade</span>
-                                                                                    <span className="text-[9px] font-black text-white italic">{manualScrollSpeed}x</span>
-                                                                                </div>
+                                                                            <div className="w-16 hidden sm:block">
                                                                                 <input type="range" min="0.5" max="5" step="0.5" value={manualScrollSpeed} onChange={(e) => setManualScrollSpeed(parseFloat(e.target.value))} className="w-full h-1 bg-white/5 rounded-full appearance-none cursor-pointer accent-[#B87333]" />
                                                                             </div>
                                                                         </div>
+                                                                    </div>
 
-                                                                        {/* Action Button */}
+                                                                    {/* Right: Actions */}
+                                                                    <div className="flex items-center space-x-3 border-l border-white/10 pl-6">
+                                                                        {/* Add to List Button */}
                                                                         <button
                                                                             onClick={() => {
                                                                                 if (manualPreviewSong && !songs.some(s => s.song_name === manualPreviewSong.song_name && s.artist_name === manualPreviewSong.artist_name)) {
                                                                                     setSongs(prev => [...prev, manualPreviewSong]);
                                                                                 }
-                                                                                // Keep the preview visible, just clear the search fields
                                                                                 setSongName('');
                                                                                 setArtistName('');
                                                                             }}
-                                                                            className="px-8 py-4 bg-[#B87333] hover:bg-green-600 text-white font-black uppercase text-[10px] tracking-widest rounded-2xl transition-all shadow-xl shadow-[#B87333]/20 flex items-center space-x-3 group"
+                                                                            className="px-6 py-3 bg-[#B87333] hover:bg-[#A86323] text-white font-black uppercase text-[10px] tracking-widest rounded-xl transition-all shadow-lg active:scale-95 flex items-center space-x-2 shrink-0"
                                                                         >
-                                                                            <Plus className="w-4 h-4 group-hover:rotate-90 transition-transform" />
-                                                                            <span>Adicionar à Lista</span>
+                                                                            <Plus className="w-3.5 h-3.5" />
+                                                                            <span>Salvar Lista</span>
                                                                         </button>
 
-                                                                        <button onClick={() => setManualPreviewSong(null)} className="p-4 bg-white/5 hover:bg-red-900/40 text-slate-500 hover:text-red-500 rounded-2xl transition-all border border-white/5" title="Fechar preview"><X className="w-5 h-5" /></button>
+                                                                        {/* Fullscreen/Exit */}
+                                                                        <div className="flex items-center space-x-2">
+                                                                            <button
+                                                                                onClick={() => setIsManualFullscreen(!isManualFullscreen)}
+                                                                                className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${isManualFullscreen ? 'bg-red-900/40 text-red-500 border-red-500/20' : 'bg-white/5 text-slate-500 hover:text-white border-white/5'} border`}
+                                                                                title={isManualFullscreen ? "Sair da Tela Cheia" : "Tela Cheia"}
+                                                                            >
+                                                                                {isManualFullscreen ? <X className="w-5 h-5" /> : <Maximize2 className="w-4 h-4" />}
+                                                                            </button>
+                                                                            {!isManualFullscreen && (
+                                                                                <button onClick={() => setManualPreviewSong(null)} className="w-10 h-10 bg-white/5 hover:bg-red-900/40 text-slate-500 hover:text-red-500 rounded-xl transition-all border border-white/5 flex items-center justify-center" title="Fechar"><X className="w-5 h-5" /></button>
+                                                                            )}
+                                                                        </div>
                                                                     </div>
                                                                 </div>
                                                             </div>
 
-                                                            {/* Scrollable Chord Content */}
-                                                            <div ref={manualScrollContainerRef} className="overflow-y-auto p-10 scrollbar-none pb-10" style={{ maxHeight: isManualFullscreen ? 'calc(100vh - 120px)' : '500px' }}>
-                                                                <div className="max-w-3xl mx-auto">
+                                                            {/* Scrollable Chord Content (Optimized Stage View) */}
+                                                            <div
+                                                                ref={manualScrollContainerRef}
+                                                                className={`
+                                                                    flex-1 overflow-y-auto ${isManualFullscreen ? 'p-10 md:p-20 pt-16 md:pt-24' : 'p-10'} 
+                                                                    scrollbar-none pb-32 transition-all
+                                                                `}
+                                                                style={{ maxHeight: isManualFullscreen ? '100vh' : '500px' }}
+                                                            >
+                                                                {/* Display Info Overlay for Fullscreen Stage View */}
+                                                                {isManualFullscreen && showPlayerControls && (
+                                                                    <div className="max-w-7xl mx-auto mb-16 animate-in fade-in slide-in-from-left-10 duration-500">
+                                                                        <div className="flex items-baseline space-x-6">
+                                                                            <h1 className="text-6xl font-black text-white italic tracking-tighter uppercase">{manualPreviewSong.song_name}</h1>
+                                                                            {manualPreviewSong.capo > 0 && (
+                                                                                <span className="text-2xl font-black text-[#B87333] border-l border-white/10 pl-6 uppercase tracking-widest">Capo {manualPreviewSong.capo}ª Casa</span>
+                                                                            )}
+                                                                        </div>
+                                                                        <p className="text-xl font-black text-[#B87333] uppercase tracking-[0.4em] mt-4 opacity-70 italic">{manualPreviewSong.artist_name}</p>
+                                                                    </div>
+                                                                )}
+
+                                                                <div className={`
+                                                                    ${isManualFullscreen && isManualColumns ? 'max-w-7xl mx-auto stage-columns-2 gap-20' : 'max-w-3xl mx-auto'}
+                                                                `}>
                                                                     {(manualPreviewSong?.content || "").split('\n').map((line, lIdx) => {
                                                                         const isChordLine = !!(line && line.trim().length > 0 && (line.match(CHORD_TOKEN_RE) || []).length > 0 && line.replace(CHORD_TOKEN_RE, '').replace(/[\s|()\-xX0-9:]/g, '').length < Math.max(2, line.trim().length * 0.25));
                                                                         return (
-                                                                            <pre key={lIdx} className={`font-mono leading-relaxed whitespace-pre-wrap ${isChordLine ? 'text-[#B87333] font-black italic tracking-tight mb-0' : 'text-slate-300 font-medium mb-1'}`} style={{ fontSize: `${manualFontSize}px` }}>
+                                                                            <pre key={lIdx} className={`font-mono leading-relaxed whitespace-pre-wrap break-inside-avoid ${isChordLine ? 'text-[#B87333] font-black italic tracking-tight mb-0' : 'text-slate-300 font-medium mb-1'}`} style={{ fontSize: `${manualFontSize}px` }}>
                                                                                 {isChordLine
                                                                                     ? renderChordLine(line, (chord, anchor, isPersistent) => setChordTooltip({ chord, anchor, isPersistent }))
                                                                                     : (line || ' ')}
@@ -1963,9 +2087,44 @@ export default function App() {
 
                                                     {/* Error display */}
                                                     {manualError && (
-                                                        <div className="flex items-center space-x-3 p-4 bg-red-900/20 border border-red-500/30 rounded-2xl animate-in fade-in duration-300">
-                                                            <AlertCircle className="w-5 h-5 text-red-500 shrink-0" />
-                                                            <p className="text-xs font-bold text-red-400">{manualError}</p>
+                                                        <div className="bg-red-900/20 border border-red-500/30 p-6 rounded-[24px] mb-8 animate-in fade-in slide-in-from-top-4 duration-300">
+                                                            <div className="flex items-center space-x-3 text-red-400 mb-4">
+                                                                <AlertCircle className="w-5 h-5" />
+                                                                <span className="text-[10px] font-black uppercase tracking-widest">{typeof manualError === 'string' ? manualError : 'Música não encontrada'}</span>
+                                                            </div>
+
+                                                            {manualSuggestions.length > 0 && (
+                                                                <div className="mt-4 space-y-2">
+                                                                    <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-3 ml-1">Tente uma destas:</p>
+                                                                    <div className="grid grid-cols-1 gap-2">
+                                                                        {manualSuggestions.map((s, i) => (
+                                                                            <button
+                                                                                key={i}
+                                                                                onClick={() => {
+                                                                                    setSongName(s.song);
+                                                                                    setArtistName(s.artist);
+                                                                                    handleManualSubmit(null, s.song, s.artist, s.key || "");
+                                                                                }}
+                                                                                className="flex items-center justify-between p-4 bg-black/40 hover:bg-[#B87333]/10 border border-white/5 hover:border-[#B87333]/30 rounded-2xl transition-all group"
+                                                                            >
+                                                                                <div className="flex items-center space-x-4">
+                                                                                    <div className="w-8 h-8 bg-white/5 rounded-lg flex items-center justify-center">
+                                                                                        <Music className="w-4 h-4 text-[#B87333]" />
+                                                                                    </div>
+                                                                                    <div className="flex flex-col text-left">
+                                                                                        <span className="text-[10px] font-black text-white uppercase italic">{s.song}</span>
+                                                                                        <span className="text-[8px] font-bold text-slate-500 uppercase">{s.artist}</span>
+                                                                                    </div>
+                                                                                </div>
+                                                                                <div className="flex items-center space-x-3">
+                                                                                    {s.key && <span className="text-[8px] font-black text-slate-600 bg-white/5 px-2 py-0.5 rounded">{s.key}</span>}
+                                                                                    <Plus className="w-4 h-4 text-[#B87333] opacity-0 group-hover:opacity-100 transition-opacity" />
+                                                                                </div>
+                                                                            </button>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+                                                            )}
                                                         </div>
                                                     )}
 
