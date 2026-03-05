@@ -1,7 +1,11 @@
 ﻿import React, { useState, useRef, useEffect } from 'react';
+import { PhoneticMatcher } from './utils/PhoneticMatcher';
+import VideokePlayer from './components/VideokePlayer';
 import { Music, UploadCloud, Plus, FileText, CheckCircle, AlertCircle, FileAudio, Info, X, Guitar, Settings2, Image as ImageIcon, Database, Edit3, Trash2, ArrowRight, Play, Maximize, Maximize2, Pause, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Download, ArrowLeft, SkipBack, SkipForward, Save, FolderHeart, Flame, Hammer, Sparkles, RefreshCw, Zap, ShieldCheck, Monitor, Tv, Check, LayoutList, Layout, Mic, Search, RotateCcw } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { SVGuitarChord } from 'svguitar';
+import { AudioTracker } from './utils/AudioTracker';
+import { CifraParser } from './utils/CifraParser';
 
 // -------------------------------------------------------------------
 // CHORD DICTIONARY  (ported from chord_drawer.py)
@@ -286,7 +290,7 @@ function ChordTooltip({ chord, anchor, onClose }) {
 // Improved Regex: enforces word boundaries and also ensures no accented letters follow the chord.
 const CHORD_TOKEN_RE = /(?:^|\s)([A-G][b#]?(?:maj7?|min7?|m7?|7|sus[24]?|dim7?|aug|add9|6|9|11|13)?(?:\/[A-G][b#]?)?)(?![a-zA-ZáàâãéèêíïóôõöúçñÁÀÂÃÉÈÊÍÏÓÔÕÖÚÇÑ])/g;
 
-function renderChordLine(line, onChordClick) {
+export function renderChordLine(line, onChordClick) {
     const parts = [];
     let last = 0;
     let match;
@@ -666,6 +670,7 @@ export default function App() {
     const [isAnchored, setIsAnchored] = useState(false);
     const [isWaitingForVoice, setIsWaitingForVoice] = useState(false);
     const [isBpmSyncing, setIsBpmSyncing] = useState(false);
+    const [isVideokeOpen, setIsVideokeOpen] = useState(false);
 
     // Playlists Persistence
     const [savedPlaylists, setSavedPlaylists] = useState(() => {
@@ -761,118 +766,121 @@ export default function App() {
     }, [manualPreviewSong, isManualFullscreen]);
 
     // Mic Level & Frequency Listener
+    const audioTrackerRef = useRef(null);
+
     useEffect(() => {
         if (micEnabled) {
-            startMic();
-            startSpeechRecognition();
+            if (!audioTrackerRef.current) {
+                audioTrackerRef.current = new AudioTracker(
+                    (detectedBpm) => {
+                        // Smoothly adjust to detected BPM
+                        setBpm(prev => {
+                            const diff = detectedBpm - prev;
+                            if (Math.abs(diff) > 10) return prev + Math.sign(diff) * 2;
+                            return detectedBpm;
+                        });
+                    },
+                    (level) => setMicLevel(level),
+                    (note) => setDetectedNote(note),
+                    (text, isFinal) => {
+                        setTranscriptRaw(text);
+                        syncLineByText(text, isFinal);
+                    }
+                );
+            }
+            audioTrackerRef.current.start();
         } else {
-            stopMic();
-            stopSpeechRecognition();
+            if (audioTrackerRef.current) {
+                audioTrackerRef.current.stop();
+                audioTrackerRef.current = null;
+            }
         }
     }, [micEnabled]);
-
-    const startSpeechRecognition = () => {
-        if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) return;
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        recognitionRef.current = new SpeechRecognition();
-        recognitionRef.current.continuous = true;
-        recognitionRef.current.interimResults = true;
-        recognitionRef.current.lang = 'pt-BR';
-        recognitionRef.current.onresult = (event) => {
-            const results = event.results;
-            const latest = results[results.length - 1];
-            const text = latest[0].transcript.toLowerCase();
-            setTranscriptRaw(text);
-            syncLineByText(text, latest.isFinal);
-        };
-        recognitionRef.current.onend = () => {
-            if (micEnabled && recognitionRef.current) {
-                try { recognitionRef.current.start(); } catch (e) { }
-            }
-        };
-        recognitionRef.current.start();
-    };
-
-    const stopSpeechRecognition = () => {
-        if (recognitionRef.current) {
-            recognitionRef.current.stop();
-            recognitionRef.current = null;
-        }
-    };
 
     const syncLineByText = (text, isFinal) => {
         const songIdx = activeTab === 'player' ? selectedManualIndex : selectedManualIndex;
         if (songIdx === null || !songs[songIdx]) return;
-        const lines = (songs[songIdx]?.content || "").split('\n');
+        const currentContent = songs[songIdx]?.content || "";
+        const lines = currentContent.split('\n');
 
         let foundIndex = -1;
-        const searchRange = 6;
         const start = currentLineIndexRef.current;
-        const end = Math.min(lines.length, start + searchRange);
 
-        const PHONETIC_ALIASED = {
-            'benção': ['bênção', 'bensao', 'bencao'],
-            'espírito': ['espirito', 'espirito santo'],
-            'glória': ['gloria', 'gloria a deus'],
-            'jesus': ['jezu', 'jesu'],
-            'senhor': ['senor'],
-            'deu': 'deus'
-        };
+        // Rules:
+        // 1. If not anchored, search from top (30 lines)
+        // 2. If anchored, search forward within range (8 lines)
+        // 3. If anchored and end of song, search for Chorus/Start (Redirection)
 
+        const searchRange = 8;
         const actualStartSearch = isAnchored ? start : 0;
-        const actualEndSearch = isAnchored ? end : Math.min(lines.length, 30);
+        const actualEndSearch = isAnchored ? Math.min(lines.length, start + searchRange) : Math.min(lines.length, 30);
+
+        // Redirection Logic (Looking for Chorus if near end)
+        let checkRedirection = false;
+        let chorusStart = 0;
+        if (isAnchored && start >= lines.length - 6) {
+            const sections = CifraParser.parseSections(currentContent);
+            chorusStart = CifraParser.getChorusStartLine(sections) || CifraParser.getStartLine(currentContent);
+            checkRedirection = true;
+        }
 
         for (let i = actualStartSearch; i < actualEndSearch; i++) {
-            const lineContent = lines[i].toLowerCase();
-            if (lineContent.match(/^[a-g][b#]?\s/i) || lineContent.trim().length < 3) continue;
-            let transcriptClean = transcriptRaw;
-            Object.entries(PHONETIC_ALIASED).forEach(([target, aliases]) => {
-                const aliasList = Array.isArray(aliases) ? aliases : [aliases];
-                aliasList.forEach(alias => {
-                    if (transcriptRaw.includes(alias)) transcriptClean = transcriptClean.replace(alias, target);
-                });
-            });
-            const words = transcriptClean.split(' ');
-            const matchedCount = words.filter(w => w.length > 2 && lineContent.includes(w)).length;
-            const isStartAnchor = !isAnchored && (matchedCount >= 1 && (words.some(w => w.length > 5) || matchedCount >= 2));
-            if (foundIndex === -1 && (isStartAnchor || matchedCount >= 2 || (lineContent.length < 15 && matchedCount >= 1))) {
+            if (PhoneticMatcher.isMatch(text, lines[i])) {
                 foundIndex = i;
                 break;
             }
         }
 
+        // Try redirection if nothing found forward
+        if (foundIndex === -1 && checkRedirection) {
+            for (let i = chorusStart; i < Math.min(lines.length, chorusStart + 8); i++) {
+                if (PhoneticMatcher.isMatch(text, lines[i])) {
+                    foundIndex = i;
+                    driftHistoryRef.current = []; // Reset drift when jumping
+                    break;
+                }
+            }
+        }
+
         if (foundIndex !== -1) {
+            // "Strict Forward" safety: if we are anchored and the match is far BEHIND (not a redirection), ignore
+            if (isAnchored && !checkRedirection && foundIndex < start - 2) {
+                return;
+            }
+
             lastVoiceMatchedIndexRef.current = foundIndex;
-            if (isWaitingForVoice) {
+
+            // Start rhythm only after first match
+            if (!isAnchored) {
+                setIsAnchored(true);
+                setIsWaitingForVoice(false);
+                startRhythmicTimer();
+            } else if (isWaitingForVoice) {
                 setIsWaitingForVoice(false);
                 if (isRhythmicMode) startRhythmicTimer();
             }
+
+            // Rhythm smoothing (Adjust BPM based on voice drift)
             if (isRhythmicMode && isAnchored) {
                 const diff = foundIndex - currentLineIndexRef.current;
                 const now = Date.now();
                 driftHistoryRef.current.push(diff);
                 if (driftHistoryRef.current.length > 5) driftHistoryRef.current.shift();
+
                 const timeSinceLastAdjust = now - lastBpmAdjustTimeRef.current;
                 const averageDrift = driftHistoryRef.current.reduce((a, b) => a + b, 0) / driftHistoryRef.current.length;
+
                 if (timeSinceLastAdjust > 2500) {
-                    if (averageDrift < -0.5) {
+                    if (averageDrift < -0.3) {
                         setBpm(prev => Math.max(40, prev - 1));
                         lastBpmAdjustTimeRef.current = now;
-                        setIsBpmSyncing(true);
-                        setTimeout(() => setIsBpmSyncing(false), 1200);
-                    } else if (averageDrift > 1.2) {
-                        setBpm(prev => Math.min(200, prev + 1));
+                    } else if (averageDrift > 0.8) {
+                        setBpm(prev => Math.min(220, prev + 1));
                         lastBpmAdjustTimeRef.current = now;
-                        setIsBpmSyncing(true);
-                        setTimeout(() => setIsBpmSyncing(false), 1200);
                     }
                 }
             }
-            if (!isAnchored) {
-                setIsAnchored(true);
-                setIsWaitingForVoice(false);
-                startRhythmicTimer();
-            }
+
             updateCurrentLine(foundIndex);
         }
     };
@@ -924,51 +932,7 @@ export default function App() {
         }
     };
 
-    const startMic = async () => {
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
-            const source = audioContextRef.current.createMediaStreamSource(stream);
-            analyserRef.current = audioContextRef.current.createAnalyser();
-            analyserRef.current.fftSize = 2048;
-            source.connect(analyserRef.current);
-            const bufferLength = analyserRef.current.frequencyBinCount;
-            const dataArray = new Uint8Array(bufferLength);
-            const freqData = new Float32Array(bufferLength);
-            const checkAudio = () => {
-                if (!micEnabled) return;
-                analyserRef.current.getByteFrequencyData(dataArray);
-                analyserRef.current.getFloatFrequencyData(freqData);
-                let sum = 0;
-                for (let i = 0; i < bufferLength; i++) sum += dataArray[i];
-                const avg = sum / bufferLength;
-                setMicLevel(avg);
-                let maxVal = -Infinity;
-                let maxIdx = -1;
-                for (let i = 0; i < bufferLength; i++) {
-                    if (freqData[i] > maxVal) { maxVal = freqData[i]; maxIdx = i; }
-                }
-                if (maxVal > -50) {
-                    const freq = maxIdx * audioContextRef.current.sampleRate / analyserRef.current.fftSize;
-                    const note = getNoteFromFreq(freq);
-                    if (note) setDetectedNote(note);
-                }
-                requestAnimationFrame(checkAudio);
-            };
-            checkAudio();
-        } catch (err) { console.error(err); setMicEnabled(false); }
-    };
 
-    const getNoteFromFreq = (freq) => {
-        if (freq < 70 || freq > 1000) return null;
-        const notes = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
-        const h = Math.round(12 * Math.log2(freq / 440)) + 69;
-        return notes[h % 12];
-    };
-
-    const stopMic = () => {
-        if (audioContextRef.current) { audioContextRef.current.close(); audioContextRef.current = null; }
-    };
 
     const transposeSong = async (index, semitones) => {
         const song = songs[index];
@@ -1663,21 +1627,28 @@ export default function App() {
 
                             {/* PLAYER LYRICS/CHORDS AREA */}
                             <div className="flex-1 relative flex flex-col bg-[url('https://www.transparenttextures.com/patterns/black-paper.png')]">
-                                <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-16 scroll-smooth scrollbar-none pb-48">
+                                <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-16 scroll-smooth scrollbar-none pb-64">
                                     <div className="max-w-4xl mx-auto space-y-1">
                                         {(currentSong?.content || "").split('\n').map((line, lIdx) => {
                                             const isChordLine = !!(line && line.trim().length > 0 && (line.match(CHORD_TOKEN_RE) || []).length > 0 && line.replace(CHORD_TOKEN_RE, '').replace(/[\s|()\-xX0-9:]/g, '').length < Math.max(2, line.trim().length * 0.25));
                                             const isActive = currentLineIndex === lIdx;
+                                            const isPast = lIdx < currentLineIndex;
+
                                             return (
                                                 <div
                                                     key={lIdx}
                                                     data-line-index={lIdx}
                                                     onClick={() => handleLineClick(lIdx)}
-                                                    className={`py-1 px-4 rounded-xl cursor-pointer transition-all duration-300 flex items-center group relative ${isActive ? 'bg-[#B87333]/15' : 'hover:bg-white/5'}`}
+                                                    className={`py-1 px-4 rounded-xl cursor-pointer transition-all duration-500 flex items-center group relative 
+                                                        ${isActive ? 'bg-[#B87333]/25 scale-[1.02] z-10' : 'hover:bg-white/5'}
+                                                        ${isPast ? 'opacity-40 grayscale-[0.5]' : 'opacity-100'}
+                                                    `}
                                                     style={{ fontSize: `${playerFontSize}px` }}
                                                 >
-                                                    {isActive && <div className="absolute left-0 w-1.5 h-full bg-[#B87333] rounded-full shadow-[0_0_15px_rgba(184,115,51,0.5)]"></div>}
-                                                    <pre className={`font-mono leading-relaxed whitespace-pre-wrap ${isChordLine ? 'text-[#B87333] font-black italic tracking-tight' : 'text-slate-200 font-medium'}`}>
+                                                    {isActive && <div className="absolute left-0 w-2 h-full bg-[#B87333] rounded-full shadow-[0_0_20px_rgba(184,115,51,0.8)] animate-pulse"></div>}
+                                                    <pre className={`font-mono leading-relaxed whitespace-pre-wrap transition-colors duration-500 
+                                                        ${isActive ? 'text-white font-black' : isChordLine ? 'text-[#B87333] font-bold italic opacity-80' : 'text-slate-400 font-medium'}
+                                                    `}>
                                                         {isChordLine
                                                             ? renderChordLine(line, (chord, anchor, isPersistent) => setChordTooltip({ chord, anchor, isPersistent }))
                                                             : (line || ' ')}
@@ -1687,6 +1658,27 @@ export default function App() {
                                         })}
                                     </div>
                                 </div>
+
+                                {/* NEXT LINE PREVIEW OVERLAY */}
+                                {currentLineIndex < (currentSong?.content || "").split('\n').length - 1 && (
+                                    <div className="absolute bottom-32 left-1/2 -translate-x-1/2 w-full max-w-2xl px-8 animate-in slide-in-from-bottom-4 duration-500 pointer-events-none">
+                                        <div className="bg-black/60 backdrop-blur-xl border border-white/10 p-4 rounded-2xl shadow-2xl flex items-center space-x-4">
+                                            <div className="flex flex-col">
+                                                <span className="text-[8px] font-black text-[#B87333] uppercase tracking-[0.3em] mb-1">Próxima Linha</span>
+                                                <p className="text-xs font-bold text-slate-300 truncate italic">
+                                                    {(() => {
+                                                        const lines = (currentSong.content || "").split('\n');
+                                                        let nextIdx = currentLineIndex + 1;
+                                                        while (nextIdx < lines.length && (!lines[nextIdx].trim() || !!(lines[nextIdx].match(CHORD_TOKEN_RE) || []).length)) {
+                                                            nextIdx++;
+                                                        }
+                                                        return lines[nextIdx] || "Fim da música";
+                                                    })()}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
 
                                 {/* PLAYER CONTROLS FLOATING PANEL */}
                                 <div className="absolute bottom-10 left-1/2 -translate-x-1/2 bg-[#1A1A1A]/95 backdrop-blur-3xl border border-white/10 p-6 rounded-[40px] shadow-[0_20px_60px_rgba(0,0,0,0.8)] flex items-center space-x-10 z-[110]">
@@ -2029,6 +2021,13 @@ export default function App() {
 
                                                                         {/* Fullscreen/Exit */}
                                                                         <div className="flex items-center space-x-2">
+                                                                            <button
+                                                                                onClick={() => setIsVideokeOpen(true)}
+                                                                                className="w-10 h-10 bg-[#B87333]/10 hover:bg-[#B87333] text-[#B87333] hover:text-white rounded-xl transition-all border border-[#B87333]/20 flex items-center justify-center group"
+                                                                                title="Abrir Modo Videokê (IA)"
+                                                                            >
+                                                                                <Tv className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                                                                            </button>
                                                                             <button
                                                                                 onClick={() => setIsManualFullscreen(!isManualFullscreen)}
                                                                                 className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${isManualFullscreen ? 'bg-red-900/40 text-red-500 border-red-500/20' : 'bg-white/5 text-slate-500 hover:text-white border-white/5'} border`}
@@ -3120,6 +3119,13 @@ export default function App() {
                         </div>
                     </div>
                 </div>
+            )}
+            {/* Videoke Player Overlay */}
+            {isVideokeOpen && manualPreviewSong && (
+                <VideokePlayer
+                    song={manualPreviewSong}
+                    onClose={() => setIsVideokeOpen(false)}
+                />
             )}
         </div>
     );
