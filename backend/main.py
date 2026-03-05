@@ -24,10 +24,14 @@ def normalize_text(text: str) -> str:
     )
 
 def clean_song_name(name: str) -> str:
-    """Removes standard fluff like (Live), [Official Video], etc."""
+    """Removes standard fluff like (Live), [Official Video], and trailing tags."""
     if not name: return ""
     # Remove anything in (...) or [...]
     name = re.sub(r'[\(\[].*?[\)\]]', '', name)
+    # Remove anything after a hyphen if there is a space around it (e.g " - Cover", " - Ao Vivo")
+    # Split by hyphen or en-dash surrounded by any whitespace
+    parts = re.split(r'\s+[-–]\s*', name)
+    name = parts[0]
     # Remove extra spaces
     return name.strip()
 
@@ -163,15 +167,18 @@ def add_manual_music(request: ManualEntryRequest):
                 # If everything failed, try to return smart suggestions
                 song_clean = clean_song_name(request.song_name)
                 artist_clean = clean_song_name(request.artist_name)
+                artist_first_words = " ".join(artist_clean.split()[:2])
                 
-                # Try suggestions for clean name and full name
-                s_results_clean = search_suggestions(song_clean)
-                s_results_orig = search_suggestions(request.song_name)
+                # Send artist first words alongside to vastly improve Solr match capability and bypass typos
+                s_results_clean = search_suggestions(f"{song_clean} {artist_first_words}".strip())
+                s_results_orig = search_suggestions(f"{request.song_name} {request.artist_name}".strip())
+                s_results_song_only = search_suggestions(song_clean)
                 
                 # Merge suggestions
                 all_s = []
                 seen = set()
-                for s in s_results_clean.get("suggestions", []) + s_results_orig.get("suggestions", []):
+                # Prioritize exact full matches over just song name matches
+                for s in s_results_clean.get("suggestions", []) + s_results_orig.get("suggestions", []) + s_results_song_only.get("suggestions", []):
                     key = (s['song'].lower(), s['artist'].lower())
                     if key not in seen:
                         seen.add(key)
@@ -182,7 +189,7 @@ def add_manual_music(request: ManualEntryRequest):
                     detail={
                         "error": "not_found",
                         "message": "Música não encontrada.",
-                        "suggestions": all_s[:10]
+                        "suggestions": all_s[:15]
                     }
                 )
         else:

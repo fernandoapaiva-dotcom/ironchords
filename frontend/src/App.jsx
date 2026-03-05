@@ -961,7 +961,7 @@ export default function App() {
                 next[index].requested_key = data.requested_key || data.original_key || item.original_key;
                 next[index].sounding_key = data.sounding_key || next[index].requested_key;
                 next[index].capo = 0;
-                next[index].include_tabs = true;
+                next[index].include_tabs = data.content ? (data.content.includes('|-') || data.content.includes('-|')) : false;
                 setBatchResults(next);
             }
         } catch (e) { console.error(e); }
@@ -1246,6 +1246,7 @@ export default function App() {
                     requested_key: song.key,
                     sounding_key: localMatch.song_key, // Default to its original key
                     status: 'success',
+                    include_tabs: localMatch.content ? (localMatch.content.includes('|-') || localMatch.content.includes('-|')) : false,
                     in_acervo: true
                 });
                 setBatchProgress({ current: i + 1, total: songsToProcess.length });
@@ -1267,6 +1268,7 @@ export default function App() {
                         ...data,
                         status: 'success',
                         show_chords: true,
+                        include_tabs: data.content ? (data.content.includes('|-') || data.content.includes('-|')) : false,
                         in_acervo: false
                     });
                 } else {
@@ -1940,13 +1942,14 @@ export default function App() {
                                                                                                 newSongs[i].sounding_key = data.sounding_key || data.original_key || data.requested_key;
                                                                                                 newSongs[i].song_key = data.requested_key || data.original_key;
                                                                                                 newSongs[i].capo = 0;
-                                                                                                newSongs[i].include_tabs = true;
+                                                                                                const hasParsedTabs = data.content ? (data.content.includes('|-') || data.content.includes('-|')) : false;
+                                                                                                newSongs[i].include_tabs = hasParsedTabs;
                                                                                                 setSongs(newSongs);
                                                                                                 if (manualPreviewSong?.song_name === song.song_name && manualPreviewSong?.artist_name === song.artist_name) {
                                                                                                     setManualPreviewSong(newSongs[i]);
                                                                                                     setSongKey(newSongs[i].song_key);
                                                                                                     setManualCapo(0);
-                                                                                                    setIncludeTabs(true);
+                                                                                                    setIncludeTabs(hasParsedTabs);
                                                                                                 }
                                                                                             }
                                                                                         } catch (err) { console.error(err); }

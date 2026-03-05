@@ -239,7 +239,13 @@ def scrape_musicas_para_missa(song_name: str) -> Optional[Dict]:
     except: return None
 
 def find_chord_cascade(song_name: str, artist_name: str, version: Optional[str] = None, include_tabs: bool = True) -> Optional[Dict]:
-    s_name = song_name.strip()
+    # Clean up the song name to bypass url mismatches (e.g. removing " - Cover", "(Live)", etc)
+    import re
+    s_name = re.sub(r'[\(\[].*?[\)\]]', '', song_name)
+    parts = re.split(r'\s+[-–]\s*', s_name)
+    s_name = parts[0]
+    s_name = " ".join(s_name.split()).strip()
+    
     a_name = artist_name.strip() if artist_name else ""
     # Cascade priority:
     # 1. User Artist on CC, Cifras, Banana
