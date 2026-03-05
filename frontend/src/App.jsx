@@ -841,7 +841,7 @@ export default function App() {
         const currentKeyToUse = song.requested_key || song.song_key || 'C';
         setIsTransposing(true);
         try {
-            const res = await fetch('http://localhost:8000/api/transpose', {
+            const res = await fetch('http://127.0.0.1:8000/api/transpose', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ content: song.content, current_key: currentKeyToUse, semitones: semitones })
@@ -876,7 +876,7 @@ export default function App() {
         if (!item || item.status !== 'success') return;
         const currentKeyToUse = item.sounding_key || item.requested_key || item.original_key || 'C';
         try {
-            const res = await fetch('http://localhost:8000/api/transpose', {
+            const res = await fetch('http://127.0.0.1:8000/api/transpose', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ content: item.content, current_key: currentKeyToUse, semitones: semitones })
@@ -934,37 +934,25 @@ export default function App() {
     useEffect(() => { if (activeTab === 'acervo') fetchAcervo(); }, [activeTab]);
     useEffect(() => {
         const delayDebounceFn = setTimeout(() => {
-            if (songName.length >= 3) fetchSuggestions(songName);
+            if (songName.length >= 2) fetchSuggestions(songName);
             else setSuggestions([]);
-        }, 300);
+        }, 250);
         return () => clearTimeout(delayDebounceFn);
     }, [songName]);
 
     const fetchSuggestions = async (name) => {
         try {
-            const res = await fetch(`http://localhost:8000/api/search/suggestions?q=${encodeURIComponent(name)}`);
+            const res = await fetch(`http://127.0.0.1:8000/api/search/suggestions?q=${encodeURIComponent(name)}`);
             const data = await res.json();
             let results = data.suggestions || [];
-
-            // Extra safety filter for branding
             results = results.filter(s => !s.song.toLowerCase().includes('agape') && !s.artist.toLowerCase().includes('agape'));
             setSuggestions(results);
-
-            const searchVal = name.trim().toLowerCase();
-            const match = results.find(r => r.song.toLowerCase() === searchVal || r.song.toLowerCase().startsWith(searchVal));
-
-            if (match && searchVal.length >= 3) {
-                console.log("MATCH PROATIVO:", match.song, "Tom:", match.key);
-                setArtistName(match.artist);
-                if (match.key) setSongKey(normalizeNote(match.key));
-                else fetchSongMetadata(match.song, match.artist);
-            }
         } catch (err) { console.error(err); }
     };
 
     const fetchSongMetadata = async (song, artist) => {
         try {
-            const res = await fetch(`http://localhost:8000/api/music/metadata?song_name=${encodeURIComponent(song)}&artist_name=${encodeURIComponent(artist)}`);
+            const res = await fetch(`http://127.0.0.1:8000/api/music/metadata?song_name=${encodeURIComponent(song)}&artist_name=${encodeURIComponent(artist)}`);
             const data = await res.json();
             if (data.key) setSongKey(normalizeNote(data.key));
         } catch (err) { console.error(err); }
@@ -979,7 +967,7 @@ export default function App() {
 
     const fetchVersions = async (artistSlug, songSlug) => {
         try {
-            const res = await fetch(`http://localhost:8000/api/song/versions?artist_slug=${artistSlug}&song_slug=${songSlug}`);
+            const res = await fetch(`http://127.0.0.1:8000/api/song/versions?artist_slug=${artistSlug}&song_slug=${songSlug}`);
             const data = await res.json();
             if (data.versions && data.versions.length > 0) {
                 setAvailableVersions(data.versions);
@@ -998,7 +986,7 @@ export default function App() {
     const fetchAcervo = async () => {
         setAcervoLoading(true);
         try {
-            const res = await fetch('http://localhost:8000/api/chords');
+            const res = await fetch('http://127.0.0.1:8000/api/chords');
             const data = await res.json();
             setAcervo(data.chords);
         } catch (err) { console.error(err); }
@@ -1013,7 +1001,7 @@ export default function App() {
     const confirmDelete = async () => {
         if (deleteTarget.type === 'acervo') {
             try {
-                await fetch(`http://localhost:8000/api/chords/${deleteTarget.id}`, { method: 'DELETE' });
+                await fetch(`http://127.0.0.1:8000/api/chords/${deleteTarget.id}`, { method: 'DELETE' });
                 fetchAcervo();
                 setSelectedAcervoItems(prev => prev.filter(id => id !== deleteTarget.id));
             } catch (err) { alert(err); }
@@ -1021,7 +1009,7 @@ export default function App() {
             try {
                 // Delete sequentially (or via possible bulk endpoint if added in backend)
                 for (const id of deleteTarget.id) {
-                    await fetch(`http://localhost:8000/api/chords/${id}`, { method: 'DELETE' });
+                    await fetch(`http://127.0.0.1:8000/api/chords/${id}`, { method: 'DELETE' });
                 }
                 fetchAcervo();
                 setSelectedAcervoItems([]);
@@ -1037,7 +1025,7 @@ export default function App() {
 
     const handleEditOpen = async (id) => {
         try {
-            const res = await fetch(`http://localhost:8000/api/chords/${id}`);
+            const res = await fetch(`http://127.0.0.1:8000/api/chords/${id}`);
             const data = await res.json();
             setEditingChord(data.id);
             setEditFormData({ song_name: data.song_name, artist_name: data.artist_name, song_key: data.song_key, content: data.content, capo: data.capo || 0 });
@@ -1047,7 +1035,7 @@ export default function App() {
     const handleEditSave = async (e) => {
         e.preventDefault();
         try {
-            await fetch(`http://localhost:8000/api/chords/${editingChord}`, {
+            await fetch(`http://127.0.0.1:8000/api/chords/${editingChord}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(editFormData)
@@ -1068,12 +1056,14 @@ export default function App() {
         if (e) e.preventDefault();
         const useSongName = songNameOverride || songName;
         const useArtistName = artistNameOverride || artistName;
-        const useKey = keyOverride || songKey;
+        // Use empty string to signal "Original Key"
+        const useKey = (keyOverride === "") ? "" : (keyOverride || songKey);
+
         if (!useSongName || !useArtistName) return;
         setManualLoading(true);
         setManualError('');
         try {
-            const res = await fetch('http://localhost:8000/api/music/manual', {
+            const res = await fetch('http://127.0.0.1:8000/api/music/manual', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -1097,6 +1087,9 @@ export default function App() {
                 capo: data.capo || manualCapo
             };
             setManualPreviewSong(newSong);
+            // Sync UI with found data
+            if (newSong.song_key) setSongKey(newSong.song_key);
+            if (newSong.capo !== undefined) setManualCapo(newSong.capo);
         } catch (err) { setManualError(err.message); }
         finally { setManualLoading(false); }
     };
@@ -1111,7 +1104,7 @@ export default function App() {
             try {
                 const formData = new FormData();
                 formData.append('file', file);
-                const res = await fetch('http://localhost:8000/api/music/batch/pdf', {
+                const res = await fetch('http://127.0.0.1:8000/api/music/batch/pdf', {
                     method: 'POST',
                     body: formData
                 });
@@ -1199,7 +1192,7 @@ export default function App() {
 
             // 2. If not in Acervo, fetch from API
             try {
-                const res = await fetch('http://localhost:8000/api/music/manual', {
+                const res = await fetch('http://127.0.0.1:8000/api/music/manual', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(song)
@@ -1247,7 +1240,7 @@ export default function App() {
     const handleTryBatchSuggestion = async (idx, suggestion) => {
         setBatchLoading(true);
         try {
-            const res = await fetch('http://localhost:8000/api/music/manual', {
+            const res = await fetch('http://127.0.0.1:8000/api/music/manual', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -1304,7 +1297,7 @@ export default function App() {
             formData.append('songs_data', JSON.stringify(validSongs));
             formData.append('export_format', exportFormat);
             if (coverImage) formData.append('cover_image', coverImage);
-            const res = await fetch('http://localhost:8000/api/generate_book', { method: 'POST', body: formData });
+            const res = await fetch('http://127.0.0.1:8000/api/generate_book', { method: 'POST', body: formData });
 
             if (!res.ok) {
                 let errText = await res.text();
@@ -1575,13 +1568,12 @@ export default function App() {
                                                                                 <button
                                                                                     key={idx} type="button"
                                                                                     onClick={() => {
-                                                                                        const resolvedKey = item.key ? normalizeNote(item.key) : songKey;
+                                                                                        const resolvedKey = item.key ? normalizeNote(item.key) : "";
                                                                                         setSongName(item.song);
                                                                                         setArtistName(item.artist);
                                                                                         if (item.key) setSongKey(resolvedKey);
-                                                                                        else fetchSongMetadata(item.song, item.artist);
                                                                                         setShowSuggestions(false);
-                                                                                        // Auto-trigger search immediately after selecting a suggestion
+                                                                                        // Auto-trigger search immediately with original key empty string
                                                                                         setTimeout(() => handleManualSubmit(null, item.song, item.artist, resolvedKey), 100);
                                                                                     }}
                                                                                     className="w-full text-left px-6 py-4 hover:bg-[#B87333]/10 transition-all border-b border-white/5 last:border-none flex items-center justify-between group active:bg-[#B87333]/20"
@@ -1608,9 +1600,8 @@ export default function App() {
                                                             <div>
                                                                 <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2 ml-1">Artista / Banda</label>
                                                                 <input
-                                                                    type="text" required value={artistName}
-                                                                    onChange={e => setArtistName(e.target.value)}
-                                                                    className="w-full bg-black/60 border border-white/10 rounded-2xl px-5 py-5 text-white focus:ring-2 focus:ring-[#B87333]/40 outline-none transition-all font-bold placeholder:text-slate-700" placeholder="Ex: Skank"
+                                                                    type="text" readOnly value={artistName}
+                                                                    className="w-full bg-black/40 border border-white/5 rounded-2xl px-5 py-5 text-slate-400 outline-none transition-all font-bold cursor-not-allowed opacity-60" placeholder="Selecionado automaticamente"
                                                                 />
                                                             </div>
                                                         </div>
@@ -1731,7 +1722,7 @@ export default function App() {
                                                                                     const song = manualPreviewSong;
                                                                                     const currentKeyToUse = song.sounding_key || song.song_key || 'C';
                                                                                     try {
-                                                                                        const res = await fetch('http://localhost:8000/api/transpose', {
+                                                                                        const res = await fetch('http://127.0.0.1:8000/api/transpose', {
                                                                                             method: 'POST',
                                                                                             headers: { 'Content-Type': 'application/json' },
                                                                                             body: JSON.stringify({ content: song.content, current_key: currentKeyToUse, semitones: -1 })
@@ -1747,7 +1738,7 @@ export default function App() {
                                                                                     const song = manualPreviewSong;
                                                                                     const currentKeyToUse = song.sounding_key || song.song_key || 'C';
                                                                                     try {
-                                                                                        const res = await fetch('http://localhost:8000/api/transpose', {
+                                                                                        const res = await fetch('http://127.0.0.1:8000/api/transpose', {
                                                                                             method: 'POST',
                                                                                             headers: { 'Content-Type': 'application/json' },
                                                                                             body: JSON.stringify({ content: song.content, current_key: currentKeyToUse, semitones: 1 })

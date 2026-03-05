@@ -116,20 +116,23 @@ class TransposeRequest(BaseModel):
 
 @app.post("/api/music/manual")
 def add_manual_music(request: ManualEntryRequest):
+    # Normalize key from request
+    req_key = request.key.strip() if request.key else ""
+    
     # Try to find exactly the requested key in DB first for efficiency
-    # Note: version and include_tabs currently impact scraping, not yet local filtering
-    chord_data = get_chord(request.song_name, request.artist_name, request.key)
+    chord_data = get_chord(request.song_name, request.artist_name, req_key if req_key else None)
     
     if not chord_data:
-        # If not found exactly, try any version of this song in DB to reuse content for transposing
+        # If not found exactly, try any version of this song in DB
         chord_data = get_chord(request.song_name, request.artist_name)
     
     if chord_data:
-        # Normalize key name from DB (song_key) to scraper format (key)
+        # Normalize key name from DB
         chord_data['key'] = chord_data.get('song_key')
+        if not req_key: # If original requested, use found key
+            req_key = chord_data['key']
     
     # If the user specifically changed the version or tabs, we should scrape again
-    # to get the correct version content
     if not chord_data or (request.version and request.version != "Principal") or not request.include_tabs:
         scraped = find_chord_cascade(request.song_name, request.artist_name, version=request.version, include_tabs=request.include_tabs)
         if not scraped:
@@ -147,37 +150,19 @@ def add_manual_music(request: ManualEntryRequest):
                 s_results_song = search_suggestions(song_clean)
                 suggestions_song = s_results_song.get("suggestions", [])
                 
-                # 3. If still few results, try normalized (no accents)
-                suggestions_norm = []
-                if len(suggestions) + len(suggestions_song) < 5:
-                    query_norm = normalize_text(f"{song_clean} {artist_clean}")
-                    if query_norm != query_full.lower():
-                        s_results_norm = search_suggestions(query_norm)
-                        suggestions_norm = s_results_norm.get("suggestions", [])
-
-                # Merge and deduplicate
-                seen = set()
-                merged = []
-                # Priority: Full query > Song only > Normalized
-                for s in suggestions + suggestions_song + suggestions_norm:
-                    # Deduplicate by song and artist name
-                    key = (s.get("song", "").lower(), s.get("artist", "").lower())
-                    if key not in seen:
-                        seen.add(key)
-                        merged.append(s)
-                
+                # If everything failed, at least return suggestions if possible
+                s_results = search_suggestions(request.song_name)
                 raise HTTPException(
                     status_code=404, 
                     detail={
                         "error": "not_found",
                         "message": "Música não encontrada.",
-                        "suggestions": merged[:10]
+                        "suggestions": s_results.get("suggestions", [])
                     }
                 )
-            # If scrape failed but we have DB data, we use DB data (fallback)
         else:
             chord_data = scraped
-            # Save the primary scraped version
+            # Save primary version
             save_chord(
                 song_name=chord_data['song_name'],
                 artist_name=chord_data['artist_name'],
@@ -186,27 +171,32 @@ def add_manual_music(request: ManualEntryRequest):
                 source=chord_data['source'],
                 capo=chord_data.get('capo', 0)
             )
-        
-    final_content = process_chords(chord_data['content'], chord_data['key'], request.key)
     
-    # CRITICAL V56: If requested key is different from what we found, save it as a new distinct entry
-    if request.key.upper() != chord_data['key'].upper():
+    # Final check for key
+    if not req_key:
+        req_key = chord_data['key']
+
+    final_content = process_chords(chord_data['content'], chord_data['key'], req_key)
+    
+    # If requested key is different, save it too
+    if req_key.upper() != chord_data['key'].upper():
         save_chord(
             song_name=chord_data['song_name'],
             artist_name=chord_data['artist_name'],
-            song_key=request.key,
+            song_key=req_key,
             content=final_content,
             source=chord_data['source'],
             capo=chord_data.get('capo', 0)
         )
     
-    # Calculate sounding key
-    sounding_key = chord_utils.get_sounding_key(chord_data['key'], request.capo)
+    # Calcs sounding key
+    sounding_key = chord_utils.get_sounding_key(req_key, request.capo)
     
+    # Save the specific entry being requested for the acervo
     save_chord(
         song_name=chord_data['song_name'],
         artist_name=chord_data['artist_name'],
-        song_key=chord_data['key'],
+        song_key=req_key,
         content=final_content,
         source=chord_data['source'],
         capo=request.capo
@@ -216,7 +206,7 @@ def add_manual_music(request: ManualEntryRequest):
         "song_name": chord_data['song_name'],
         "artist_name": chord_data['artist_name'],
         "original_key": chord_data['key'],
-        "requested_key": request.key,
+        "requested_key": req_key,
         "sounding_key": sounding_key,
         "content": final_content,
         "source": chord_data['source'],
@@ -511,13 +501,12 @@ def delete_chord(chord_id: int):
 
 @app.get("/api/search/suggestions")
 def search_suggestions(q: str):
-    """Real-time autocomplete suggestions for Song and Artist using Solr API."""
-    print(f"DEBUG AUTOCOMPLETE: Query='{q}'")
+    """Real-time autocomplete suggestions using Solr API."""
     if not q or len(q) < 2:
         return {"suggestions": []}
         
     url = "https://solr.sscdn.co/cc/c7/"
-    params = {"q": q, "limit": 15}
+    params = {"q": q, "limit": 20}
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
         "Referer": "https://www.cifraclub.com.br/"
@@ -530,7 +519,7 @@ def search_suggestions(q: str):
         conn = get_db_connection()
         like_q = f"%{q}%"
         local_results = conn.execute(
-            "SELECT DISTINCT song_name, artist_name, song_key FROM chords WHERE song_name LIKE ? OR artist_name LIKE ? LIMIT 5",
+            "SELECT DISTINCT song_name, artist_name, song_key FROM chords WHERE song_name LIKE ? OR artist_name LIKE ? LIMIT 10",
             (like_q, like_q)
         ).fetchall()
         conn.close()
@@ -542,7 +531,7 @@ def search_suggestions(q: str):
                 "source": "local"
             })
     except Exception as e:
-        print(f"DEBUG LOCAL SUGGEST ERROR: {e}")
+        print(f"DEBUG LOCAL ERROR: {e}")
         
     # 2. Remote Solr Results
     try:
@@ -551,7 +540,6 @@ def search_suggestions(q: str):
             data = response.json()
             docs = data.get("response", {}).get("docs", [])
             for doc in docs:
-                # Accept anything that has song (txt) and artist (art) names
                 s_name = doc.get("txt")
                 a_name = doc.get("art")
                 
@@ -566,9 +554,9 @@ def search_suggestions(q: str):
                             "source": "cifraclub"
                         })
     except Exception as e:
-        print(f"DEBUG REMOTE SUGGEST ERROR: {e}")
+        print(f"DEBUG REMOTE ERROR: {e}")
             
-    # Final filter for local results as well
+    # Final filter for branding
     suggestions = [s for s in suggestions if "agape" not in s['song'].lower() and "agape" not in s['artist'].lower()]
             
     return {"suggestions": cast(List[Any], suggestions)[:12]}
