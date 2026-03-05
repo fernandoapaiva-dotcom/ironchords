@@ -28,6 +28,21 @@ def clean_song_name(name: str) -> str:
     if not name: return ""
     # Remove anything in (...) or [...]
     name = re.sub(r'[\(\[].*?[\)\]]', '', name)
+    
+    # Remove specific terms common in the request examples or standard suffixes
+    fluff_terms = [
+        r'-?\s*best song gospel\b',
+        r'-?\s*ao vivo\b',
+        r'-?\s*live\b',
+        r'-?\s*official\b',
+        r'-?\s*clipe\b',
+        r'-?\s*video\b',
+        r'-?\s*lyric\b',
+        r'-?\s*remix\b'
+    ]
+    for term in fluff_terms:
+        name = re.sub(term, '', name, flags=re.IGNORECASE)
+        
     # Remove anything after a hyphen if there is a space around it (e.g " - Cover", " - Ao Vivo")
     # Split by hyphen or en-dash surrounded by any whitespace
     parts = re.split(r'\s+[-–]\s*', name)
@@ -152,13 +167,35 @@ def add_manual_music(request: ManualEntryRequest):
 
     # If not in DB OR specific version requested, try scraping
     if needs_scrape:
-        # Attempt 1: Full name
-        scraped = find_chord_cascade(request.song_name, request.artist_name, version=request.version, include_tabs=request.include_tabs)
+        # Attempt 1: Contextual Smart Search (Solr)
+        # This helps with typos (e.g. Chili vs Chilli) and finding the correct song name (e.g. adding (Hey Oh))
+        found_via_suggestion = False
+        suggested_song = request.song_name
+        suggested_artist = request.artist_name
         
-        # Attempt 2: Cleaned name (Removing fluff like (Live), [Remix], etc.)
+        # Try to get a high-confidence suggestion
+        search_query = f"{request.song_name} {request.artist_name}".strip()
+        suggestions_res = search_suggestions(search_query)
+        suggestions = [s for s in suggestions_res.get("suggestions", []) if s.get("source") == "cifraclub"]
+        
+        if suggestions:
+            top = suggestions[0]
+            # If the top suggestion contains the normalized core of the requested song, use it
+            s_core = normalize_text(clean_song_name(request.song_name))
+            t_core = normalize_text(clean_song_name(top['song']))
+            if s_core in t_core or t_core in s_core:
+                print(f"DEBUG SMART SEARCH: Resolvendo '{request.song_name}' -> '{top['song']}' por '{top['artist']}'")
+                suggested_song = top['song']
+                suggested_artist = top['artist']
+                found_via_suggestion = True
+
+        # Attempt 2: Scrape with resolved metadata
+        scraped = find_chord_cascade(suggested_song, suggested_artist, version=request.version, include_tabs=request.include_tabs)
+        
+        # Attempt 3: Normal cleaning fallback if smart search didn't resolve or scraper failed
         if not scraped:
             song_clean = clean_song_name(request.song_name)
-            if song_clean != request.song_name:
+            if song_clean != suggested_song: # Only if it wasn't tried yet
                 print(f"DEBUG REQ 7: Tentando nome limpo '{song_clean}'...")
                 scraped = find_chord_cascade(song_clean, request.artist_name, version=request.version, include_tabs=request.include_tabs)
         
@@ -575,6 +612,19 @@ def delete_chord(chord_id: int):
     conn.commit()
     conn.close()
     return {"status": "ok"}
+
+@app.get("/api/chords/check")
+def check_song_exists(name: str):
+    conn = get_db_connection()
+    # Case insensitive search by name
+    chord = conn.execute(
+        "SELECT * FROM chords WHERE song_name = ? COLLATE NOCASE LIMIT 1",
+        (name.strip(),)
+    ).fetchone()
+    conn.close()
+    if chord:
+        return {"exists": True, "chord": dict(chord)}
+    return {"exists": False}
 
 @app.get("/api/search/suggestions")
 def search_suggestions(q: str):

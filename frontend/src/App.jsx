@@ -518,6 +518,8 @@ export default function App() {
     const [acervo, setAcervo] = useState([]);
     const [acervoLoading, setAcervoLoading] = useState(false);
     const [acervoSearchTerm, setAcervoSearchTerm] = useState('');
+    const [conflictData, setConflictData] = useState(null); // { newSong, existingSong, onConfirm }
+    const [conflictQueue, setConflictQueue] = useState([]);
     const [selectedAcervoItems, setSelectedAcervoItems] = useState([]);
     const [batchLinkLoading, setBatchLinkLoading] = useState(false);
 
@@ -540,12 +542,72 @@ export default function App() {
     const [deleteModalOpen, setDeleteModalOpen] = useState(false);
     const [deleteTarget, setDeleteTarget] = useState({ type: '', id: null, name: '' });
 
-    const handleSaveList = () => {
+    const saveOneChordToAcervo = async (song, force = false) => {
+        // Prepare song data
+        const songToSave = {
+            song_name: song.song_name,
+            artist_name: song.artist_name,
+            song_key: song.sounding_key || song.requested_key || song.song_key,
+            content: song.content || '',
+            capo: song.capo || 0,
+            include_tabs: song.include_tabs !== undefined ? song.include_tabs : true
+        };
+
+        if (!force) {
+            // Check for conflict
+            try {
+                const res = await fetch(`http://127.0.0.1:8000/api/chords/check?name=${encodeURIComponent(songToSave.song_name)}`);
+                const data = await res.json();
+                if (data.exists) {
+                    return { conflict: true, existing: data.chord, newSong: songToSave };
+                }
+            } catch (err) { console.error("Erro ao verificar conflito:", err); }
+        }
+
+        // No conflict or forced, save it
+        try {
+            await fetch('http://127.0.0.1:8000/api/chords', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(songToSave)
+            });
+            return { success: true };
+        } catch (err) {
+            console.error("Erro ao salvar no acervo:", err);
+            return { success: false };
+        }
+    };
+
+    const processConflictQueue = async (queue) => {
+        if (queue.length === 0) {
+            fetchAcervo();
+            return;
+        }
+
+        const nextConflict = queue[0];
+        setConflictData({
+            ...nextConflict,
+            onConfirm: async (action) => {
+                if (action === 'replace') {
+                    await saveOneChordToAcervo(nextConflict.newSong, true);
+                }
+                // 'skip' does nothing
+                const remaining = queue.slice(1);
+                setConflictQueue(remaining);
+                setConflictData(null);
+                processConflictQueue(remaining);
+            }
+        });
+    };
+
+    const handleSaveList = async () => {
         const songsToSave = activeTab === 'batch' && showBatchReview
             ? batchResults.filter(r => r.status === 'success')
             : songs;
 
         if (!saveListName.trim() || songsToSave.length === 0) return;
+
+        // 1. Save to Playlists (localStorage)
         const listToSave = {
             id: Date.now().toString(),
             name: saveListName,
@@ -560,12 +622,29 @@ export default function App() {
                 content: s.content || ''
             }))
         };
-        const existing = JSON.parse(localStorage.getItem('iron_chords_playlists') || '[]');
-        localStorage.setItem('iron_chords_playlists', JSON.stringify([...existing, listToSave]));
+        const playlists = JSON.parse(localStorage.getItem('iron_chords_playlists') || '[]');
+        localStorage.setItem('iron_chords_playlists', JSON.stringify([...playlists, listToSave]));
+
+        // 2. Save to Acervo (DB) with conflict check
+        const conflictsFound = [];
+        for (const song of songsToSave) {
+            const result = await saveOneChordToAcervo(song);
+            if (result.conflict) {
+                conflictsFound.push({ newSong: result.newSong, existingSong: result.existing });
+            }
+        }
+
         setSaveListModalOpen(false);
         setSaveListName('');
-        setShowSaveSuccess(true);
-        setTimeout(() => setShowSaveSuccess(false), 2500);
+
+        if (conflictsFound.length > 0) {
+            setConflictQueue(conflictsFound);
+            processConflictQueue(conflictsFound);
+        } else {
+            fetchAcervo();
+            setShowSaveSuccess(true);
+            setTimeout(() => setShowSaveSuccess(false), 2500);
+        }
     };
 
     const [micEnabled, setMicEnabled] = useState(false);
@@ -1214,14 +1293,22 @@ export default function App() {
         setBatchLoading(true);
         setForgeMessage("Vasculhando a Internet...");
 
-        const songsToProcess = batchRawData.map(row => ({
-            song_name: String(row[batchMapping.song_name] || '').trim(),
-            artist_name: String(row[batchMapping.artist_name] || '').trim(),
-            key: String(row[batchMapping.key] || '').trim(),
-            version: 'Principal',
-            include_tabs: true,
-            capo: 0
-        })).filter(s => s.song_name && s.artist_name);
+        const songsToProcess = batchRawData.map(row => {
+            const songName = String(row[batchMapping.song_name] || '').trim();
+            const artistName = String(row[batchMapping.artist_name] || '').trim();
+            // Basic validation: if artist is just a dot, dash or empty, mark as invalid but keep it
+            const invalidArtist = !artistName || artistName === '.' || artistName === '-' || artistName === '_';
+
+            return {
+                song_name: songName,
+                artist_name: invalidArtist ? '' : artistName,
+                key: String(row[batchMapping.key] || '').trim(),
+                version: 'Principal',
+                include_tabs: true,
+                capo: 0,
+                needs_artist: invalidArtist
+            };
+        }).filter(s => s.song_name); // Keep it as long as there is a song name
 
         setBatchProgress({ current: 0, total: songsToProcess.length });
         setIsGenerating(true);
@@ -1278,7 +1365,8 @@ export default function App() {
                         artist_name: song.artist_name,
                         requested_key: song.key,
                         status: 'error',
-                        suggestions: errorData.detail?.suggestions || []
+                        suggestions: errorData.detail?.suggestions || [],
+                        needs_artist: song.needs_artist
                     });
                 }
             } catch (err) {
@@ -2059,7 +2147,33 @@ export default function App() {
                                                                                         <h5 className="font-black text-slate-400 uppercase italic tracking-tighter text-lg truncate">{item.song_name}</h5>
                                                                                     )}
                                                                                     <div className="flex items-center space-x-3 mt-1">
-                                                                                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest truncate">{item.artist_name}</p>
+                                                                                        {item.needs_artist || !item.artist_name ? (
+                                                                                            <div className="flex items-center space-x-2">
+                                                                                                <input
+                                                                                                    type="text"
+                                                                                                    placeholder="Pendente: Digite o Artista..."
+                                                                                                    className="bg-black/60 border border-[#B87333]/50 rounded-lg px-3 py-1 text-[10px] font-bold text-white outline-none w-56 placeholder:text-red-500/50 focus:border-[#B87333] shadow-[0_0_10px_rgba(184,115,51,0.1)] transition-all"
+                                                                                                    value={item.artist_name || ''}
+                                                                                                    onChange={(e) => {
+                                                                                                        const next = [...batchResults];
+                                                                                                        next[idx].artist_name = e.target.value;
+                                                                                                        setBatchResults(next);
+                                                                                                    }}
+                                                                                                    onKeyDown={(e) => {
+                                                                                                        if (e.key === 'Enter') handleTryBatchSuggestion(idx, { song: item.song_name, artist: item.artist_name });
+                                                                                                    }}
+                                                                                                />
+                                                                                                <button
+                                                                                                    onClick={() => handleTryBatchSuggestion(idx, { song: item.song_name, artist: item.artist_name })}
+                                                                                                    className="p-1.5 bg-[#B87333]/20 text-[#B87333] hover:bg-[#B87333] hover:text-white rounded-lg transition-all border border-[#B87333]/30"
+                                                                                                    title="Pesquisar este artista"
+                                                                                                >
+                                                                                                    <Search size={12} />
+                                                                                                </button>
+                                                                                            </div>
+                                                                                        ) : (
+                                                                                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest truncate">{item.artist_name}</p>
+                                                                                        )}
                                                                                         {item.in_acervo && <span className="text-[8px] font-black bg-blue-600/20 text-blue-400 px-2 py-0.5 rounded border border-blue-600/30 uppercase whitespace-nowrap" title="Detectado no Acervo Local">Acervo</span>}
                                                                                     </div>
                                                                                 </div>
@@ -2244,23 +2358,7 @@ export default function App() {
 
                                                                 <button onClick={async () => {
                                                                     if (!batchFixData.content.trim()) return;
-                                                                    try {
-                                                                        await fetch('http://localhost:8000/api/chords', {
-                                                                            method: 'POST',
-                                                                            headers: { 'Content-Type': 'application/json' },
-                                                                            body: JSON.stringify({
-                                                                                song_name: batchFixData.song_name,
-                                                                                artist_name: batchFixData.artist_name,
-                                                                                song_key: batchFixData.song_key,
-                                                                                content: batchFixData.content,
-                                                                                capo: batchFixData.capo,
-                                                                                include_tabs: batchFixData.include_tabs
-                                                                            })
-                                                                        });
-                                                                        // Update acervo list so it shows 'No Acervo' optionally globally
-                                                                        fetchAcervo();
-                                                                    } catch (e) { console.error(e); }
-
+                                                                    // Only update the local batch results state. No DB call here.
                                                                     const next = [...batchResults];
                                                                     next[batchFixData.idx] = {
                                                                         ...next[batchFixData.idx],
@@ -2272,13 +2370,12 @@ export default function App() {
                                                                         content: batchFixData.content,
                                                                         capo: batchFixData.capo,
                                                                         include_tabs: batchFixData.include_tabs,
-                                                                        status: 'success',
-                                                                        in_acervo: true
+                                                                        status: 'success'
                                                                     };
                                                                     setBatchResults(next);
                                                                     setBatchFixData(null);
                                                                 }} className="w-full mt-6 py-4 bg-[#B87333] hover:bg-[#8B4513] text-white font-black uppercase tracking-widest rounded-xl transition-all shadow-xl shadow-[#B87333]/20 shrink-0">
-                                                                    Salvar no Banco e Lote
+                                                                    Salvar no Lote
                                                                 </button>
                                                             </div>
                                                         </div>
@@ -2683,11 +2780,68 @@ export default function App() {
                                     </div>
                                 </div>
                             )}
-
                         </div>
                     </div>
                 )}
             </main>
+
+            {/* Conflict Resolution Modal */}
+            {conflictData && (
+                <div className="fixed inset-0 z-[400] flex items-center justify-center bg-[#070709]/95 backdrop-blur-2xl animate-in fade-in zoom-in-95 duration-300 p-4">
+                    <div className="bg-[#16161D] border border-blue-500/30 p-10 rounded-[40px] shadow-[0_0_80px_rgba(59,130,246,0.15)] w-full max-w-2xl flex flex-col relative overflow-hidden">
+                        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-blue-500 to-transparent opacity-50"></div>
+                        <div className="flex items-center justify-between mb-10">
+                            <div className="flex items-center space-x-5">
+                                <div className="w-12 h-12 bg-blue-500/10 rounded-2xl flex items-center justify-center border border-blue-500/20">
+                                    <AlertCircle className="w-6 h-6 text-blue-500" />
+                                </div>
+                                <div>
+                                    <h3 className="text-2xl font-black text-white uppercase italic tracking-tighter">Conflito de Forja</h3>
+                                    <p className="text-[10px] font-bold text-blue-400 uppercase tracking-[0.2em] mt-1">Uma peça com este nome já existe no acervo</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-8 mb-10">
+                            <div className="bg-white/5 border border-white/10 p-6 rounded-3xl relative">
+                                <span className="absolute -top-3 left-6 px-3 py-1 bg-[#16161D] border border-white/10 rounded-full text-[8px] font-black text-slate-500 uppercase tracking-widest">No Acervo</span>
+                                <h4 className="text-lg font-black text-white uppercase italic truncate">{conflictData.existingSong?.song_name}</h4>
+                                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1 truncate">{conflictData.existingSong?.artist_name}</p>
+                                <div className="mt-4 pt-4 border-t border-white/5 flex items-center justify-between">
+                                    <span className="text-[10px] font-black text-blue-400 italic bg-blue-500/10 px-3 py-1 rounded-lg border border-blue-500/20">{conflictData.existingSong?.song_key}</span>
+                                    <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest">{conflictData.existingSong?.content?.split('\n').length} linhas</span>
+                                </div>
+                            </div>
+
+                            <div className="bg-blue-600/5 border border-blue-500/30 p-6 rounded-3xl relative">
+                                <span className="absolute -top-3 left-6 px-3 py-1 bg-blue-600 border border-blue-500 text-[8px] font-black text-white uppercase tracking-widest">Nova Versão</span>
+                                <h4 className="text-lg font-black text-white uppercase italic truncate">{conflictData.newSong?.song_name}</h4>
+                                <p className="text-[10px] font-bold text-blue-400/60 uppercase tracking-widest mt-1 truncate">{conflictData.newSong?.artist_name}</p>
+                                <div className="mt-4 pt-4 border-t border-blue-500/10 flex items-center justify-between">
+                                    <span className="text-[10px] font-black text-blue-400 italic bg-blue-500/10 px-3 py-1 rounded-lg border border-blue-500/20">{conflictData.newSong?.song_key}</span>
+                                    <span className="text-[10px] font-black text-blue-400/60 uppercase tracking-widest">{conflictData.newSong?.content?.split('\n').length} linhas</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="flex flex-col space-y-4">
+                            <button
+                                onClick={() => conflictData.onConfirm('replace')}
+                                className="w-full py-5 bg-blue-600 hover:bg-blue-500 text-white font-black uppercase tracking-[0.2em] rounded-2xl transition-all shadow-xl shadow-blue-900/20 flex items-center justify-center space-x-3 group"
+                            >
+                                <RefreshCw className="w-5 h-5 group-hover:rotate-180 transition-transform duration-700" />
+                                <span>Substituir Versão Existente</span>
+                            </button>
+                            <button
+                                onClick={() => conflictData.onConfirm('skip')}
+                                className="py-4 bg-white/5 hover:bg-white/10 text-slate-400 font-bold uppercase tracking-widest text-[10px] rounded-xl border border-white/5 transition-all w-full"
+                            >
+                                Manter Peça do Acervo / Pular
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Delete Confirmation Modal */}
             {deleteModalOpen && (
@@ -2707,16 +2861,8 @@ export default function App() {
                             <p className="text-[10px] text-red-500/80 italic uppercase">Esta ação não poderá ser desfeita.</p>
 
                             <div className="flex items-center space-x-4 mt-6">
-                                <button
-                                    onClick={() => setDeleteModalOpen(false)}
-                                    className="flex-1 py-4 bg-white/5 hover:bg-white/10 text-white font-black uppercase tracking-widest rounded-xl transition-all border border-white/5"
-                                >
-                                    Cancelar
-                                </button>
-                                <button
-                                    onClick={confirmDelete}
-                                    className="flex-1 py-4 bg-red-600 hover:bg-red-700 text-white font-black uppercase tracking-widest rounded-xl transition-all shadow-xl shadow-red-900/20 flex items-center justify-center space-x-2"
-                                >
+                                <button onClick={() => setDeleteModalOpen(false)} className="flex-1 py-4 bg-white/5 hover:bg-white/10 text-white font-black uppercase tracking-widest rounded-xl transition-all border border-white/5">Cancelar</button>
+                                <button onClick={confirmDelete} className="flex-1 py-4 bg-red-600 hover:bg-red-700 text-white font-black uppercase tracking-widest rounded-xl transition-all shadow-xl shadow-red-900/20 flex items-center justify-center space-x-2">
                                     <Trash2 className="w-4 h-4" />
                                     <span>Excluir</span>
                                 </button>
@@ -2727,125 +2873,96 @@ export default function App() {
             )}
 
             {/* Save List Modal */}
-            {
-                saveListModalOpen && (
-                    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-[#070709]/90 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-300">
-                        <div className="bg-[#16161D] border border-white/10 p-8 rounded-[32px] shadow-2xl w-full max-w-md flex flex-col">
-                            <div className="flex items-center justify-between mb-8">
-                                <div className="flex items-center space-x-4">
-                                    <div className="w-1.5 h-6 bg-[#B87333] rounded-full shadow-[0_0_15px_rgba(184,115,51,0.4)]"></div>
-                                    <h3 className="text-xl font-black text-white uppercase italic tracking-tighter">Salvar Lista</h3>
-                                </div>
-                                <button onClick={() => { setSaveListModalOpen(false); setSaveListName(''); }} className="p-2 bg-white/5 hover:bg-white/10 rounded-xl transition-all border border-white/5"><X className="w-5 h-5 text-slate-400" /></button>
+            {saveListModalOpen && (
+                <div className="fixed inset-0 z-[200] flex items-center justify-center bg-[#070709]/90 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-300">
+                    <div className="bg-[#16161D] border border-white/10 p-8 rounded-[32px] shadow-2xl w-full max-w-md flex flex-col">
+                        <div className="flex items-center justify-between mb-8">
+                            <div className="flex items-center space-x-4">
+                                <div className="w-1.5 h-6 bg-[#B87333] rounded-full shadow-[0_0_15px_rgba(184,115,51,0.4)]"></div>
+                                <h3 className="text-xl font-black text-white uppercase italic tracking-tighter">Salvar Lista</h3>
                             </div>
-                            <div className="space-y-6">
-                                <div>
-                                    <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Nome da Lista</label>
-                                    <input
-                                        type="text"
-                                        autoFocus
-                                        placeholder="Ex: Missa de Domingo, Setlist Rock..."
-                                        value={saveListName}
-                                        onChange={e => setSaveListName(e.target.value)}
-                                        className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-4 text-white font-bold outline-none focus:border-[#B87333]/50 transition-all placeholder:text-slate-700"
-                                        onKeyDown={e => e.key === 'Enter' && handleSaveList()}
-                                    />
-                                </div>
-                                <button
-                                    onClick={handleSaveList}
-                                    disabled={!saveListName.trim()}
-                                    className="w-full py-4 bg-[#B87333] hover:bg-[#8B4513] text-white font-black uppercase tracking-widest rounded-xl transition-all shadow-xl shadow-[#B87333]/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
-                                >
-                                    <Save className="w-4 h-4" />
-                                    <span>Confirmar Salvamento</span>
-                                </button>
+                            <button onClick={() => { setSaveListModalOpen(false); setSaveListName(''); }} className="p-2 bg-white/5 hover:bg-white/10 rounded-xl transition-all border border-white/5"><X className="w-5 h-5 text-slate-400" /></button>
+                        </div>
+                        <div className="space-y-6">
+                            <div>
+                                <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Nome da Lista</label>
+                                <input type="text" autoFocus placeholder="Ex: Missa de Domingo..." value={saveListName} onChange={e => setSaveListName(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-4 text-white font-bold outline-none focus:border-[#B87333]/50 transition-all placeholder:text-slate-700" onKeyDown={e => e.key === 'Enter' && handleSaveList()} />
                             </div>
+                            <button onClick={handleSaveList} disabled={!saveListName.trim()} className="w-full py-4 bg-[#B87333] hover:bg-[#8B4513] text-white font-black uppercase tracking-widest rounded-xl transition-all shadow-xl shadow-[#B87333]/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2">
+                                <Save className="w-4 h-4" />
+                                <span>Confirmar Salvamento</span>
+                            </button>
                         </div>
                     </div>
-                )
-            }
+                </div>
+            )}
 
             {/* Save Success Animation */}
-            {
-                showSaveSuccess && (
-                    <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/40 backdrop-blur-sm animate-in fade-in duration-300 pointer-events-none">
-                        <div className="bg-green-500/10 border border-green-500/20 p-10 rounded-[40px] shadow-[0_0_50px_rgba(34,197,94,0.3)] flex flex-col items-center animate-in zoom-in-50 duration-500 spring-gentle">
-                            <div className="w-24 h-24 bg-green-500/20 rounded-full flex items-center justify-center relative mb-6">
-                                <div className="absolute inset-0 bg-green-500/20 rounded-full animate-ping"></div>
-                                <CheckCircle className="w-12 h-12 text-green-400 drop-shadow-[0_0_15px_rgba(34,197,94,0.8)]" />
-                            </div>
-                            <h2 className="text-3xl font-black text-white uppercase italic tracking-tighter drop-shadow-md">Lista Forjada</h2>
-                            <p className="text-green-400/80 font-bold uppercase tracking-[0.2em] text-xs mt-2">Salva com Sucesso no Acervo Local</p>
+            {showSaveSuccess && (
+                <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/40 backdrop-blur-sm animate-in fade-in duration-300 pointer-events-none">
+                    <div className="bg-green-500/10 border border-green-500/20 p-10 rounded-[40px] shadow-[0_0_50px_rgba(34,197,94,0.3)] flex flex-col items-center animate-in zoom-in-50 duration-500 spring-gentle">
+                        <div className="w-24 h-24 bg-green-500/20 rounded-full flex items-center justify-center relative mb-6">
+                            <div className="absolute inset-0 bg-green-500/20 rounded-full animate-ping"></div>
+                            <CheckCircle className="w-12 h-12 text-green-400 drop-shadow-[0_0_15px_rgba(34,197,94,0.8)]" />
                         </div>
+                        <h2 className="text-3xl font-black text-white uppercase italic tracking-tighter drop-shadow-md">Lista Forjada</h2>
+                        <p className="text-green-400/80 font-bold uppercase tracking-[0.2em] text-xs mt-2">Salva com Sucesso no Acervo Local</p>
                     </div>
-                )
-            }
+                </div>
+            )}
 
             {/* Edit Acervo Modal */}
-            {
-                editingChord && (
-                    <div className="fixed inset-0 z-[250] flex items-center justify-center bg-[#070709]/90 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-300 p-4">
-                        <div className="bg-[#16161D] border border-[#B87333]/30 p-8 rounded-[32px] shadow-[0_0_50px_rgba(0,0,0,0.8)] w-full max-w-4xl flex flex-col max-h-[90vh]">
-                            <div className="flex items-center justify-between mb-8 shrink-0">
-                                <div className="flex items-center space-x-4">
-                                    <div className="w-1.5 h-6 bg-[#B87333] rounded-full shadow-[0_0_15px_rgba(184,115,51,0.4)]"></div>
-                                    <h3 className="text-2xl font-black text-white uppercase italic tracking-tighter">Editar Cifra</h3>
-                                </div>
-                                <button onClick={() => setEditingChord(null)} className="p-2 bg-white/5 hover:bg-white/10 rounded-xl transition-all border border-white/5"><X className="w-5 h-5 text-slate-400" /></button>
+            {editingChord && (
+                <div className="fixed inset-0 z-[250] flex items-center justify-center bg-[#070709]/90 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-300 p-4">
+                    <div className="bg-[#16161D] border border-[#B87333]/30 p-8 rounded-[32px] shadow-[0_0_50px_rgba(0,0,0,0.8)] w-full max-w-4xl flex flex-col max-h-[90vh]">
+                        <div className="flex items-center justify-between mb-8 shrink-0">
+                            <div className="flex items-center space-x-4">
+                                <div className="w-1.5 h-6 bg-[#B87333] rounded-full shadow-[0_0_15px_rgba(184,115,51,0.4)]"></div>
+                                <h3 className="text-2xl font-black text-white uppercase italic tracking-tighter">Editar Cifra</h3>
                             </div>
-
-                            <div className="overflow-y-auto pr-4 space-y-6 scrollbar-thin scrollbar-thumb-white/10">
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    <div>
-                                        <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Música</label>
-                                        <input type="text" value={editFormData.song_name} onChange={e => setEditFormData({ ...editFormData, song_name: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-4 text-white font-bold outline-none focus:border-[#B87333]/50 transition-all" />
-                                    </div>
-                                    <div>
-                                        <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Artista</label>
-                                        <input type="text" value={editFormData.artist_name} onChange={e => setEditFormData({ ...editFormData, artist_name: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-4 text-white font-bold outline-none focus:border-[#B87333]/50 transition-all" />
-                                    </div>
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-6">
-                                    <div>
-                                        <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Tom Original</label>
-                                        <select value={editFormData.song_key} onChange={e => setEditFormData({ ...editFormData, song_key: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-4 text-white font-bold outline-none focus:border-[#B87333]/50 transition-all">
-                                            {["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"].map(k => <option key={k} value={k} className="bg-[#1A1A1A]">{k}</option>)}
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Capo</label>
-                                        <select value={editFormData.capo} onChange={e => setEditFormData({ ...editFormData, capo: parseInt(e.target.value) })} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-4 text-white font-bold outline-none focus:border-[#B87333]/50 transition-all">
-                                            <option value={0} className="bg-[#1A1A1A]">Sem Capo</option>
-                                            {[...Array(12)].map((_, i) => <option key={i + 1} value={i + 1} className="bg-[#1A1A1A]">Casa {i + 1}</option>)}
-                                        </select>
-                                    </div>
-                                </div>
-
+                            <button onClick={() => setEditingChord(null)} className="p-2 bg-white/5 hover:bg-white/10 rounded-xl transition-all border border-white/5"><X className="w-5 h-5 text-slate-400" /></button>
+                        </div>
+                        <div className="overflow-y-auto pr-4 space-y-6 scrollbar-thin scrollbar-thumb-white/10">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div>
-                                    <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Cifra</label>
-                                    <textarea
-                                        value={editFormData.content}
-                                        onChange={e => setEditFormData({ ...editFormData, content: e.target.value })}
-                                        className="w-full bg-black/60 border border-white/10 rounded-2xl px-6 py-6 text-white outline-none font-mono text-xs leading-relaxed min-h-[400px] hover:border-white/20 focus:border-[#B87333]/50 transition-all scrollbar-thin shadow-inner"
-                                        spellCheck="false"
-                                    />
+                                    <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Música</label>
+                                    <input type="text" value={editFormData.song_name} onChange={e => setEditFormData({ ...editFormData, song_name: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-4 text-white font-bold outline-none focus:border-[#B87333]/50 transition-all" />
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Artista</label>
+                                    <input type="text" value={editFormData.artist_name} onChange={e => setEditFormData({ ...editFormData, artist_name: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-4 text-white font-bold outline-none focus:border-[#B87333]/50 transition-all" />
                                 </div>
                             </div>
-
-                            <div className="mt-8 shrink-0">
-                                <button onClick={handleEditSave} className="w-full py-5 bg-[#B87333] hover:bg-[#8B4513] text-white font-black uppercase tracking-[0.2em] rounded-xl transition-all shadow-xl shadow-[#B87333]/20 flex items-center justify-center space-x-3 group">
-                                    <Save className="w-5 h-5 group-hover:scale-110 transition-transform" />
-                                    <span>Salvar Alterações no Acervo</span>
-                                </button>
+                            <div className="grid grid-cols-2 gap-6">
+                                <div>
+                                    <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Tom Original</label>
+                                    <select value={editFormData.song_key} onChange={e => setEditFormData({ ...editFormData, song_key: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-4 text-white font-bold outline-none focus:border-[#B87333]/50 transition-all">
+                                        {["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"].map(k => <option key={k} value={k} className="bg-[#1A1A1A]">{k}</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Capo</label>
+                                    <select value={editFormData.capo} onChange={e => setEditFormData({ ...editFormData, capo: parseInt(e.target.value) })} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-4 text-white font-bold outline-none focus:border-[#B87333]/50 transition-all">
+                                        <option value={0} className="bg-[#1A1A1A]">Sem Capo</option>
+                                        {[...Array(12)].map((_, i) => <option key={i + 1} value={i + 1} className="bg-[#1A1A1A]">Casa {i + 1}</option>)}
+                                    </select>
+                                </div>
+                            </div>
+                            <div>
+                                <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Cifra</label>
+                                <textarea value={editFormData.content} onChange={e => setEditFormData({ ...editFormData, content: e.target.value })} className="w-full bg-black/60 border border-white/10 rounded-2xl px-6 py-6 text-white outline-none font-mono text-xs leading-relaxed min-h-[400px] hover:border-white/20 focus:border-[#B87333]/50 transition-all scrollbar-thin shadow-inner" spellCheck="false" />
                             </div>
                         </div>
+                        <div className="mt-8 shrink-0">
+                            <button onClick={handleEditSave} className="w-full py-5 bg-[#B87333] hover:bg-[#8B4513] text-white font-black uppercase tracking-[0.2em] rounded-xl transition-all shadow-xl shadow-[#B87333]/20 flex items-center justify-center space-x-3 group">
+                                <Save className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                                <span>Salvar Alterações no Acervo</span>
+                            </button>
+                        </div>
                     </div>
-                )
-            }
-
-        </div >
+                </div>
+            )}
+        </div>
     );
 }
-
 
