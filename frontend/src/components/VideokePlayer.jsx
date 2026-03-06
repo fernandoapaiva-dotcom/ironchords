@@ -46,7 +46,7 @@ function RenderChordLine({ line }) {
     return <>{parts}</>;
 }
 
-function buildBlocks(lines) {
+function buildBlocks(lines, includeTabs = false) {
     const blocks = [];
     let i = 0;
     while (i < lines.length) {
@@ -66,8 +66,8 @@ function buildBlocks(lines) {
             continue;
         }
 
-        // If it's a tab line, skip it for videoke lyrics
-        if (isTablatureLine(line)) {
+        // If it's a tab line, skip it for videoke lyrics ONLY if includeTabs is false
+        if (!includeTabs && isTablatureLine(line)) {
             i++;
             continue;
         }
@@ -76,7 +76,7 @@ function buildBlocks(lines) {
             let next = lines[i + 1];
             // Look ahead for the actual lyric, skipping empty/tab lines that might be randomly placed after chords
             let j = i + 1;
-            while (j < lines.length && (!next || !next.trim() || next.includes('---') || next.trim().startsWith('[') || isTablatureLine(next))) {
+            while (j < lines.length && (!next || !next.trim() || next.includes('---') || next.trim().startsWith('[') || (!includeTabs && isTablatureLine(next)))) {
                 j++;
                 next = lines[j];
             }
@@ -103,7 +103,7 @@ function buildBlocks(lines) {
 // ─────────────────────────────────────────────────────────────
 // VideokePlayer
 // ─────────────────────────────────────────────────────────────
-const VideokePlayer = ({ song, onClose }) => {
+const VideokePlayer = ({ song, includeTabs = false, onClose }) => {
     const [blocks, setBlocks] = useState([]);
     const [currentBlockIndex, setCurrentBlockIndex] = useState(0);
     const [hasPermission, setHasPermission] = useState(false);
@@ -140,11 +140,11 @@ const VideokePlayer = ({ song, onClose }) => {
     useEffect(() => {
         if (song?.content) {
             const l = song.content.split('\n');
-            const b = buildBlocks(l);
+            const b = buildBlocks(l, includeTabs);
             setBlocks(b);
             blocksRef.current = b;
         }
-    }, [song]);
+    }, [song, includeTabs]);
 
     const [fsmState, setFsmState] = useState({ state: 'AGUARDANDO', action: 'freeze' });
     const [micGain, setMicGain] = useState(2.0); // Reset to 2.0 default
@@ -166,7 +166,7 @@ const VideokePlayer = ({ song, onClose }) => {
     useEffect(() => {
         if (song?.content) {
             const l = song.content.split('\n');
-            const b = buildBlocks(l);
+            const b = buildBlocks(l, includeTabs);
             setBlocks(b);
             blocksRef.current = b;
 
@@ -190,7 +190,7 @@ const VideokePlayer = ({ song, onClose }) => {
                 window.__PENDING_VOCABULARY = vocabArray;
             }
         }
-    }, [song]);
+    }, [song, includeTabs]);
 
     // Sync refs
     useEffect(() => { currentRef.current = currentBlockIndex; }, [currentBlockIndex]);

@@ -1,7 +1,8 @@
 ﻿import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { PhoneticMatcher } from './utils/PhoneticMatcher';
 import VideokePlayer from './components/VideokePlayer';
-import { Music, UploadCloud, Plus, FileText, CheckCircle, AlertCircle, FileAudio, Info, X, Guitar, Settings2, Image as ImageIcon, Database, Edit3, Trash2, ArrowRight, Play, Maximize, Maximize2, Pause, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Download, ArrowLeft, SkipBack, SkipForward, Save, FolderHeart, Flame, Hammer, Sparkles, RefreshCw, Zap, ShieldCheck, Monitor, Tv, Check, LayoutList, Layout, Mic, Search, RotateCcw } from 'lucide-react';
+import { Music, UploadCloud, Plus, FileText, CheckCircle, AlertCircle, FileAudio, Info, X, Guitar, Settings2, Image as ImageIcon, Database, Edit3, Trash2, ArrowRight, Play, Maximize, Maximize2, Pause, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Download, ArrowLeft, SkipBack, SkipForward, Save, FolderHeart, Flame, Hammer, Sparkles, RefreshCw, Zap, ShieldCheck, Monitor, Tv, Check, LayoutList, Layout, Mic, Search, RotateCcw, Printer, Archive } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { SVGuitarChord } from 'svguitar';
 import { AudioTracker } from './utils/AudioTracker';
@@ -443,7 +444,7 @@ const TopNav = ({ current, onChange }) => (
                 className={`flex items-center space-x-3 px-8 py-3.5 rounded-[20px] font-black uppercase tracking-widest text-[10px] italic transition-all duration-300 ${current === 'escolha' ? 'bg-[#B87333] text-white shadow-[0_0_20px_rgba(184,115,51,0.4)] scale-105' : 'text-slate-500 hover:text-white hover:bg-white/5'}`}
             >
                 <Hammer className="w-4 h-4" />
-                <span>Escolha de Peças</span>
+                <span>Escolha de Músicas</span>
             </button>
             <button
                 onClick={() => onChange('listas')}
@@ -490,7 +491,6 @@ export default function App() {
     const [includeTabs, setIncludeTabs] = useState(true);
     const [manualLoading, setManualLoading] = useState(false);
     const [manualError, setManualError] = useState('');
-    const [manualSuggestions, setManualSuggestions] = useState([]);
     const [suggestions, setSuggestions] = useState([]);
     const [showSuggestions, setShowSuggestions] = useState(false);
     const [availableVersions, setAvailableVersions] = useState([{ name: 'Principal', key: 'Principal' }]);
@@ -649,11 +649,11 @@ export default function App() {
         if (conflictsFound.length > 0) {
             setConflictQueue(conflictsFound);
             processConflictQueue(conflictsFound);
-        } else {
-            fetchAcervo();
-            setShowSaveSuccess(true);
-            setTimeout(() => setShowSaveSuccess(false), 2500);
         }
+    };
+
+    const handlePrint = () => {
+        window.print();
     };
 
     const [micEnabled, setMicEnabled] = useState(false);
@@ -1207,12 +1207,15 @@ export default function App() {
         } catch (err) { alert(err); }
     };
 
-    // Auto-update Manual Preview when Key, Capo or Tabs change
+    // Auto-update Manual Preview when Key, Capo or Tabs change (DISABLED to decouple player from search form)
+    /*
     useEffect(() => {
         if (manualPreviewSong && activeTab === 'manual') {
             handleManualSubmit();
         }
     }, [songKey, manualCapo, includeTabs]);
+    */
+
 
     const handleManualSubmit = async (e, songNameOverride, artistNameOverride, keyOverride) => {
         if (e) e.preventDefault();
@@ -1252,7 +1255,7 @@ export default function App() {
                 capo: data.capo || manualCapo
             };
             setManualPreviewSong(newSong);
-            setManualSuggestions([]);
+            setSuggestions([]);
             // Sync UI with found data
             if (newSong.song_key) setSongKey(newSong.song_key);
             if (newSong.capo !== undefined) setManualCapo(newSong.capo);
@@ -1261,7 +1264,7 @@ export default function App() {
                 const data = JSON.parse(err.message);
                 if (data.error === "not_found") {
                     setManualError(data.message || "Música não encontrada.");
-                    setManualSuggestions(data.suggestions || []);
+                    setSuggestions(data.suggestions || []);
                 } else {
                     setManualError(typeof data === 'string' ? data : "Erro ao buscar cifra.");
                 }
@@ -1536,9 +1539,9 @@ export default function App() {
 
             <main className="max-w-7xl mx-auto px-6 pt-32 pb-20 relative">
                 {/* Visual Header */}
-                <div className="absolute top-10 left-1/2 -translate-x-1/2 flex flex-col items-center space-y-4">
+                <div className="absolute top-10 left-1/2 -translate-x-1/2 flex flex-col items-center space-y-4 no-print">
                     <div className="flex items-center space-x-4">
-                        <Flame className="w-10 h-10 text-[#B87333] animate-pulse" />
+                        <Flame className="w-10 h-10 text-[#B87333]" />
                         <h1 className="text-6xl font-black text-white italic tracking-tighter uppercase leading-none">IRON<span className="text-[#B87333]">CHORDS</span></h1>
                     </div>
                     <div className="flex items-center space-x-3 opacity-40">
@@ -1551,7 +1554,7 @@ export default function App() {
                 {activeTab === 'player' ? (
                     <div className="fixed inset-0 bg-[#070709] z-[100] flex flex-col animate-in fade-in zoom-in-95 duration-500">
                         {/* PLAYER HEADER */}
-                        <div className="h-20 bg-black/40 border-b border-white/5 flex items-center justify-between px-8 backdrop-blur-xl shrink-0">
+                        <div className="h-20 bg-black/40 border-b border-white/5 flex items-center justify-between px-8 backdrop-blur-xl shrink-0 no-print">
                             <div className="flex items-center space-x-6">
                                 <button onClick={() => { setActiveTab('manual'); setCurrentStep(3); }} className="p-3 bg-white/5 hover:bg-white/10 rounded-xl transition-all border border-white/5 text-slate-400 hover:text-white"><ArrowLeft className="w-5 h-5" /></button>
                                 <div>
@@ -1559,12 +1562,42 @@ export default function App() {
                                     <p className="text-[10px] font-bold text-[#B87333] uppercase tracking-widest mt-1 opacity-60 italic">{currentSong?.artist_name}</p>
                                 </div>
                             </div>
-                            <div className="flex items-center space-x-10">
+                            <div className="flex items-center space-x-6">
+                                <div className="flex items-center space-x-2 border-r border-white/10 pr-6">
+                                    <button
+                                        onClick={handlePrint}
+                                        className="p-3 bg-white/5 hover:bg-white/10 rounded-xl transition-all border border-white/5 text-slate-400 hover:text-white"
+                                        title="Imprimir Cifra"
+                                    >
+                                        <Printer className="w-5 h-5" />
+                                    </button>
+                                    <button
+                                        onClick={async () => {
+                                            if (currentSong) {
+                                                const res = await saveOneChordToAcervo(currentSong, true);
+                                                if (res.success) {
+                                                    setShowSaveSuccess(true);
+                                                    setTimeout(() => setShowSaveSuccess(false), 2000);
+                                                }
+                                            }
+                                        }}
+                                        className="p-3 bg-white/5 hover:bg-[#B87333]/20 rounded-xl transition-all border border-white/5 text-slate-400 hover:text-[#B87333]"
+                                        title="Salvar no Acervo"
+                                    >
+                                        <Archive className="w-5 h-5" />
+                                    </button>
+                                </div>
                                 <div className="flex flex-col items-end">
                                     <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Tom Atual</span>
                                     <div className="flex items-center space-x-3 bg-black/40 px-5 py-2 rounded-xl border border-[#B87333]/20 shadow-[0_0_15px_rgba(184,115,51,0.1)]">
                                         <Music className="w-4 h-4 text-[#B87333]" />
-                                        <span className="text-sm font-black text-white uppercase italic">{currentSong?.sounding_key}</span>
+                                        <span className="text-sm font-black text-white uppercase italic">{currentSong?.sounding_key || currentSong?.song_key}</span>
+                                    </div>
+                                </div>
+                                <div className="flex flex-col items-end opacity-40">
+                                    <span className="text-[9px] font-black text-slate-600 uppercase tracking-widest mb-1">Original</span>
+                                    <div className="flex items-center space-x-3 bg-black/20 px-4 py-1.5 rounded-xl border border-white/5">
+                                        <span className="text-xs font-black text-slate-400 uppercase italic">{currentSong?.original_key || currentSong?.song_key}</span>
                                     </div>
                                 </div>
                                 <div className="flex flex-col items-center">
@@ -1574,13 +1607,23 @@ export default function App() {
                                         <span className="text-xs font-black text-white w-8 text-center">{playerFontSize}</span>
                                         <button onClick={() => setPlayerFontSize(prev => Math.min(45, prev + 1))} className="p-2 text-slate-500 hover:text-white transition-all"><Plus className="w-4 h-4" /></button>
                                     </div>
+                                    <div className="flex flex-col items-center">
+                                        <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Tabs</span>
+                                        <button
+                                            onClick={() => setIncludeTabs(!includeTabs)}
+                                            className={`p-3 rounded-xl transition-all border ${includeTabs ? 'bg-[#B87333]/20 border-[#B87333] text-[#B87333]' : 'bg-black/40 border-white/5 text-slate-600 hover:text-slate-400'}`}
+                                            title={includeTabs ? "Esconder Tablaturas" : "Mostrar Tablaturas"}
+                                        >
+                                            <FileText className="w-5 h-5" />
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
 
                         <div className="flex-1 flex overflow-hidden">
                             {/* PLAYER PLAYLIST SIDEBAR */}
-                            <div className="w-80 bg-black/40 border-r border-white/5 flex flex-col p-6 space-y-6 shrink-0 relative">
+                            <div className="w-80 bg-black/40 border-r border-white/5 flex flex-col p-6 space-y-6 shrink-0 relative no-print">
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center space-x-3">
                                         <LayoutList className="w-4 h-4 text-[#B87333]" />
@@ -1628,9 +1671,28 @@ export default function App() {
                             {/* PLAYER LYRICS/CHORDS AREA */}
                             <div className="flex-1 relative flex flex-col bg-[url('https://www.transparenttextures.com/patterns/black-paper.png')]">
                                 <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-16 scroll-smooth scrollbar-none pb-64">
-                                    <div className="max-w-4xl mx-auto space-y-1">
+
+                                    <div className="max-w-4xl mx-auto space-y-1 printable-area">
+                                        {/* Print Only Header */}
+                                        <div className="print-only mb-10 border-b-4 border-black pb-10 text-black">
+                                            <div className="flex flex-col items-center mb-12">
+                                                <div className="flex items-center space-x-4">
+                                                    <Flame className="w-10 h-10 text-black" />
+                                                    <h1 className="text-5xl font-black italic tracking-tighter uppercase leading-none">IRON<span className="text-black">CHORDS</span></h1>
+                                                </div>
+                                            </div>
+                                            <h1 className="text-5xl font-black uppercase italic tracking-tighter mb-2">{currentSong?.song_name}</h1>
+                                            <div className="flex justify-between items-end">
+                                                <p className="text-xl font-bold text-slate-700 uppercase">{currentSong?.artist_name}</p>
+                                                <p className="text-2xl font-black uppercase italic tracking-widest">Tom: {currentSong?.sounding_key || currentSong?.song_key}</p>
+                                            </div>
+                                        </div>
                                         {(currentSong?.content || "").split('\n').map((line, lIdx) => {
                                             const isChordLine = !!(line && line.trim().length > 0 && (line.match(CHORD_TOKEN_RE) || []).length > 0 && line.replace(CHORD_TOKEN_RE, '').replace(/[\s|()\-xX0-9:]/g, '').length < Math.max(2, line.trim().length * 0.25));
+                                            const isTabLine = line.includes('|-') || line.includes('-|');
+
+                                            if (!includeTabs && isTabLine) return null;
+
                                             const isActive = currentLineIndex === lIdx;
                                             const isPast = lIdx < currentLineIndex;
 
@@ -1681,7 +1743,7 @@ export default function App() {
                                 )}
 
                                 {/* PLAYER CONTROLS FLOATING PANEL */}
-                                <div className="absolute bottom-10 left-1/2 -translate-x-1/2 bg-[#1A1A1A]/95 backdrop-blur-3xl border border-white/10 p-6 rounded-[40px] shadow-[0_20px_60px_rgba(0,0,0,0.8)] flex items-center space-x-10 z-[110]">
+                                <div className="absolute bottom-10 left-1/2 -translate-x-1/2 bg-[#1A1A1A]/95 backdrop-blur-3xl border border-white/10 p-6 rounded-[40px] shadow-[0_20px_60px_rgba(0,0,0,0.8)] flex items-center space-x-10 z-[110] no-print">
                                     <div className="flex items-center space-x-6 pr-10 border-r border-white/10">
                                         <button onClick={() => setIsAutoScrolling(!isAutoScrolling)} className={`w-16 h-16 rounded-[24px] flex items-center justify-center transition-all ${isAutoScrolling ? 'bg-[#B87333] text-white shadow-xl shadow-[#B87333]/30 scale-105' : 'bg-white/5 text-slate-500 hover:text-white'}`}>
                                             {isAutoScrolling ? <Pause className="w-7 h-7" /> : <Play className="w-7 h-7 ml-1" />}
@@ -1741,12 +1803,14 @@ export default function App() {
                     </div>
                 ) : (
                     <div className="selection-branch-root flex flex-col min-h-[600px] h-full">
-                        <TopNav current={mainNav} onChange={setMainNav} />
+                        <div className="no-print">
+                            <TopNav current={mainNav} onChange={setMainNav} />
+                        </div>
                         <div className="flex-1 overflow-y-auto w-full max-w-6xl mx-auto px-4 pb-20">
 
                             {/* ABA 1: ESCOLHA DE PEÇAS */}
                             {mainNav === 'escolha' && (
-                                <div className="flex-1 animate-in fade-in slide-in-from-right-8 duration-700">
+                                <div className="flex-1 animate-in fade-in slide-in-from-right-8 duration-700 no-print">
                                     <div className="bg-[#16161D]/80 backdrop-blur-xl border border-white/5 rounded-[40px] p-8 shadow-2xl">
                                         <div className="flex items-center justify-between mb-10">
                                             <div className="flex items-center space-x-4">
@@ -1773,7 +1837,7 @@ export default function App() {
                                                                     onChange={e => { setSongName(e.target.value); setShowSuggestions(true); }}
                                                                     onFocus={() => setShowSuggestions(true)}
                                                                     onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
-                                                                    className="w-full bg-[#B87333] border border-[#B87333] rounded-2xl px-5 py-5 text-white outline-none focus:ring-4 focus:ring-[#B87333]/30 transition-all font-black placeholder:text-white/60 shadow-lg shadow-[#B87333]/20" placeholder="Ex: Missa de Domingo"
+                                                                    className="w-full bg-[#B87333] border border-[#B87333] rounded-2xl px-5 py-5 text-white outline-none focus:ring-4 focus:ring-[#B87333]/30 transition-all font-black placeholder:text-white/60 shadow-lg shadow-[#B87333]/20" placeholder="Ex: Black"
                                                                 />
                                                                 {showSuggestions && suggestions.length > 0 && (
                                                                     <div className="absolute z-[100] w-full mt-2 bg-[#16161D] border border-white/10 rounded-[24px] shadow-[0_20px_50px_rgba(0,0,0,0.5)] overflow-hidden backdrop-blur-3xl animate-in fade-in zoom-in-95 duration-300">
@@ -1827,7 +1891,7 @@ export default function App() {
                                                                 <div>
                                                                     <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2 ml-1">Tom Original</label>
                                                                     <input
-                                                                        type="text" readOnly value={songKey}
+                                                                        type="text" readOnly value={manualPreviewSong?.original_key || songKey}
                                                                         className="w-full bg-black/40 border border-white/5 rounded-2xl px-5 py-5 text-slate-400 outline-none transition-all font-bold cursor-not-allowed opacity-60" placeholder="Tom da cifra"
                                                                     />
                                                                 </div>
@@ -1858,8 +1922,9 @@ export default function App() {
                                                             ${isManualFullscreen
                                                                 ? 'fixed inset-0 z-[9999] bg-[#070709] bg-grid-white/[0.02]'
                                                                 : 'bg-[#16161D] border border-white/10 rounded-[40px] shadow-2xl mt-12'} 
-                                                            animate-in fade-in slide-in-from-top-10 duration-700 overflow-hidden flex flex-col transition-all
+                                                            animate-in fade-in slide-in-from-top-10 duration-700 overflow-hidden flex flex-col transition-all printable-area
                                                         `}>
+
                                                             {/* Scroll Progress Bar (Top) */}
                                                             {isManualFullscreen && (
                                                                 <div className="absolute top-0 left-0 w-full h-[6px] bg-white/5 z-[100]">
@@ -1877,8 +1942,9 @@ export default function App() {
                                                                     : 'bg-black/60 border-b border-white/10 p-4 flex flex-wrap items-center justify-between gap-4 relative z-20'}
                                                             `}>
                                                                 <div className={`
-                                                                    flex items-center gap-6 
+                                                                    flex items-center gap-6 no-print
                                                                     ${isManualFullscreen ? 'bg-[#12121A]/95 backdrop-blur-3xl px-8 py-4 rounded-[32px] border border-[#B87333]/30 shadow-[0_20px_80px_rgba(0,0,0,0.9)] ring-1 ring-white/10' : ''}
+
                                                                 `}>
                                                                     {/* Left: Info & Nav */}
                                                                     <div className="flex items-center space-x-4 border-r border-white/10 pr-6">
@@ -1965,11 +2031,13 @@ export default function App() {
                                                                                         const data = await res.json();
                                                                                         if (data.transposed_content) {
                                                                                             setManualPreviewSong({ ...manualPreviewSong, content: data.transposed_content, sounding_key: data.new_key });
-                                                                                            setSongKey(data.new_key);
                                                                                         }
                                                                                     } catch (err) { console.error(err); }
                                                                                 }} className="p-1 text-slate-500 hover:text-white transition-all"><ChevronDown className="w-3 h-3" /></button>
-                                                                                <span className="text-[10px] font-black text-white w-6 text-center italic">{manualPreviewSong.sounding_key || manualPreviewSong.song_key}</span>
+                                                                                <div className="flex flex-col items-center">
+                                                                                    <span className="text-[10px] font-black text-white w-6 text-center italic">{manualPreviewSong.sounding_key || manualPreviewSong.song_key}</span>
+                                                                                    <span className="text-[7px] font-black text-slate-700 uppercase tracking-widest mt-0.5">({manualPreviewSong.original_key || manualPreviewSong.song_key})</span>
+                                                                                </div>
                                                                                 <button onClick={async () => {
                                                                                     const currentKeyToUse = manualPreviewSong.sounding_key || manualPreviewSong.song_key || 'C';
                                                                                     try {
@@ -1981,7 +2049,6 @@ export default function App() {
                                                                                         const data = await res.json();
                                                                                         if (data.transposed_content) {
                                                                                             setManualPreviewSong({ ...manualPreviewSong, content: data.transposed_content, sounding_key: data.new_key });
-                                                                                            setSongKey(data.new_key);
                                                                                         }
                                                                                     } catch (err) { console.error(err); }
                                                                                 }} className="p-1 text-slate-500 hover:text-white transition-all"><ChevronUp className="w-3 h-3" /></button>
@@ -2019,8 +2086,30 @@ export default function App() {
                                                                             <span>Salvar Lista</span>
                                                                         </button>
 
-                                                                        {/* Fullscreen/Exit */}
+                                                                        {/* Fullscreen/Exit/Print */}
                                                                         <div className="flex items-center space-x-2">
+                                                                            <button
+                                                                                onClick={handlePrint}
+                                                                                className="w-10 h-10 bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white rounded-xl transition-all border border-white/5 flex items-center justify-center"
+                                                                                title="Imprimir Cifra"
+                                                                            >
+                                                                                <Printer className="w-5 h-5" />
+                                                                            </button>
+                                                                            <button
+                                                                                onClick={async () => {
+                                                                                    if (manualPreviewSong) {
+                                                                                        const res = await saveOneChordToAcervo(manualPreviewSong, true);
+                                                                                        if (res.success) {
+                                                                                            setShowSaveSuccess(true);
+                                                                                            setTimeout(() => setShowSaveSuccess(false), 2000);
+                                                                                        }
+                                                                                    }
+                                                                                }}
+                                                                                className="w-10 h-10 bg-white/5 hover:bg-[#B87333]/20 text-slate-400 hover:text-[#B87333] rounded-xl transition-all border border-white/5 flex items-center justify-center"
+                                                                                title="Salvar no Acervo"
+                                                                            >
+                                                                                <Archive className="w-5 h-5" />
+                                                                            </button>
                                                                             <button
                                                                                 onClick={() => setIsVideokeOpen(true)}
                                                                                 className="w-10 h-10 bg-[#B87333]/10 hover:bg-[#B87333] text-[#B87333] hover:text-white rounded-xl transition-all border border-[#B87333]/20 flex items-center justify-center group"
@@ -2039,6 +2128,7 @@ export default function App() {
                                                                                 <button onClick={() => setManualPreviewSong(null)} className="w-10 h-10 bg-white/5 hover:bg-red-900/40 text-slate-500 hover:text-red-500 rounded-xl transition-all border border-white/5 flex items-center justify-center" title="Fechar"><X className="w-5 h-5" /></button>
                                                                             )}
                                                                         </div>
+
                                                                     </div>
                                                                 </div>
                                                             </div>
@@ -2052,32 +2142,54 @@ export default function App() {
                                                                 `}
                                                                 style={{ maxHeight: isManualFullscreen ? '100vh' : '500px' }}
                                                             >
-                                                                {/* Display Info Overlay for Fullscreen Stage View */}
-                                                                {isManualFullscreen && showPlayerControls && (
-                                                                    <div className="max-w-7xl mx-auto mb-16 animate-in fade-in slide-in-from-left-10 duration-500">
-                                                                        <div className="flex items-baseline space-x-6">
-                                                                            <h1 className="text-6xl font-black text-white italic tracking-tighter uppercase">{manualPreviewSong.song_name}</h1>
-                                                                            {manualPreviewSong.capo > 0 && (
-                                                                                <span className="text-2xl font-black text-[#B87333] border-l border-white/10 pl-6 uppercase tracking-widest">Capo {manualPreviewSong.capo}ª Casa</span>
-                                                                            )}
+                                                                <div className="printable-area">
+                                                                    {/* Print Only Header */}
+                                                                    <div className="print-only mb-10 border-b-4 border-black pb-10 text-black">
+                                                                        <div className="flex flex-col items-center mb-12">
+                                                                            <div className="flex items-center space-x-4">
+                                                                                <Flame className="w-10 h-10 text-black" />
+                                                                                <h1 className="text-5xl font-black italic tracking-tighter uppercase leading-none">IRON<span className="text-black">CHORDS</span></h1>
+                                                                            </div>
                                                                         </div>
-                                                                        <p className="text-xl font-black text-[#B87333] uppercase tracking-[0.4em] mt-4 opacity-70 italic">{manualPreviewSong.artist_name}</p>
+                                                                        <h1 className="text-5xl font-black uppercase italic tracking-tighter mb-2">{manualPreviewSong?.song_name}</h1>
+                                                                        <div className="flex justify-between items-end">
+                                                                            <p className="text-xl font-bold text-slate-700 uppercase">{manualPreviewSong?.artist_name}</p>
+                                                                            <p className="text-2xl font-black uppercase italic tracking-widest">Tom: {manualPreviewSong?.sounding_key || manualPreviewSong?.song_key}</p>
+                                                                        </div>
                                                                     </div>
-                                                                )}
 
-                                                                <div className={`
-                                                                    ${isManualFullscreen && isManualColumns ? 'max-w-7xl mx-auto stage-columns-2 gap-20' : 'max-w-3xl mx-auto'}
-                                                                `}>
-                                                                    {(manualPreviewSong?.content || "").split('\n').map((line, lIdx) => {
-                                                                        const isChordLine = !!(line && line.trim().length > 0 && (line.match(CHORD_TOKEN_RE) || []).length > 0 && line.replace(CHORD_TOKEN_RE, '').replace(/[\s|()\-xX0-9:]/g, '').length < Math.max(2, line.trim().length * 0.5));
-                                                                        return (
-                                                                            <pre key={lIdx} className={`font-mono leading-relaxed whitespace-pre-wrap break-inside-avoid ${isChordLine ? 'text-[#B87333] font-black italic tracking-tight mb-0' : 'text-slate-300 font-medium mb-1'}`} style={{ fontSize: `${manualFontSize}px` }}>
-                                                                                {isChordLine
-                                                                                    ? renderChordLine(line, (chord, anchor, isPersistent) => setChordTooltip({ chord, anchor, isPersistent }))
-                                                                                    : (line || ' ')}
-                                                                            </pre>
-                                                                        );
-                                                                    })}
+                                                                    {/* Display Info Overlay for Fullscreen Stage View */}
+                                                                    {isManualFullscreen && showPlayerControls && (
+                                                                        <div className="max-w-7xl mx-auto mb-16 animate-in fade-in slide-in-from-left-10 duration-500 print:hidden">
+                                                                            <div className="flex items-baseline space-x-6">
+                                                                                <h1 className="text-6xl font-black text-white italic tracking-tighter uppercase">{manualPreviewSong.song_name}</h1>
+                                                                                {manualPreviewSong.capo > 0 && (
+                                                                                    <span className="text-2xl font-black text-[#B87333] border-l border-white/10 pl-6 uppercase tracking-widest">Capo {manualPreviewSong.capo}ª Casa</span>
+                                                                                )}
+                                                                            </div>
+                                                                            <p className="text-xl font-black text-[#B87333] uppercase tracking-[0.4em] mt-4 opacity-70 italic">{manualPreviewSong.artist_name}</p>
+                                                                        </div>
+                                                                    )}
+
+                                                                    <div className={`
+                                                                        ${isManualFullscreen && isManualColumns ? 'max-w-7xl mx-auto stage-columns-2 gap-20' : 'max-w-3xl mx-auto'}
+                                                                    `}>
+                                                                        {(manualPreviewSong?.content || "").split('\n').map((line, lIdx) => {
+                                                                            const isChordLine = !!(line && line.trim().length > 0 && (line.match(CHORD_TOKEN_RE) || []).length > 0 && line.replace(CHORD_TOKEN_RE, '').replace(/[\s|()\-xX0-9:]/g, '').length < Math.max(2, line.trim().length * 0.5));
+                                                                            const isTabLine = line.includes('|-') || line.includes('-|');
+
+                                                                            // Skip tab lines if includeTabs is false
+                                                                            if (!includeTabs && isTabLine) return null;
+
+                                                                            return (
+                                                                                <pre key={lIdx} className={`font-mono leading-relaxed whitespace-pre-wrap break-inside-avoid ${isChordLine ? 'text-[#B87333] font-black italic tracking-tight mb-0' : 'text-slate-300 font-medium mb-1'}`} style={{ fontSize: `${manualFontSize}px` }}>
+                                                                                    {isChordLine
+                                                                                        ? renderChordLine(line, (chord, anchor, isPersistent) => setChordTooltip({ chord, anchor, isPersistent }))
+                                                                                        : (line || ' ')}
+                                                                                </pre>
+                                                                            );
+                                                                        })}
+                                                                    </div>
                                                                 </div>
                                                             </div>
                                                         </div>
@@ -2092,11 +2204,11 @@ export default function App() {
                                                                 <span className="text-[10px] font-black uppercase tracking-widest">{typeof manualError === 'string' ? manualError : 'Música não encontrada'}</span>
                                                             </div>
 
-                                                            {manualSuggestions.length > 0 && (
+                                                            {suggestions.length > 0 && (
                                                                 <div className="mt-4 space-y-2">
                                                                     <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-3 ml-1">Tente uma destas:</p>
                                                                     <div className="grid grid-cols-1 gap-2">
-                                                                        {manualSuggestions.map((s, i) => (
+                                                                        {suggestions.map((s, i) => (
                                                                             <button
                                                                                 key={i}
                                                                                 onClick={() => {
@@ -3124,8 +3236,58 @@ export default function App() {
             {isVideokeOpen && manualPreviewSong && (
                 <VideokePlayer
                     song={manualPreviewSong}
+                    includeTabs={includeTabs}
                     onClose={() => setIsVideokeOpen(false)}
                 />
+            )}
+
+            {/* DEDICATED PRINT SHEET (Hidden by default, shown via CSS @media print) */}
+            {createPortal(
+                <div id="dedicated-print-sheet" className="hidden print:block fixed inset-0 bg-white text-black z-[99999] overflow-y-auto">
+                    {(() => {
+                        const songToPrint = activeTab === 'player' ? currentSong : manualPreviewSong;
+                        if (!songToPrint) return null;
+
+                        return (
+                            <div className="max-w-4xl mx-auto p-12">
+                                {/* Logo */}
+                                <div className="flex flex-col items-center mb-10 border-b-2 border-black pb-8">
+                                    <div className="flex items-center space-x-4">
+                                        <Flame className="w-10 h-10 text-black" />
+                                        <h1 className="text-5xl font-black italic tracking-tighter uppercase leading-none">IRON<span className="text-black">CHORDS</span></h1>
+                                    </div>
+                                </div>
+
+                                {/* Metadata */}
+                                <div className="mb-10">
+                                    <h1 className="text-5xl font-black uppercase italic tracking-tighter mb-2">{songToPrint.song_name}</h1>
+                                    <div className="flex justify-between items-end">
+                                        <p className="text-2xl font-bold uppercase">{songToPrint.artist_name}</p>
+                                        <p className="text-3xl font-black uppercase italic tracking-widest">Tom: {songToPrint.sounding_key || songToPrint.song_key}</p>
+                                    </div>
+                                </div>
+
+                                {/* Chords Content */}
+                                <div className="space-y-1">
+                                    {(songToPrint.content || "").split('\n').map((line, lIdx) => {
+                                        const isChordLine = !!(line && line.trim().length > 0 && (line.match(CHORD_TOKEN_RE) || []).length > 0 && line.replace(CHORD_TOKEN_RE, '').replace(/[\s|()\-xX0-9:]/g, '').length < Math.max(2, line.trim().length * 0.25));
+                                        const isTabLine = line.includes('|-') || line.includes('-|');
+
+                                        // Skip tab lines if includeTabs is false
+                                        if (!includeTabs && isTabLine) return null;
+
+                                        return (
+                                            <pre key={lIdx} className={`font-mono leading-relaxed whitespace-pre-wrap ${isChordLine ? 'text-black font-black italic border-b border-gray-100' : 'text-gray-800 font-medium'}`} style={{ fontSize: '16px' }}>
+                                                {isChordLine ? line : (line || ' ')}
+                                            </pre>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        );
+                    })()}
+                </div>,
+                document.body
             )}
         </div>
     );

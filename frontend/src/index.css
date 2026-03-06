@@ -276,3 +276,55 @@
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+.print-only {
+  display: none !important;
+}
+
+@media print {
+  @page {
+    margin: 1.5cm;
+    size: A4;
+  }
+
+  /* Nuclear Hide: Hide the entire root app and only show the portal */
+  #root {
+    display: none !important;
+  }
+
+  #dedicated-print-sheet {
+    display: block !important;
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    min-height: 100% !important;
+    background: white !important;
+    color: black !important;
+    z-index: 9999999 !important;
+    overflow: visible !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* Reset basic text colors for printing */
+  #dedicated-print-sheet h1,
+  #dedicated-print-sheet p,
+  #dedicated-print-sheet span {
+    color: black !important;
+  }
+
+  #dedicated-print-sheet pre {
+    color: black !important;
+    font-family: 'Courier New', Courier, monospace !important;
+    white-space: pre-wrap !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+  }
+
+  /* Ensure chords stay bold */
+  #dedicated-print-sheet .font-black {
+    font-weight: 900 !important;
+  }
+}

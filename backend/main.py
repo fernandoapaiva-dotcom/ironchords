@@ -264,15 +264,7 @@ def add_manual_music(request: ManualEntryRequest):
                 )
         else:
             chord_data = scraped
-            # Save primary version
-            save_chord(
-                song_name=chord_data['song_name'],
-                artist_name=chord_data['artist_name'],
-                song_key=chord_data['key'],
-                content=chord_data['content'],
-                source=chord_data['source'],
-                capo=chord_data.get('capo', 0)
-            )
+
     
     # Final check for key (Requirement 2)
     if not req_key:
@@ -396,13 +388,7 @@ def add_batch_music(request: BatchRequest):
                 scraped = find_chord_cascade(song_name, artist_name, version=row.version, include_tabs=row.include_tabs)
                 if scraped:
                     chord_data = scraped
-                    save_chord(
-                        song_name=chord_data['song_name'],
-                        artist_name=chord_data['artist_name'],
-                        song_key=chord_data['key'],
-                        content=chord_data['content'],
-                        source=chord_data['source']
-                    )
+
             
             if not chord_data:
                 # Fallback to any version if specific scrape failed
@@ -416,13 +402,7 @@ def add_batch_music(request: BatchRequest):
                 scraped = find_chord_cascade(song_name, artist_name)
                 if scraped:
                     chord_data = scraped
-                    save_chord(
-                        song_name=chord_data['song_name'],
-                        artist_name=chord_data['artist_name'],
-                        song_key=chord_data['key'],
-                        content=chord_data['content'],
-                        source=chord_data['source']
-                    )
+
             
             if chord_data:
                 # Se não houver Tom mapeado, assume o tom original da música
@@ -444,17 +424,6 @@ def add_batch_music(request: BatchRequest):
 
                 final_content = process_chords(chord_data['content'], chord_data['key'], visual_key)
                 
-                # NEW: If requested key or capo changed, save the transposed version
-                if (req_key and chord_data.get('key') and req_key.upper() != chord_data['key'].upper()) or row.capo > 0:
-                    save_chord(
-                        song_name=chord_data['song_name'],
-                        artist_name=chord_data['artist_name'],
-                        song_key=req_key,
-                        content=final_content,
-                        source=chord_data.get('source', ''),
-                        capo=row.capo
-                    )
-
                 # Calculate sounding key
                 sounding_key = req_key
                 
