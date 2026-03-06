@@ -163,7 +163,8 @@ const VideokePlayer = ({ song, onClose }) => {
                 if (block.lyric) {
                     const norm = PhoneticMatcher.normalize(block.lyric);
                     norm.split(' ').forEach(w => {
-                        if (w.length >= 3 && !STOP_WORDS.has(w)) vocab.add(w);
+                        // Relax filter to 2 characters to catch "Sol", "Pé", "Fé" etc.
+                        if (w.length >= 2 && !STOP_WORDS.has(w)) vocab.add(w);
                     });
                 }
             });
@@ -211,76 +212,93 @@ const VideokePlayer = ({ song, onClose }) => {
         // from skipping lyrics. Progression is now strictly phonetic via handleVoice.
     }, []);
 
+    // ── Voice timeout and debug handling ──────────────────
+    useEffect(() => {
+        const timer = setInterval(() => {
+            const now = Date.now();
+            if (forceVoiceUi && now - lastVoiceTimeRef.current > 3000) {
+                setForceVoiceUi(false);
+            }
+        }, 1000);
+        return () => clearInterval(timer);
+    }, [forceVoiceUi]);
+
     // ── Mic Level (Simplified) ───────────────────────────────
     const handleMicLevel = useCallback((level) => {
         setMicLevel(level);
         micLevelRef.current = level;
     }, []);
 
-    // ── Voice matching (Hybrid Subphrase Fuzzy Tracker) ────────────────
+    // ── Voice matching ───────────────────────────────────────
     const handleVoice = useCallback((text, isFinal) => {
         setListenStatus(text);
+
+        // Ignore system debug messages for matching logic
+        if (text.startsWith('[') && text.endsWith(']')) return;
+
         lastVoiceTimeRef.current = Date.now();
         setForceVoiceUi(true);
         if (isPaused || !text || text.trim().length === 0) return;
 
-        // 1. Normalize and get the last few words to prevent infinite backward loops 
+        // Normalize and get tokens
         const normTranscript = PhoneticMatcher.normalize(PhoneticMatcher.applyAliases(text));
         const STOP_WORDS = new Set(['o', 'a', 'e', 'de', 'do', 'da', 'no', 'na', 'que', 'se', 'te', 'me', 'um', 'uma', 'os', 'as', 'pra', 'pro', 'ao', 'aos']);
         const getMeaningfulWords = (phrase) => phrase.split(' ').filter(w => w.length >= 2 && !STOP_WORDS.has(w));
 
-        // Take the last 6 words to keep the context window small and responsive
-        const transWords = getMeaningfulWords(normTranscript).slice(-6);
-        if (transWords.length < 1) return;
+        // ── ROBUST SEQUENTIAL FLOW ────────────────────────────────────
+        // 1. Take a larger window (up to 10 words) to handle fast singing
+        const transWordsLong = getMeaningfulWords(normTranscript).slice(-10);
+        if (transWordsLong.length < 1) return;
+
+        // Helper: Check if words from transcript appear in a line
+        const scoreLine = (bIdx) => {
+            const b = blocks[bIdx];
+            if (!b || !b.lyric) return 0;
+            const lw = getMeaningfulWords(PhoneticMatcher.normalize(b.lyric));
+            if (lw.length === 0) return 0;
+
+            let matches = 0;
+            // Use the longer window for matching
+            for (const tw of transWordsLong) {
+                if (lw.includes(tw)) matches++;
+            }
+            return matches;
+        };
 
         const currentIdx = currentRef.current;
         const blocks = blocksRef.current;
         let targetIndex = -1;
 
-        // ── PURE VIDEOKE LOGIC ──────────────────────────────────────
-        // Helper to see if words exist in a line (Bag of Words)
-        const hasWords = (bIdx, reqThreshold = 2) => {
-            const b = blocks[bIdx];
-            if (!b || !b.lyric) return false;
-            const lw = getMeaningfulWords(PhoneticMatcher.normalize(b.lyric));
-            if (lw.length === 0) return false;
-            let matches = 0;
-            for (const tw of transWords) {
-                if (lw.includes(tw)) matches++;
-            }
-            return matches >= Math.min(reqThreshold, lw.length);
-        };
+        // NEW: Clear waiting status as soon as we hear valid speech
+        if (waitingRef.current) {
+            setIsWaiting(false);
+            waitingRef.current = false;
+        }
 
-        // 1. ORGANIC ADVANCE (Current Line End or Next Line Start)
-        let foundNext = -1;
-
-        // Check if they hit the END of the current line
-        const currentBlock = blocks[currentIdx];
-        if (currentBlock && currentBlock.lyric) {
-            const curLw = getMeaningfulWords(PhoneticMatcher.normalize(currentBlock.lyric));
-            if (curLw.length > 0) {
-                const lastTrans = transWords[transWords.length - 1];
-                const lastExpected = curLw[curLw.length - 1];
-                if (lastTrans === lastExpected) foundNext = currentIdx + 1;
+        // 1. ORGANIC ADVANCE (Look-ahead bias)
+        // We look up to 4 lines ahead. If we find at least 2 words matching, we jump.
+        for (let offset = 1; offset <= 4; offset++) {
+            const testIdx = currentIdx + offset;
+            if (testIdx < blocks.length) {
+                if (scoreLine(testIdx) >= 2) {
+                    targetIndex = testIdx;
+                    break;
+                }
             }
         }
 
-        // If not found by end-word, check if they are singing words from the next 2 lines
-        if (foundNext === -1) {
-            if (hasWords(currentIdx + 1, 2)) foundNext = currentIdx + 1;
-            else if (hasWords(currentIdx + 2, 2)) foundNext = currentIdx + 2;
-        }
-
-        targetIndex = foundNext;
-
-        // 2. GLOBAL RESCUE (FIND THE SINGER)
-        if (targetIndex === -1 && transWords.length >= 2) {
-            // Only jump if we are clearly NOT on the current line anymore
-            if (!hasWords(currentIdx, 1)) {
-                for (let i = 0; i < blocks.length; i++) {
-                    if (i !== currentIdx && hasWords(i, 2)) {
-                        targetIndex = i;
-                        break;
+        // 2. GLOBAL RESCUE (If we are completely lost)
+        if (targetIndex === -1 && transWordsLong.length >= 3) {
+            // Only rescue if the current line has NO matches to avoid jumping out of a chorus
+            if (scoreLine(currentIdx) === 0) {
+                // Forward Search
+                for (let i = currentIdx + 5; i < blocks.length; i++) {
+                    if (scoreLine(i) >= 2) { targetIndex = i; break; }
+                }
+                // Backward Search
+                if (targetIndex === -1) {
+                    for (let i = 0; i < currentIdx; i++) {
+                        if (scoreLine(i) >= 3) { targetIndex = i; break; } // Be stricter going backward
                     }
                 }
             }
@@ -370,9 +388,8 @@ const VideokePlayer = ({ song, onClose }) => {
         if (connectionStatus === 'error' || connectionStatus === 'disconnected') return { label: 'OFFLINE', color: '#ef4444', desc: 'Erro de conexão com servidor' };
 
         if (isPaused) return { label: 'PAUSADO', color: '#ef4444', desc: 'Clique para retomar' };
-        if (isWaiting) return { label: 'AGUARDANDO', color: '#B87333', desc: 'Aguardando voz ou instrumento...' };
 
-        // FORCE UI IF WEBSPEECH HEARS SOMETHING RECENTLY TO BYPASS BACKEND FALSE NEGATIVES
+        // PRIORITIZE VOICE UI (To give immediate feedback that we are listening)
         if (forceVoiceUi) {
             const baseStatus = fsmState.state;
             if (baseStatus === 'CONGELAR_LETRA_SEGUIR_VIOLA' || baseStatus === 'SEGUINDO_NORMAL') {
@@ -380,6 +397,8 @@ const VideokePlayer = ({ song, onClose }) => {
             }
             return { label: 'A CAPELA', color: '#60A5FA', desc: 'Sincronizando pela sua voz' };
         }
+
+        if (isWaiting) return { label: 'AGUARDANDO', color: '#B87333', desc: 'Aguardando voz ou instrumento...' };
 
         switch (fsmState.state) {
             case 'SEGUINDO_NORMAL':

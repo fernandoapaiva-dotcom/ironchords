@@ -85,25 +85,48 @@ export class AudioTracker {
     }
 
     setVocabulary(words) {
-        this.vocabulary = words;
-        if (this.recognition && words && words.length > 0) {
+        // Sanitize and limit to 200 most relevant words to avoid engine crash
+        const sanitized = (words || [])
+            .map(w => w.replace(/[^a-zA-Z0-9áéíóúâêîôûàèìòùãõçÁÉÍÓÚÂÊÎÔÛÀÈÌÒÙÃÕÇ]/g, ''))
+            .filter(w => w.length >= 2)
+            .slice(0, 200);
+
+        this.vocabulary = sanitized;
+
+        if (this.recognition && sanitized.length > 0) {
             try {
                 const SpeechGrammarList = window.SpeechGrammarList || window.webkitSpeechGrammarList;
                 if (SpeechGrammarList) {
                     const grammarList = new SpeechGrammarList();
-                    // Create a simple JSGF grammar string with all the words
-                    const grammar = `#JSGF V1.0; grammar songLyrics; public <word> = ${words.join(' | ')};`;
+                    const grammar = `#JSGF V1.0; grammar songLyrics; public <word> = ${sanitized.join(' | ')};`;
+                    console.log("[AudioTracker] JSGF Grammar Generated:", grammar.substring(0, 100) + "...");
                     grammarList.addFromString(grammar, 1);
                     this.recognition.grammars = grammarList;
-                    console.log(`[AudioTracker] Injected ${words.length} song words into Speech Recognition Grammar.`);
+                    console.log(`[AudioTracker] Injected ${sanitized.length} words into Grammar.`);
+
+                    if (this.isMicActive) {
+                        console.log("[AudioTracker] Restarting recognition to apply new song vocabulary...");
+                        this.stopSpeechRecognition();
+                        setTimeout(() => this.startSpeechRecognition(), 150);
+                    }
                 }
             } catch (e) {
-                console.warn("[AudioTracker] SpeechGrammarList not supported or failed to set.", e);
+                console.warn("[AudioTracker] Failed to set Grammar:", e);
             }
         }
     }
 
+    stopSpeechRecognition() {
+        if (this.recognition) {
+            try {
+                this.recognition.stop();
+            } catch (e) { }
+            this.recognition = null;
+        }
+    }
+
     startSpeechRecognition() {
+        if (this.recognition) return;
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (!SpeechRecognition) return;
 
@@ -112,36 +135,54 @@ export class AudioTracker {
         this.recognition.interimResults = true;
         this.recognition.lang = 'pt-BR';
 
-        // Apply vocabulary if already set
-        if (this.vocabulary) {
-            this.setVocabulary(this.vocabulary);
+        if (this.vocabulary && this.vocabulary.length > 0) {
+            const SpeechGrammarList = window.SpeechGrammarList || window.webkitSpeechGrammarList;
+            if (SpeechGrammarList) {
+                const grammarList = new SpeechGrammarList();
+                const grammar = `#JSGF V1.0; grammar songLyrics; public <word> = ${this.vocabulary.join(' | ')};`;
+                grammarList.addFromString(grammar, 1);
+                this.recognition.grammars = grammarList;
+            }
         }
+
+        this.recognition.onstart = () => {
+            console.log("[AudioTracker] Speech Recognition officially STARTED");
+            if (this.onSpeechResult) this.onSpeechResult("[SISTEMA: Motor de voz iniciado]", false);
+        };
 
         this.recognition.onresult = (event) => {
             let interimText = '';
             let finalText = '';
             for (let i = event.resultIndex; i < event.results.length; i++) {
-                if (event.results[i].isFinal) {
-                    finalText += event.results[i][0].transcript;
-                } else {
-                    interimText += event.results[i][0].transcript;
-                }
+                if (event.results[i].isFinal) finalText += event.results[i][0].transcript + ' ';
+                else interimText += event.results[i][0].transcript;
             }
             if (this.onSpeechResult) {
-                // If we have final text, send it. Else send interim for UI feedback.
                 if (finalText.trim()) this.onSpeechResult(finalText.trim(), true);
                 else if (interimText.trim()) this.onSpeechResult(interimText.trim(), false);
             }
         };
 
         this.recognition.onerror = (e) => {
-            console.warn("SpeechRec error:", e.error);
+            console.warn("[AudioTracker] SpeechRec Error:", e.error);
+            if (this.onSpeechResult) this.onSpeechResult(`[ERRO VOZ: ${e.error}]`, false);
+            if (e.error === 'network') {
+                this.stopSpeechRecognition();
+                setTimeout(() => this.startSpeechRecognition(), 2000);
+            }
+        };
+
+        this.recognition.onend = () => {
+            if (this.isMicActive && !this.recognition) {
+                // If it ended and we didn't manually null it, restart
+                setTimeout(() => this.startSpeechRecognition(), 500);
+            }
         };
 
         try {
             this.recognition.start();
         } catch (e) {
-            console.error("Could not start SpeechRecognition", e);
+            console.error("[AudioTracker] Failed to start SpeechRecognition:", e);
         }
     }
 
