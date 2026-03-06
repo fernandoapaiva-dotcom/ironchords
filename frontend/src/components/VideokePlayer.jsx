@@ -7,7 +7,7 @@ import { X, Mic, Radio, SkipForward, Pause, Play } from 'lucide-react';
 // ─────────────────────────────────────────────────────────────
 // Chord Token Regex
 // ─────────────────────────────────────────────────────────────
-const CHORD_TOKEN_RE = /(?:^|\s)([A-G][b#]?(?:maj7?|min7?|m7?|7|sus[24]?|dim7?|aug|add9|6|9|11|13)?(?:\/[A-G][b#]?)?)(?![a-zA-ZáàâãéèêíïóôõöúçñÁÀÂÃÉÈÊÍÏÓÔÕÖÚÇÑ])/g;
+const CHORD_TOKEN_RE = /(?:^|\s)([A-G][b#]?(?:m|maj|min|M|dim|aug|sus|add|alt|7|9|11|13|6|2|4|5|b5|#5|#11|b9|#9)*(?:\/[A-G][b#]?)?)(?![a-zA-ZáàâãéèêíïóôõöúçñÁÀÂÃÉÈÊÍÏÓÔÕÖÚÇÑ])/g;
 
 function isChordOnlyLine(line) {
     if (!line || !line.trim()) return false;
@@ -16,7 +16,7 @@ function isChordOnlyLine(line) {
 
     const chords = (line.match(CHORD_TOKEN_RE) || []).map(m => m.trim());
     const cleaned = line.replace(CHORD_TOKEN_RE, '').replace(/[\s|()\-xX0-9:]/g, '');
-    return chords.length > 0 && cleaned.length < Math.max(2, line.trim().length * 0.25);
+    return chords.length > 0 && cleaned.length < Math.max(2, line.trim().length * 0.5);
 }
 
 function isTablatureLine(line) {
@@ -52,8 +52,22 @@ function buildBlocks(lines) {
     while (i < lines.length) {
         const line = lines[i];
 
-        // Skip explicitly empty lines, tab markers, or section headers
-        if (!line.trim() || line.includes('---') || line.trim().startsWith('[') || isTablatureLine(line)) {
+        const chordMatch = line.match(CHORD_TOKEN_RE);
+
+        // Skip explicitly empty lines or horizontal separators
+        if (!line.trim() || line.includes('---')) {
+            i++;
+            continue;
+        }
+
+        // If it's a section header (e.g., [Solo]) AND has no chords, skip it
+        if (line.trim().startsWith('[') && line.trim().endsWith(']') && !chordMatch) {
+            i++;
+            continue;
+        }
+
+        // If it's a tab line, skip it for videoke lyrics
+        if (isTablatureLine(line)) {
             i++;
             continue;
         }

@@ -288,7 +288,7 @@ function ChordTooltip({ chord, anchor, onClose }) {
 // Improved Regex: enforces word boundaries so words like 'Deus' don't get 'D' captured unless standalone.
 // Added (^|\s) and (?!\w) to ensure it only captures the chord if it's isolated.
 // Improved Regex: enforces word boundaries and also ensures no accented letters follow the chord.
-const CHORD_TOKEN_RE = /(?:^|\s)([A-G][b#]?(?:maj7?|min7?|m7?|7|sus[24]?|dim7?|aug|add9|6|9|11|13)?(?:\/[A-G][b#]?)?)(?![a-zA-ZáàâãéèêíïóôõöúçñÁÀÂÃÉÈÊÍÏÓÔÕÖÚÇÑ])/g;
+const CHORD_TOKEN_RE = /(?:^|\s)([A-G][b#]?(?:m|maj|min|M|dim|aug|sus|add|alt|7|9|11|13|6|2|4|5|b5|#5|#11|b9|#9)*(?:\/[A-G][b#]?)?)(?![a-zA-ZáàâãéèêíïóôõöúçñÁÀÂÃÉÈÊÍÏÓÔÕÖÚÇÑ])/g;
 
 export function renderChordLine(line, onChordClick) {
     const parts = [];
@@ -2069,7 +2069,7 @@ export default function App() {
                                                                     ${isManualFullscreen && isManualColumns ? 'max-w-7xl mx-auto stage-columns-2 gap-20' : 'max-w-3xl mx-auto'}
                                                                 `}>
                                                                     {(manualPreviewSong?.content || "").split('\n').map((line, lIdx) => {
-                                                                        const isChordLine = !!(line && line.trim().length > 0 && (line.match(CHORD_TOKEN_RE) || []).length > 0 && line.replace(CHORD_TOKEN_RE, '').replace(/[\s|()\-xX0-9:]/g, '').length < Math.max(2, line.trim().length * 0.25));
+                                                                        const isChordLine = !!(line && line.trim().length > 0 && (line.match(CHORD_TOKEN_RE) || []).length > 0 && line.replace(CHORD_TOKEN_RE, '').replace(/[\s|()\-xX0-9:]/g, '').length < Math.max(2, line.trim().length * 0.5));
                                                                         return (
                                                                             <pre key={lIdx} className={`font-mono leading-relaxed whitespace-pre-wrap break-inside-avoid ${isChordLine ? 'text-[#B87333] font-black italic tracking-tight mb-0' : 'text-slate-300 font-medium mb-1'}`} style={{ fontSize: `${manualFontSize}px` }}>
                                                                                 {isChordLine
