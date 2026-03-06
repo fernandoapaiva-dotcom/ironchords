@@ -10,3 +10,5 @@ pdfplumber
 pypiwin32
 Pillow
 python-multipart
+websockets
+librosa

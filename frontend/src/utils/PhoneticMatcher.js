@@ -131,6 +131,30 @@ export class PhoneticMatcher {
     }
 
     /**
+     * Checks if the transcript contains words from the END of the line,
+     * signaling the singer is finishing it. This allows anticipating the next line.
+     */
+    static isCompletingLine(transcript, line) {
+        if (!line || !line.trim()) return false;
+        const transcriptWords = this.tokenize(transcript);
+        const lineWords = this.tokenize(line);
+        if (transcriptWords.length === 0 || lineWords.length < 2) return false;
+
+        // Take the last 2 or 3 words of the line
+        const endWords = lineWords.slice(-Math.min(3, Math.ceil(lineWords.length / 2)));
+
+        // See if any of these end words are perfectly in the transcript
+        for (const tw of transcriptWords) {
+            for (const ew of endWords) {
+                if (ew === tw || (tw.length >= 4 && (ew.includes(tw) || tw.includes(ew)))) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
      * Find the BEST matching block index from a list of {lyric} candidate blocks.
      * Applies a proximity bias so blocks near `currentIndex` score a bonus.
      *
@@ -139,38 +163,57 @@ export class PhoneticMatcher {
     static findBestBlock(transcript, blocks, currentIndex, options = {}) {
         const {
             searchBackward = 0,    // how many blocks to search behind current
-            searchForward = 12,    // how many blocks to search ahead
+            searchForward = 1,     // how many blocks to search ahead (local window)
+            allowGlobalJump = false, // if true, it can jump anywhere in the song
             minThreshold = 0.38,   // minimum required confidence
-            proximityBonus = 0.12, // bonus for blocks close to current position
+            proximityBonus = 0.20, // bonus for blocks close to current position
             anchored = true,       // if false, search from start (pre-anchor)
         } = options;
-
-        const from = anchored ? Math.max(0, currentIndex - searchBackward) : 0;
-        const to = anchored
-            ? Math.min(blocks.length - 1, currentIndex + searchForward)
-            : Math.min(blocks.length - 1, 30);
 
         let bestScore = -Infinity;
         let bestIndex = -1;
 
-        for (let i = from; i <= to; i++) {
-            const block = blocks[i];
-            if (!block.lyric || !block.lyric.trim()) continue;
+        // Helper to evaluate a range of blocks
+        const evaluateRange = (fromIdx, toIdx, applyPenalty = 0) => {
+            fromIdx = Math.max(0, fromIdx);
+            toIdx = Math.min(blocks.length - 1, toIdx);
 
-            let s = this.score(transcript, block.lyric);
+            for (let i = fromIdx; i <= toIdx; i++) {
+                const block = blocks[i];
+                if (!block.lyric || !block.lyric.trim()) continue;
 
-            // Proximity bonus: blocks closer to current position score a bit higher
-            // This prevents the player from jumping far away on a weak match
-            if (anchored) {
-                const dist = Math.abs(i - currentIndex);
-                const prox = Math.max(0, proximityBonus - dist * 0.015);
-                s += prox;
+                let s = this.score(transcript, block.lyric);
+
+                // Proximity bonus: blocks closer to current position score a bit higher
+                // This forces it to prefer the "current" chorus over a "future" chorus with the same lyrics
+                if (anchored) {
+                    const dist = Math.abs(i - currentIndex);
+                    const prox = Math.max(0, proximityBonus - dist * 0.015);
+                    s += prox;
+                }
+
+                s -= applyPenalty;
+
+                if (s > bestScore) {
+                    bestScore = s;
+                    bestIndex = i;
+                }
             }
+        };
 
-            if (s > bestScore) {
-                bestScore = s;
-                bestIndex = i;
-            }
+        // 1. Search the local window first (highly preferred)
+        let localFrom = anchored ? currentIndex - searchBackward : 0;
+        let localTo = anchored ? currentIndex + searchForward : 30;
+        evaluateRange(localFrom, localTo, 0);
+
+        // 2. If allowGlobalJump is true and we didn't find a strong match locally, search the whole song
+        // We apply a strict penalty so it only jumps if it's ABSOLUTELY sure (e.g. matched an entire phrase)
+        // A penalty of 0.3 means a global match must score at least 0.3 higher than the minThreshold to be accepted.
+        // We also REQUIRE the transcript to have >= 3 words to prevent teleporting on a single common word like "Deus".
+        const transcriptWordCount = this.tokenize(transcript).length;
+        if (allowGlobalJump && bestScore < minThreshold && transcriptWordCount >= 3) {
+            evaluateRange(0, localFrom - 1, 0.40); // Search before local window (with huge penalty to avoid jumping back randomly)
+            evaluateRange(localTo + 1, blocks.length - 1, 0.30); // Search after local window (with moderate penalty)
         }
 
         if (bestScore < minThreshold || bestIndex === -1) return null;

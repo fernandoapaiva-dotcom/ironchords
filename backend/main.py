@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
@@ -56,6 +56,7 @@ from database import init_db, get_chord, save_chord, get_db_connection, get_all_
 import chord_utils
 from chord_utils import process_chords
 from document_generator import generate_docx
+from audio_processor import IronChordsPlayer
 
 def fix_pywin32():
     import os
@@ -114,6 +115,31 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.websocket("/ws/videoke")
+async def videoke_stream(websocket: WebSocket):
+    await websocket.accept()
+    player = IronChordsPlayer()
+    
+    try:
+        while True:
+            # Recebe o pedaço de áudio PCM do frontend
+            data = await websocket.receive_bytes()
+            
+            # Processa o áudio na Máquina de Estados
+            response = player.process_audio_chunk(data)
+            
+            # Envia a resposta de volta
+            await websocket.send_json(response)
+            
+    except WebSocketDisconnect:
+        print("Videoke client disconnected.")
+    except Exception as e:
+        print(f"WebSocket error: {e}")
+        try:
+            await websocket.close()
+        except:
+            pass
 
 @app.on_event("startup")
 def startup_event():

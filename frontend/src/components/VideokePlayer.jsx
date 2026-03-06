@@ -11,9 +11,21 @@ const CHORD_TOKEN_RE = /(?:^|\s)([A-G][b#]?(?:maj7?|min7?|m7?|7|sus[24]?|dim7?|a
 
 function isChordOnlyLine(line) {
     if (!line || !line.trim()) return false;
+    // If it's a tab line, it's definitely not a chord line (and shouldn't be read as lyrics)
+    if (isTablatureLine(line)) return false;
+
     const chords = (line.match(CHORD_TOKEN_RE) || []).map(m => m.trim());
     const cleaned = line.replace(CHORD_TOKEN_RE, '').replace(/[\s|()\-xX0-9:]/g, '');
     return chords.length > 0 && cleaned.length < Math.max(2, line.trim().length * 0.25);
+}
+
+function isTablatureLine(line) {
+    if (!line) return false;
+    const trimmed = line.trim();
+    // Common tab indicators: E|---, e|---, A|---, or just lots of dashes
+    if (/^[eEaAdDgGbB]\|/.test(trimmed)) return true;
+    if ((trimmed.match(/-/g) || []).length > 8) return true;
+    return false;
 }
 
 function RenderChordLine({ line }) {
@@ -39,11 +51,25 @@ function buildBlocks(lines) {
     let i = 0;
     while (i < lines.length) {
         const line = lines[i];
+
+        // Skip explicitly empty lines, tab markers, or section headers
+        if (!line.trim() || line.includes('---') || line.trim().startsWith('[') || isTablatureLine(line)) {
+            i++;
+            continue;
+        }
+
         if (isChordOnlyLine(line)) {
-            const next = lines[i + 1];
+            let next = lines[i + 1];
+            // Look ahead for the actual lyric, skipping empty/tab lines that might be randomly placed after chords
+            let j = i + 1;
+            while (j < lines.length && (!next || !next.trim() || next.includes('---') || next.trim().startsWith('[') || isTablatureLine(next))) {
+                j++;
+                next = lines[j];
+            }
+
             if (next !== undefined && !isChordOnlyLine(next)) {
                 blocks.push({ chords: line, lyric: next, lineIndex: i });
-                i += 2;
+                i = j + 1;
             } else {
                 blocks.push({ chords: line, lyric: null, lineIndex: i });
                 i++;
@@ -53,7 +79,11 @@ function buildBlocks(lines) {
             i++;
         }
     }
-    return blocks;
+
+    // Filter out blocks that have absolutely nothing to display (blank lines or just random characters)
+    // Note: We keep blocks that only have chords (b.chords != null) so instrumental intros are still visible,
+    // they just won't be required to be sung.
+    return blocks.filter(b => b.chords || (b.lyric && b.lyric.trim().length > 0));
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -85,6 +115,7 @@ const VideokePlayer = ({ song, onClose }) => {
     const advTimerRef = useRef(null);
     const silenceTimerRef = useRef(null); // tracks how long silence has been
     const lastJumpRef = useRef(0);
+    const lastVoiceTimeRef = useRef(0); // <--- Traces when WebSpeech last fired
 
     // Silence threshold: if mic average < this for SILENCE_DELAY ms → pause
     const SILENCE_THRESHOLD = 8;   // very low mic level = silence
@@ -98,6 +129,51 @@ const VideokePlayer = ({ song, onClose }) => {
             const b = buildBlocks(l);
             setBlocks(b);
             blocksRef.current = b;
+        }
+    }, [song]);
+
+    const [fsmState, setFsmState] = useState({ state: 'AGUARDANDO', action: 'freeze' });
+    const [micGain, setMicGain] = useState(2.0); // Reset to 2.0 default
+    const [connectionStatus, setConnectionStatus] = useState('offline'); // offline, connecting, connected, error
+    const [lastAction, setLastAction] = useState(null);
+    const [forceVoiceUi, setForceVoiceUi] = useState(false); // To force re-render when WebSpeech is active
+
+    // Heartbeat to clear WebSpeech force UI
+    useEffect(() => {
+        const interval = setInterval(() => {
+            if (Date.now() - lastVoiceTimeRef.current > 2000 && forceVoiceUi) {
+                setForceVoiceUi(false);
+            }
+        }, 500);
+        return () => clearInterval(interval);
+    }, [forceVoiceUi]);
+
+    // Build blocks from song content
+    useEffect(() => {
+        if (song?.content) {
+            const l = song.content.split('\n');
+            const b = buildBlocks(l);
+            setBlocks(b);
+            blocksRef.current = b;
+
+            // Extract vocabulary for WebSpeech API grammar injection
+            const STOP_WORDS = new Set(['o', 'a', 'e', 'de', 'do', 'da', 'no', 'na', 'que', 'se', 'te', 'me', 'um', 'uma', 'os', 'as', 'pra', 'pro', 'ao', 'aos']);
+            const vocab = new Set();
+            b.forEach(block => {
+                if (block.lyric) {
+                    const norm = PhoneticMatcher.normalize(block.lyric);
+                    norm.split(' ').forEach(w => {
+                        if (w.length >= 3 && !STOP_WORDS.has(w)) vocab.add(w);
+                    });
+                }
+            });
+
+            const vocabArray = Array.from(vocab);
+            if (trackerRef.current) {
+                trackerRef.current.setVocabulary(vocabArray);
+            } else {
+                window.__PENDING_VOCABULARY = vocabArray;
+            }
         }
     }, [song]);
 
@@ -116,182 +192,169 @@ const VideokePlayer = ({ song, onClose }) => {
         if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }, [currentBlockIndex]);
 
-    // ── Rhythmic timer ───────────────────────────────────────
-    // Advances one block per (4 beats at current BPM), but stops
-    // when isPaused === true or isWaiting === true.
-    const tickRef = useRef(null);
+    // ── Update Tracker Gain ────────────────────────────────
+    useEffect(() => {
+        if (trackerRef.current) {
+            trackerRef.current.setGain(micGain);
+        }
+    }, [micGain]);
 
-    const startRhythmicTimer = useCallback(() => {
-        if (advTimerRef.current) clearTimeout(advTimerRef.current);
-
-        const tick = () => {
-            const msPerLine = (60000 / bpmRef.current) * 4;
-            advTimerRef.current = setTimeout(() => {
-                // Only advance if not paused and not waiting
-                if (!pausedRef.current && !waitingRef.current) {
-                    setCurrentBlockIndex(prev => {
-                        const next = prev + 1;
-                        if (next >= blocksRef.current.length) {
-                            waitingRef.current = true;
-                            setIsWaiting(true);
-                            return prev;
-                        }
-                        currentRef.current = next;
-                        return next;
-                    });
-                }
-                tick(); // schedule next tick regardless of pause state
-            }, msPerLine);
-        };
-        tick();
+    // ── Connection Status ──────────────────────────────────
+    const handleConnectionStatus = useCallback((status) => {
+        setConnectionStatus(status);
     }, []);
 
-    // ── Silence detection: pauses when singer stops ──────────
-    // Called every time micLevel updates (via onMicLevel callback).
+    // ── Alignment State Handler ──────────────────────────────
+    const handleAlignmentState = useCallback((data) => {
+        setFsmState(data);
+        // We no longer advance blindly based on VAD action to prevent random noises
+        // from skipping lyrics. Progression is now strictly phonetic via handleVoice.
+    }, []);
+
+    // ── Mic Level (Simplified) ───────────────────────────────
     const handleMicLevel = useCallback((level) => {
         setMicLevel(level);
         micLevelRef.current = level;
-
-        if (!anchoredRef.current) return; // don't detect silence before first match
-
-        if (level < SILENCE_THRESHOLD) {
-            // Start silence timer if not already running
-            if (!silenceTimerRef.current) {
-                silenceTimerRef.current = setTimeout(() => {
-                    silenceTimerRef.current = null;
-                    // Only pause if mic is still silent
-                    if (micLevelRef.current < SILENCE_THRESHOLD) {
-                        pausedRef.current = true;
-                        setIsPaused(true);
-                    }
-                }, SILENCE_DELAY);
-            }
-        } else {
-            // Voice detected: cancel silence timer and resume if paused
-            if (silenceTimerRef.current) {
-                clearTimeout(silenceTimerRef.current);
-                silenceTimerRef.current = null;
-            }
-            if (level >= RESUME_THRESHOLD && pausedRef.current) {
-                pausedRef.current = false;
-                setIsPaused(false);
-            }
-        }
     }, []);
 
-    // ── Voice matching ───────────────────────────────────────
+    // ── Voice matching (Hybrid Subphrase Fuzzy Tracker) ────────────────
     const handleVoice = useCallback((text, isFinal) => {
-        if (!isFinal) { setListenStatus(text); return; }
         setListenStatus(text);
-        if (!text?.trim()) return;
+        lastVoiceTimeRef.current = Date.now();
+        setForceVoiceUi(true);
+        if (isPaused || !text || text.trim().length === 0) return;
 
-        const blks = blocksRef.current;
-        const cur = currentRef.current;
-        const anch = anchoredRef.current;
-        const now = Date.now();
+        // 1. Normalize and get the last few words to prevent infinite backward loops 
+        const normTranscript = PhoneticMatcher.normalize(PhoneticMatcher.applyAliases(text));
+        const STOP_WORDS = new Set(['o', 'a', 'e', 'de', 'do', 'da', 'no', 'na', 'que', 'se', 'te', 'me', 'um', 'uma', 'os', 'as', 'pra', 'pro', 'ao', 'aos']);
+        const getMeaningfulWords = (phrase) => phrase.split(' ').filter(w => w.length >= 2 && !STOP_WORDS.has(w));
 
-        if (now - lastJumpRef.current < 2000) return;
+        // Take the last 6 words to keep the context window small and responsive
+        const transWords = getMeaningfulWords(normTranscript).slice(-6);
+        if (transWords.length < 1) return;
 
-        const result = PhoneticMatcher.findBestBlock(text, blks, cur, {
-            searchBackward: anch ? 2 : 0,
-            searchForward: anch ? 6 : 22,
-            minThreshold: anch ? 0.42 : 0.38,
-            proximityBonus: anch ? 0.15 : 0.04,
-            anchored: anch,
-        });
+        const currentIdx = currentRef.current;
+        const blocks = blocksRef.current;
+        let targetIndex = -1;
 
-        setLastConfidence(result ? +(result.confidence * 100).toFixed(0) : 0);
-        if (!result) return;
+        // ── PURE VIDEOKE LOGIC ──────────────────────────────────────
+        // Helper to see if words exist in a line (Bag of Words)
+        const hasWords = (bIdx, reqThreshold = 2) => {
+            const b = blocks[bIdx];
+            if (!b || !b.lyric) return false;
+            const lw = getMeaningfulWords(PhoneticMatcher.normalize(b.lyric));
+            if (lw.length === 0) return false;
+            let matches = 0;
+            for (const tw of transWords) {
+                if (lw.includes(tw)) matches++;
+            }
+            return matches >= Math.min(reqThreshold, lw.length);
+        };
 
-        const targetIdx = result.index;
-        lastJumpRef.current = now;
+        // 1. ORGANIC ADVANCE (Current Line End or Next Line Start)
+        let foundNext = -1;
 
-        if (!anch) {
-            // First match: anchor + start timer
-            anchoredRef.current = true;
-            waitingRef.current = false;
-            pausedRef.current = false;
-            setIsAnchored(true);
-            setIsWaiting(false);
-            setIsPaused(false);
-            setCurrentBlockIndex(targetIdx);
-            currentRef.current = targetIdx;
-            startRhythmicTimer();
-            return;
+        // Check if they hit the END of the current line
+        const currentBlock = blocks[currentIdx];
+        if (currentBlock && currentBlock.lyric) {
+            const curLw = getMeaningfulWords(PhoneticMatcher.normalize(currentBlock.lyric));
+            if (curLw.length > 0) {
+                const lastTrans = transWords[transWords.length - 1];
+                const lastExpected = curLw[curLw.length - 1];
+                if (lastTrans === lastExpected) foundNext = currentIdx + 1;
+            }
         }
 
-        // Prevent jumping back more than 4 blocks unless it's the chorus redirect
-        if (targetIdx < cur - 4) return;
+        // If not found by end-word, check if they are singing words from the next 2 lines
+        if (foundNext === -1) {
+            if (hasWords(currentIdx + 1, 2)) foundNext = currentIdx + 1;
+            else if (hasWords(currentIdx + 2, 2)) foundNext = currentIdx + 2;
+        }
 
-        setCurrentBlockIndex(targetIdx);
-        currentRef.current = targetIdx;
-    }, [song, startRhythmicTimer]);
+        targetIndex = foundNext;
+
+        // 2. GLOBAL RESCUE (FIND THE SINGER)
+        if (targetIndex === -1 && transWords.length >= 2) {
+            // Only jump if we are clearly NOT on the current line anymore
+            if (!hasWords(currentIdx, 1)) {
+                for (let i = 0; i < blocks.length; i++) {
+                    if (i !== currentIdx && hasWords(i, 2)) {
+                        targetIndex = i;
+                        break;
+                    }
+                }
+            }
+        }
+
+        // Apply Jump
+        if (targetIndex !== -1 && targetIndex !== currentIdx) {
+            const now = Date.now();
+            if (now - lastJumpRef.current > 1200) { // Cooldown against double jumping on echo
+                setCurrentBlockIndex(targetIndex);
+                currentRef.current = targetIndex;
+                lastJumpRef.current = now;
+
+                if (waitingRef.current) {
+                    setIsWaiting(false);
+                    waitingRef.current = false;
+                    setIsAnchored(true);
+                    anchoredRef.current = true;
+                }
+            }
+        }
+    }, [isPaused]);
 
     // ── Manual line click: jump + resume ────────────────────
     const handleLineClick = useCallback((idx) => {
         setCurrentBlockIndex(idx);
         currentRef.current = idx;
         lastJumpRef.current = Date.now();
-
-        // If player was paused/waiting, resume it
-        if (anchoredRef.current) {
-            pausedRef.current = false;
-            waitingRef.current = false;
-            setIsPaused(false);
-            setIsWaiting(false);
-        } else {
-            // Click before first voice match: anchor here and start
-            anchoredRef.current = true;
-            pausedRef.current = false;
-            waitingRef.current = false;
-            setIsAnchored(true);
-            setIsPaused(false);
-            setIsWaiting(false);
-            startRhythmicTimer();
-        }
-    }, [startRhythmicTimer]);
+        setIsPaused(false);
+        setIsWaiting(false);
+        setIsAnchored(true);
+        pausedRef.current = false;
+        waitingRef.current = false;
+        anchoredRef.current = true;
+    }, []);
 
     // ── AudioTracker startup ─────────────────────────────────
     const startMic = useCallback(() => {
         if (trackerRef.current) return;
         trackerRef.current = new AudioTracker(
-            (detectedBpm) => {
-                setBpm(prev => {
-                    const diff = detectedBpm - prev;
-                    return Math.abs(diff) > 10 ? prev + Math.sign(diff) * 2 : detectedBpm;
-                });
-            },
+            null,
             handleMicLevel,
-            () => { },
-            (text, isFinal) => handleVoice(text, isFinal)
+            null,
+            handleVoice, // <--- Now using phonetic matching
+            handleAlignmentState,
+            handleConnectionStatus // connection callback
         );
+
+        if (window.__PENDING_VOCABULARY) {
+            trackerRef.current.setVocabulary(window.__PENDING_VOCABULARY);
+            delete window.__PENDING_VOCABULARY;
+        }
+
+        // It will pick up the current micGain via the other useEffect that calls setGain()
         trackerRef.current.start().catch(() => setPermissionDenied(true));
-    }, [handleMicLevel, handleVoice]);
+    }, [handleMicLevel, handleVoice, handleAlignmentState, handleConnectionStatus]);
 
     useEffect(() => {
         if (hasPermission) startMic();
         return () => {
             if (trackerRef.current) { trackerRef.current.stop(); trackerRef.current = null; }
-            if (advTimerRef.current) clearTimeout(advTimerRef.current);
-            if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
         };
     }, [hasPermission, startMic]);
 
     // ── Manual pause/resume toggle ───────────────────────────
     const togglePause = () => {
-        if (isPaused || isWaiting) {
-            pausedRef.current = false;
-            waitingRef.current = false;
-            setIsPaused(false);
+        const newPause = !isPaused;
+        setIsPaused(newPause);
+        pausedRef.current = newPause;
+        if (!newPause) {
             setIsWaiting(false);
-            if (!anchoredRef.current) {
-                anchoredRef.current = true;
-                setIsAnchored(true);
-                startRhythmicTimer();
-            }
-        } else {
-            pausedRef.current = true;
-            setIsPaused(true);
+            waitingRef.current = false;
+            setIsAnchored(true);
+            anchoredRef.current = true;
         }
     };
 
@@ -300,7 +363,39 @@ const VideokePlayer = ({ song, onClose }) => {
     const nextBlock = blocks[currentBlockIndex + 1];
     const progress = blocks.length > 1 ? Math.round((currentBlockIndex / (blocks.length - 1)) * 100) : 0;
     const micBarWidth = Math.min(100, micLevel * 1.2);
-    const isSilent = micLevel < SILENCE_THRESHOLD && isAnchored;
+
+    // FSM State mapping for UI
+    const getStatusInfo = () => {
+        if (connectionStatus === 'connecting') return { label: 'CONECTANDO', color: '#60A5FA', desc: 'Iniciando link com servidor...' };
+        if (connectionStatus === 'error' || connectionStatus === 'disconnected') return { label: 'OFFLINE', color: '#ef4444', desc: 'Erro de conexão com servidor' };
+
+        if (isPaused) return { label: 'PAUSADO', color: '#ef4444', desc: 'Clique para retomar' };
+        if (isWaiting) return { label: 'AGUARDANDO', color: '#B87333', desc: 'Aguardando voz ou instrumento...' };
+
+        // FORCE UI IF WEBSPEECH HEARS SOMETHING RECENTLY TO BYPASS BACKEND FALSE NEGATIVES
+        if (forceVoiceUi) {
+            const baseStatus = fsmState.state;
+            if (baseStatus === 'CONGELAR_LETRA_SEGUIR_VIOLA' || baseStatus === 'SEGUINDO_NORMAL') {
+                return { label: 'VOZ+VIOLA', color: '#22c55e', desc: 'Sincronizando banda completa' };
+            }
+            return { label: 'A CAPELA', color: '#60A5FA', desc: 'Sincronizando pela sua voz' };
+        }
+
+        switch (fsmState.state) {
+            case 'SEGUINDO_NORMAL':
+                return { label: 'VOZ+VIOLA', color: '#22c55e', desc: 'Sincronizando banda completa' };
+            case 'CONGELAR_LETRA_SEGUIR_VIOLA':
+                return { label: 'VIOLA', color: '#FCD34D', desc: 'Sincronizando pelo instrumento' };
+            case 'ACAPELLA':
+                return { label: 'A CAPELA', color: '#60A5FA', desc: 'Sincronizando pela sua voz' };
+            case 'MODO_BANDA_VAMPING':
+                return { label: 'VAMPING', color: '#F87171', desc: 'Ritmo automático (Silêncio)' };
+            default:
+                return { label: 'SINCRONIZANDO', color: '#22c55e', desc: 'Processando áudio...' };
+        }
+    };
+
+    const statusInfo = getStatusInfo();
 
     // ── Permission Screen ────────────────────────────────────
     if (!hasPermission) {
@@ -308,23 +403,22 @@ const VideokePlayer = ({ song, onClose }) => {
             <div style={S.overlay}>
                 <div style={S.permCard}>
                     <div style={S.permIcon}><Mic size={40} style={{ color: '#B87333' }} /></div>
-                    <h2 style={S.permTitle}>Modo Videokê IA</h2>
+                    <h2 style={S.permTitle}>IRONCHORDS HYBRID PLAYER</h2>
                     <p style={S.permText}>
-                        A IA escuta sua voz em tempo real e acompanha a cifra automaticamente enquanto você canta.
-                        O app precisa acessar o <strong>microfone do seu dispositivo</strong>.
+                        Arquitetura de Alinhamento Híbrido: Sincronia inteligente entre sua voz e o instrumento via WebSockets.
                     </p>
                     <p style={S.permSub}>
-                        🔒 Nenhuma gravação é salva ou enviada para servidores. Processamento 100% local.
+                        🔒 Áudio processado em tempo real. Desativa cancelamento de eco para captar a viola.
                     </p>
                     {permissionDenied && (
                         <p style={{ color: '#ef4444', fontSize: 13, marginBottom: 16, textAlign: 'center' }}>
-                            ⚠ Acesso negado. Verifique as permissões do navegador.
+                            ⚠ Acesso negado ao microfone.
                         </p>
                     )}
                     <div style={S.permActions}>
                         <button style={S.cancelBtn} onClick={onClose}>Cancelar</button>
                         <button style={S.confirmBtn} onClick={() => setHasPermission(true)}>
-                            <Mic size={16} /> Ativar e Iniciar
+                            <Mic size={16} /> Iniciar Sincronia
                         </button>
                     </div>
                 </div>
@@ -335,6 +429,14 @@ const VideokePlayer = ({ song, onClose }) => {
     // ── Main UI ──────────────────────────────────────────────
     return (
         <div style={S.overlay}>
+            <style>
+                {`
+                    @keyframes pulse-data {
+                        0% { left: 0; opacity: 0.8; }
+                        100% { left: 100%; opacity: 0; }
+                    }
+                `}
+            </style>
             {/* Header */}
             <div style={S.header}>
                 <div>
@@ -342,43 +444,53 @@ const VideokePlayer = ({ song, onClose }) => {
                     <div style={S.songArtist}>{song.artist_name}{song.sounding_key ? ` · Tom: ${song.sounding_key}` : ''}</div>
                 </div>
                 <div style={S.headerRight}>
-                    {/* BPM */}
                     <div style={S.stat}>
-                        <span style={S.statLabel}>BPM</span>
-                        <span style={S.statValue}>{Math.round(bpm)}</span>
-                    </div>
-                    {/* Confidence */}
-                    <div style={S.stat}>
-                        <span style={S.statLabel}>CONF</span>
-                        <span style={{ ...S.statValue, color: lastConfidence >= 50 ? '#22c55e' : lastConfidence >= 30 ? '#B87333' : '#475569' }}>
-                            {lastConfidence}%
-                        </span>
-                    </div>
-                    {/* Mic */}
-                    <div style={S.stat}>
-                        <span style={S.statLabel}>MIC</span>
-                        <div style={S.micTrack}>
-                            <div style={{ ...S.micFill, width: `${micBarWidth}%`, background: micBarWidth > 25 ? '#B87333' : 'rgba(184,115,51,0.2)' }} />
+                        <span style={S.statLabel}>STATUS</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <div style={{
+                                width: 6, height: 6, borderRadius: '50%',
+                                background: connectionStatus === 'connected' ? '#22c55e' : '#ef4444',
+                                boxShadow: connectionStatus === 'connected' ? '0 0 6px #22c55e' : 'none'
+                            }} />
+                            <span style={{ ...S.statValue, color: statusInfo.color, fontSize: 10 }}>{statusInfo.label}</span>
                         </div>
                     </div>
-                    {/* Manual pause/play */}
+                    <div style={S.stat}>
+                        <span style={S.statLabel}>SENSIBILIDADE</span>
+                        <input
+                            type="range"
+                            min="0.5"
+                            max="10.0"
+                            step="0.5"
+                            value={micGain}
+                            onChange={(e) => setMicGain(parseFloat(e.target.value))}
+                            style={{ width: 60, accentColor: '#B87333', cursor: 'pointer' }}
+                        />
+                        <span style={{ fontSize: 10, color: '#B87333', fontWeight: 900, minWidth: 20 }}>{micGain}x</span>
+                    </div>
+                    <div style={S.stat}>
+                        <span style={S.statLabel}>MIC</span>
+                        <div style={{ ...S.micTrack, overflow: 'hidden', position: 'relative' }}>
+                            <div style={{
+                                ...S.micFill,
+                                width: `${micBarWidth}%`,
+                                background: micBarWidth > 15 ? statusInfo.color : 'rgba(255,255,255,0.05)',
+                                transition: 'width 0.05s ease-out'
+                            }} />
+                            {/* Connection Pulse */}
+                            {connectionStatus === 'connected' && micBarWidth > 5 && (
+                                <div style={{
+                                    position: 'absolute', top: 0, left: 0, bottom: 0, width: 2, background: '#fff',
+                                    animation: 'pulse-data 1s infinite'
+                                }} />
+                            )}
+                        </div>
+                    </div>
                     <button
                         style={{ ...S.iconBtn, color: (isPaused || isWaiting) ? '#B87333' : '#64748b' }}
                         onClick={togglePause}
-                        title={(isPaused || isWaiting) ? 'Retomar' : 'Pausar'}
                     >
                         {(isPaused || isWaiting) ? <Play size={17} /> : <Pause size={17} />}
-                    </button>
-                    {/* Skip forward */}
-                    <button
-                        style={S.iconBtn}
-                        onClick={() => {
-                            const next = Math.min(blocks.length - 1, currentRef.current + 1);
-                            handleLineClick(next);
-                        }}
-                        title="Avançar linha"
-                    >
-                        <SkipForward size={16} />
                     </button>
                     <button style={S.iconBtn} onClick={onClose} title="Fechar"><X size={18} /></button>
                 </div>
@@ -392,22 +504,16 @@ const VideokePlayer = ({ song, onClose }) => {
             {/* Status bar */}
             <div style={{
                 ...S.statusBar,
-                background: isPaused ? 'rgba(239,68,68,0.06)' : isSilent ? 'rgba(100,116,139,0.04)' : isWaiting ? 'rgba(184,115,51,0.06)' : 'rgba(34,197,94,0.04)',
-                borderBottom: isPaused ? '1px solid rgba(239,68,68,0.12)' : '1px solid rgba(255,255,255,0.03)',
+                background: `${statusInfo.color}10`,
+                borderBottom: `1px solid ${statusInfo.color}30`,
             }}>
                 <span style={{
                     ...S.statusDot,
-                    background: isPaused ? '#ef4444' : isSilent ? '#475569' : isWaiting ? '#B87333' : '#22c55e',
-                    boxShadow: isPaused ? '0 0 6px #ef4444' : isWaiting ? '0 0 6px #B87333' : !isWaiting && !isPaused ? '0 0 6px #22c55e' : 'none',
+                    background: statusInfo.color,
+                    boxShadow: `0 0 8px ${statusInfo.color}`,
                 }} />
-                <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1, color: isPaused ? '#ef4444' : isSilent ? '#475569' : isWaiting ? '#B87333' : '#22c55e' }}>
-                    {isPaused
-                        ? 'PAUSADO — clique em ▶ ou numa linha para retomar'
-                        : isSilent
-                            ? 'SILÊNCIO DETECTADO — aguardando som...'
-                            : isWaiting
-                                ? 'AGUARDANDO SUA VOZ PARA INICIAR...'
-                                : 'SINCRONIZANDO IA'}
+                <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1, color: statusInfo.color }}>
+                    {statusInfo.desc.toUpperCase()}
                 </span>
             </div>
 
@@ -417,9 +523,11 @@ const VideokePlayer = ({ song, onClose }) => {
                 <div style={{
                     ...S.currentBlock,
                     opacity: isPaused ? 0.65 : 1,
-                    borderColor: isPaused ? 'rgba(239,68,68,0.2)' : 'rgba(184,115,51,0.18)',
+                    borderColor: statusInfo.color + '40',
+                    transform: fsmState.action === 'advance' ? 'scale(1.01)' : 'scale(1)',
+                    transition: 'all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
                 }}>
-                    <span style={S.badge}>AGORA</span>
+                    <span style={{ ...S.badge, background: statusInfo.color }}>{statusInfo.label}</span>
                     <div style={S.blockInner}>
                         {currentBlock?.chords && (
                             <pre style={S.chordLine}><RenderChordLine line={currentBlock.chords} /></pre>
@@ -432,15 +540,15 @@ const VideokePlayer = ({ song, onClose }) => {
 
                 {/* Next block */}
                 {nextBlock && (
-                    <div style={S.nextBlock}>
-                        <span style={{ ...S.badge, background: 'rgba(255,255,255,0.04)', color: '#64748b' }}>A SEGUIR</span>
+                    <div style={{ ...S.nextBlock, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.04)' }}>
+                        <span style={{ ...S.badge, background: 'rgba(255,255,255,0.15)', color: '#cbd5e1' }}>PRÓXIMA LINHA</span>
                         <div style={S.blockInner}>
                             {nextBlock.chords && (
-                                <pre style={{ ...S.chordLine, fontSize: 15, opacity: 0.4 }}>
+                                <pre style={{ ...S.chordLine, fontSize: 18, opacity: 0.75 }}>
                                     <RenderChordLine line={nextBlock.chords} />
                                 </pre>
                             )}
-                            <div style={{ ...S.lyricLine, fontSize: 19, opacity: 0.35 }}>{nextBlock.lyric ?? '\u00a0'}</div>
+                            <div style={{ ...S.lyricLine, fontSize: 22, opacity: 0.85, color: '#e2e8f0' }}>{nextBlock.lyric ?? '\u00a0'}</div>
                         </div>
                     </div>
                 )}
