@@ -2983,7 +2983,15 @@ export default function App() {
                                                                 </div>
                                                                 <h3 className="text-lg font-black text-white uppercase italic tracking-tighter line-clamp-2 flex-1 mx-3">{pl.name}</h3>
                                                                 <div className="flex items-center space-x-1">
-                                                                    <button onClick={() => { setEditingList({ ...pl, songs: [...(pl.songs || [])] }); setEditListName(pl.name); }} className="p-2 bg-white/5 hover:bg-[#B87333]/20 text-slate-500 hover:text-[#B87333] rounded-lg transition-all border border-white/5" title="Editar Lista"><Edit3 className="w-3.5 h-3.5" /></button>
+                                                                    <button onClick={() => {
+                                                                        const enriched = (pl.songs || []).map(s => ({
+                                                                            ...s,
+                                                                            _orig_key: s.sounding_key || s.song_key || 'C',
+                                                                            _orig_content: s.content || ''
+                                                                        }));
+                                                                        setEditingList({ ...pl, songs: enriched });
+                                                                        setEditListName(pl.name);
+                                                                    }} className="p-2 bg-white/5 hover:bg-[#B87333]/20 text-slate-500 hover:text-[#B87333] rounded-lg transition-all border border-white/5" title="Editar Lista"><Edit3 className="w-3.5 h-3.5" /></button>
                                                                     <button onClick={() => { setDeleteTarget({ type: 'lista', id: idx, name: pl.name }); setDeleteModalOpen(true); }} className="p-2 bg-white/5 hover:bg-red-600/20 text-slate-500 hover:text-red-500 rounded-lg transition-all border border-white/5" title="Excluir"><Trash2 className="w-3.5 h-3.5" /></button>
                                                                 </div>
                                                             </div>
@@ -3068,14 +3076,26 @@ export default function App() {
                                                             };
                                                             const transpose = async (semitones, targetKey = null) => {
                                                                 try {
-                                                                    const currentKey = song.sounding_key || song.song_key || 'C';
-                                                                    const actualSemitones = targetKey !== null
-                                                                        ? ((KEY_SEMITONES[targetKey] ?? 0) - (KEY_SEMITONES[currentKey] ?? 0) + 12) % 12
-                                                                        : semitones;
-                                                                    if (actualSemitones === 0 && targetKey !== null) { updateSong({ song_key: targetKey, sounding_key: targetKey }); return; }
-                                                                    const res = await fetch('http://127.0.0.1:8000/api/transpose', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: song.content, current_key: currentKey, semitones: actualSemitones }) });
-                                                                    const d = await res.json();
-                                                                    if (d.transposed_content) updateSong({ content: d.transposed_content, sounding_key: targetKey || d.new_key, song_key: targetKey || d.new_key });
+                                                                    if (targetKey !== null) {
+                                                                        // Dropdown: always transpose from the ORIGINAL content/key
+                                                                        const origKey = song._orig_key || song.sounding_key || song.song_key || 'C';
+                                                                        const origContent = song._orig_content || song.content || '';
+                                                                        const diff = ((KEY_SEMITONES[targetKey] ?? 0) - (KEY_SEMITONES[origKey] ?? 0) + 12) % 12;
+                                                                        if (diff === 0) { updateSong({ song_key: targetKey, sounding_key: targetKey, content: origContent }); return; }
+                                                                        const res = await fetch('http://127.0.0.1:8000/api/transpose', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: origContent, current_key: origKey, semitones: diff }) });
+                                                                        const d = await res.json();
+                                                                        if (d.transposed_content) updateSong({ content: d.transposed_content, sounding_key: targetKey, song_key: targetKey });
+                                                                    } else {
+                                                                        // ♭/♯ buttons: transpose incrementally from current content
+                                                                        const currentKey = song.sounding_key || song.song_key || 'C';
+                                                                        const res = await fetch('http://127.0.0.1:8000/api/transpose', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: song.content, current_key: currentKey, semitones }) });
+                                                                        const d = await res.json();
+                                                                        if (d.transposed_content) {
+                                                                            const s2 = [...editingList.songs];
+                                                                            s2[si] = { ...s2[si], content: d.transposed_content, sounding_key: d.new_key, song_key: d.new_key, _orig_key: d.new_key, _orig_content: d.transposed_content };
+                                                                            setEditingList({ ...editingList, songs: s2 });
+                                                                        }
+                                                                    }
                                                                 } catch (e) { console.error(e); }
                                                             };
                                                             const printSong = () => {
