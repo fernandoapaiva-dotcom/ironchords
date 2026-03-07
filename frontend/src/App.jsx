@@ -578,30 +578,69 @@ export default function App() {
 
     const handlePlayerDragStart = (e) => {
         if (e.target.closest('button') || e.target.closest('input')) return;
+
         setIsDraggingPlayer(true);
         const rect = playerControlsRef.current.getBoundingClientRect();
+
+        // Handle both Mouse and Touch events
+        const clientX = e.type.startsWith('touch') ? e.touches[0].clientX : e.clientX;
+        const clientY = e.type.startsWith('touch') ? e.touches[0].clientY : e.clientY;
+
         playerDragOffset.current = {
-            x: e.clientX - rect.left,
-            y: e.clientY - rect.top
+            x: clientX - rect.left,
+            y: clientY - rect.top
         };
+
+        // Prevent scroll while dragging on mobile
+        if (e.type.startsWith('touch')) {
+            // we can't always e.preventDefault() here if we want buttons to work, 
+            // but the handleTouchMove will handle it.
+        }
     };
 
     useEffect(() => {
-        const handleMouseMove = (e) => {
+        const handleMove = (e) => {
             if (!isDraggingPlayer) return;
-            setPlayerPos({
-                x: e.clientX - playerDragOffset.current.x,
-                y: e.clientY - playerDragOffset.current.y
-            });
+
+            // Handle both Mouse and Touch events
+            const clientX = e.type.startsWith('touch') ? e.touches[0].clientX : e.clientX;
+            const clientY = e.type.startsWith('touch') ? e.touches[0].clientY : e.clientY;
+
+            // Calculate new position
+            let newX = clientX - playerDragOffset.current.x;
+            let newY = clientY - playerDragOffset.current.y;
+
+            // Boundary checks
+            const rect = playerControlsRef.current?.getBoundingClientRect();
+            if (rect) {
+                const maxX = window.innerWidth - rect.width;
+                const maxY = window.innerHeight - rect.height;
+                newX = Math.max(0, Math.min(newX, maxX));
+                newY = Math.max(0, Math.min(newY, maxY));
+            }
+
+            setPlayerPos({ x: newX, y: newY });
+
+            // Prevent scrolling on touch devices while dragging
+            if (e.type.startsWith('touch')) {
+                e.preventDefault();
+            }
         };
-        const handleMouseUp = () => setIsDraggingPlayer(false);
+
+        const handleEnd = () => setIsDraggingPlayer(false);
+
         if (isDraggingPlayer) {
-            window.addEventListener('mousemove', handleMouseMove);
-            window.addEventListener('mouseup', handleMouseUp);
+            window.addEventListener('mousemove', handleMove);
+            window.addEventListener('mouseup', handleEnd);
+            window.addEventListener('touchmove', handleMove, { passive: false });
+            window.addEventListener('touchend', handleEnd);
         }
+
         return () => {
-            window.removeEventListener('mousemove', handleMouseMove);
-            window.removeEventListener('mouseup', handleMouseUp);
+            window.removeEventListener('mousemove', handleMove);
+            window.removeEventListener('mouseup', handleEnd);
+            window.removeEventListener('touchmove', handleMove);
+            window.removeEventListener('touchend', handleEnd);
         };
     }, [isDraggingPlayer]);
 
@@ -3408,14 +3447,16 @@ export default function App() {
                                                 <div
                                                     ref={playerControlsRef}
                                                     onMouseDown={handlePlayerDragStart}
+                                                    onTouchStart={handlePlayerDragStart}
                                                     style={{
                                                         left: playerPos.x !== null ? `${playerPos.x}px` : '50%',
                                                         top: playerPos.y !== null ? `${playerPos.y}px` : 'auto',
                                                         bottom: playerPos.y === null ? '40px' : 'auto',
                                                         transform: playerPos.x === null ? 'translateX(-50%)' : 'none',
-                                                        cursor: isDraggingPlayer ? 'grabbing' : 'auto'
+                                                        cursor: isDraggingPlayer ? 'grabbing' : 'auto',
+                                                        transition: isDraggingPlayer ? 'none' : 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
                                                     }}
-                                                    className={`absolute bg-[#1A1A1A]/95 backdrop-blur-3xl border border-white/10 p-4 rounded-[32px] shadow-[0_20px_60px_rgba(0,0,0,0.8)] flex items-center z-[110] transition-all duration-300 ${isPlayerMinimized ? 'w-auto' : 'space-x-6 px-6'}`}
+                                                    className={`absolute bg-[#1A1A1A]/95 backdrop-blur-3xl border border-white/10 p-4 rounded-[32px] shadow-[0_20px_60px_rgba(0,0,0,0.8)] flex items-center z-[110] touch-none ${isPlayerMinimized ? 'w-auto' : 'space-x-6 px-6'}`}
                                                 >
                                                     {/* Drag Handle */}
                                                     <div className="cursor-grab active:cursor-grabbing p-2 text-slate-600 hover:text-slate-400 transition-colors">
