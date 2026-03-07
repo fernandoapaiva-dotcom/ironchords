@@ -2,7 +2,7 @@
 import { createPortal } from 'react-dom';
 import { PhoneticMatcher } from './utils/PhoneticMatcher';
 import VideokePlayer from './components/VideokePlayer';
-import { Music, UploadCloud, Plus, FileText, CheckCircle, AlertCircle, Eye, EyeOff, FileAudio, Info, X, Guitar, Settings2, Image as ImageIcon, Database, Edit3, Trash2, ArrowRight, Play, Maximize, Maximize2, Pause, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Download, ArrowLeft, SkipBack, SkipForward, Save, FolderHeart, Flame, Hammer, Sparkles, RefreshCw, Zap, ShieldCheck, Monitor, Tv, Check, LayoutList, Layout, Mic, Search, RotateCcw, Printer, Archive } from 'lucide-react';
+import { Music, UploadCloud, Plus, Minus, FileText, CheckCircle, AlertCircle, Eye, EyeOff, FileAudio, Info, X, Guitar, Settings2, Image as ImageIcon, Database, Edit3, Trash2, ArrowRight, Play, Maximize, Maximize2, Pause, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Download, ArrowLeft, SkipBack, SkipForward, Save, FolderHeart, Flame, Hammer, Sparkles, RefreshCw, Zap, ShieldCheck, Monitor, Tv, Check, LayoutList, Layout, Mic, Search, RotateCcw, Printer, Archive, GripVertical, Minimize2 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { SVGuitarChord } from 'svguitar';
 import { AudioTracker } from './utils/AudioTracker';
@@ -549,6 +549,54 @@ export default function App() {
     const [isAutoScrolling, setIsAutoScrolling] = useState(false);
     const [scrollSpeed, setScrollSpeed] = useState(1);
     const scrollContainerRef = useRef(null);
+    const [isPlayerMinimized, setIsPlayerMinimized] = useState(() => {
+        const saved = localStorage.getItem('iron_player_minimized');
+        return saved ? JSON.parse(saved) : false;
+    });
+    const [playerPos, setPlayerPos] = useState(() => {
+        const saved = localStorage.getItem('iron_player_pos');
+        return saved ? JSON.parse(saved) : { x: null, y: null };
+    });
+    const [isDraggingPlayer, setIsDraggingPlayer] = useState(false);
+    const playerDragOffset = useRef({ x: 0, y: 0 });
+    const playerControlsRef = useRef(null);
+
+    useEffect(() => {
+        localStorage.setItem('iron_player_minimized', JSON.stringify(isPlayerMinimized));
+    }, [isPlayerMinimized]);
+
+    useEffect(() => {
+        localStorage.setItem('iron_player_pos', JSON.stringify(playerPos));
+    }, [playerPos]);
+
+    const handlePlayerDragStart = (e) => {
+        if (e.target.closest('button') || e.target.closest('input')) return;
+        setIsDraggingPlayer(true);
+        const rect = playerControlsRef.current.getBoundingClientRect();
+        playerDragOffset.current = {
+            x: e.clientX - rect.left,
+            y: e.clientY - rect.top
+        };
+    };
+
+    useEffect(() => {
+        const handleMouseMove = (e) => {
+            if (!isDraggingPlayer) return;
+            setPlayerPos({
+                x: e.clientX - playerDragOffset.current.x,
+                y: e.clientY - playerDragOffset.current.y
+            });
+        };
+        const handleMouseUp = () => setIsDraggingPlayer(false);
+        if (isDraggingPlayer) {
+            window.addEventListener('mousemove', handleMouseMove);
+            window.addEventListener('mouseup', handleMouseUp);
+        }
+        return () => {
+            window.removeEventListener('mousemove', handleMouseMove);
+            window.removeEventListener('mouseup', handleMouseUp);
+        };
+    }, [isDraggingPlayer]);
 
     // Save List State
     const [saveListModalOpen, setSaveListModalOpen] = useState(false);
@@ -1672,12 +1720,12 @@ export default function App() {
                     </div>
                 </div>
 
-                {activeTab === 'player' ? (
+                {(isFullScreenPlayer || activeTab === 'player') ? (
                     <div className="fixed inset-0 bg-[#070709] z-[100] flex flex-col animate-in fade-in zoom-in-95 duration-500">
                         {/* PLAYER HEADER */}
                         <div className="h-20 bg-black/40 border-b border-white/5 flex items-center justify-between px-8 backdrop-blur-xl shrink-0 no-print">
                             <div className="flex items-center space-x-6">
-                                <button onClick={() => { setActiveTab('manual'); setCurrentStep(3); }} className="p-3 bg-white/5 hover:bg-white/10 rounded-xl transition-all border border-white/5 text-slate-400 hover:text-white"><ArrowLeft className="w-5 h-5" /></button>
+                                <button onClick={() => { setIsFullScreenPlayer(false); setActiveTab('manual'); setCurrentStep(3); setMainNav('escolha'); }} className="p-3 bg-white/5 hover:bg-white/10 rounded-xl transition-all border border-white/5 text-slate-400 hover:text-white"><ArrowLeft className="w-5 h-5" /></button>
                                 <div>
                                     <h2 className="text-xl font-black text-white uppercase italic tracking-tighter leading-none">{currentSong?.song_name}</h2>
                                     <p className="text-[10px] font-bold text-[#B87333] uppercase tracking-widest mt-1 opacity-60 italic">{currentSong?.artist_name}</p>
@@ -1877,48 +1925,83 @@ export default function App() {
                                 )}
 
                                 {/* PLAYER CONTROLS FLOATING PANEL */}
-                                <div className="absolute bottom-10 left-1/2 -translate-x-1/2 bg-[#1A1A1A]/95 backdrop-blur-3xl border border-white/10 p-6 rounded-[40px] shadow-[0_20px_60px_rgba(0,0,0,0.8)] flex items-center space-x-10 z-[110] no-print">
-                                    <div className="flex items-center space-x-6 pr-10 border-r border-white/10">
-                                        <button onClick={() => setIsAutoScrolling(!isAutoScrolling)} className={`w-16 h-16 rounded-[24px] flex items-center justify-center transition-all ${isAutoScrolling ? 'bg-[#B87333] text-white shadow-xl shadow-[#B87333]/30 scale-105' : 'bg-white/5 text-slate-500 hover:text-white'}`}>
-                                            {isAutoScrolling ? <Pause className="w-7 h-7" /> : <Play className="w-7 h-7 ml-1" />}
-                                        </button>
-                                        <div className="w-32">
-                                            <div className="flex items-center justify-between mb-2">
-                                                <span className="text-[9px] font-black text-slate-600 uppercase tracking-widest leading-none">Scrolloff</span>
-                                                <span className="text-[10px] font-black text-white italic">{scrollSpeed}x</span>
+                                {/* PLAYER CONTROLS FLOATING PANEL */}
+                                <div
+                                    ref={playerControlsRef}
+                                    onMouseDown={handlePlayerDragStart}
+                                    style={{
+                                        left: playerPos.x !== null ? `${playerPos.x}px` : '50%',
+                                        top: playerPos.y !== null ? `${playerPos.y}px` : 'auto',
+                                        bottom: playerPos.y === null ? '40px' : 'auto',
+                                        transform: playerPos.x === null ? 'translateX(-50%)' : 'none',
+                                        cursor: isDraggingPlayer ? 'grabbing' : 'auto'
+                                    }}
+                                    className={`absolute bg-[#1A1A1A]/95 backdrop-blur-3xl border border-white/10 p-6 rounded-[40px] shadow-[0_20px_60px_rgba(0,0,0,0.8)] flex items-center z-[110] no-print transition-all duration-300 ${isPlayerMinimized ? 'w-auto' : 'space-x-10 px-10'}`}
+                                >
+                                    {/* Drag Handle */}
+                                    <div className="cursor-grab active:cursor-grabbing p-2 text-slate-600 hover:text-slate-400 transition-colors">
+                                        <GripVertical className="w-6 h-6" />
+                                    </div>
+
+                                    {!isPlayerMinimized ? (
+                                        <>
+                                            <div className="flex items-center space-x-6 pr-10 border-r border-white/10">
+                                                <button onClick={() => setIsAutoScrolling(!isAutoScrolling)} className={`w-16 h-16 rounded-[24px] flex items-center justify-center transition-all ${isAutoScrolling ? 'bg-[#B87333] text-white shadow-xl shadow-[#B87333]/30 scale-105' : 'bg-white/5 text-slate-500 hover:text-white'}`}>
+                                                    {isAutoScrolling ? <Pause className="w-7 h-7" /> : <Play className="w-7 h-7 ml-1" />}
+                                                </button>
+                                                <div className="w-32">
+                                                    <div className="flex items-center justify-between mb-2">
+                                                        <span className="text-[9px] font-black text-slate-600 uppercase tracking-widest leading-none">Scrolloff</span>
+                                                        <span className="text-[10px] font-black text-white italic">{scrollSpeed}x</span>
+                                                    </div>
+                                                    <input type="range" min="0.5" max="5" step="0.5" value={scrollSpeed} onChange={(e) => setScrollSpeed(parseFloat(e.target.value))} className="w-full h-1.5 bg-white/5 rounded-full appearance-none cursor-pointer accent-[#B87333]" />
+                                                </div>
                                             </div>
-                                            <input type="range" min="0.5" max="5" step="0.5" value={scrollSpeed} onChange={(e) => setScrollSpeed(parseFloat(e.target.value))} className="w-full h-1.5 bg-white/5 rounded-full appearance-none cursor-pointer accent-[#B87333]" />
-                                        </div>
-                                    </div>
 
-                                    <div className="flex items-center space-x-10 pr-10 border-r border-white/10">
-                                        <div className="flex flex-col items-center">
-                                            <span className="text-[9px] font-black text-slate-600 uppercase tracking-widest mb-3 leading-none">Microfone</span>
-                                            <button onClick={() => setMicEnabled(!micEnabled)} className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all border ${micEnabled ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-900/40 animate-pulse' : 'bg-white/5 border-white/10 text-slate-600 hover:text-slate-400'}`}>
-                                                <Mic className="w-5 h-5" />
+                                            <div className="flex items-center space-x-10 pr-10 border-r border-white/10">
+                                                <div className="flex flex-col items-center">
+                                                    <span className="text-[9px] font-black text-slate-600 uppercase tracking-widest mb-3 leading-none">Microfone</span>
+                                                    <button onClick={() => setMicEnabled(!micEnabled)} className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all border ${micEnabled ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-900/40 animate-pulse' : 'bg-white/5 border-white/10 text-slate-600 hover:text-slate-400'}`}>
+                                                        <Mic className="w-5 h-5" />
+                                                    </button>
+                                                </div>
+                                                <div className="flex flex-col items-center">
+                                                    <span className="text-[9px] font-black text-slate-600 uppercase tracking-widest mb-3 leading-none">Ritmagem</span>
+                                                    <button onClick={() => setIsRhythmicMode(!isRhythmicMode)} className={`px-6 py-2.5 rounded-full border text-[10px] font-black uppercase transition-all italic tracking-widest ${isRhythmicMode ? 'bg-green-600/80 border-green-600 text-white shadow-lg' : 'bg-white/5 border-white/10 text-slate-700'}`}>
+                                                        {isRhythmicMode ? 'Autosync' : 'Manual'}
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            {/* BPM Section */}
+                                            <div className="flex items-center space-x-6 pr-10 border-r border-white/10 relative group">
+                                                <div className={`w-14 h-14 rounded-2xl bg-black/40 border-2 flex items-center justify-center transition-all duration-500 ${isBpmSyncing ? 'border-yellow-500 shadow-[0_0_20px_rgba(234,179,8,0.3)]' : 'border-[#B87333]/20 shadow-none'}`}>
+                                                    <Zap className={`w-6 h-6 ${isBpmSyncing ? 'text-yellow-500 animate-bounce' : 'text-[#B87333] opacity-40'}`} />
+                                                </div>
+                                                <div className="text-center">
+                                                    <p className="text-2xl font-black text-white italic leading-none">{bpm}</p>
+                                                    <p className="text-[9px] font-bold text-slate-500 uppercase mt-1 tracking-widest italic">Pulsos/Min</p>
+                                                </div>
+                                                <div className="flex flex-col space-y-1">
+                                                    <button onClick={() => setBpm(b => b + 1)} className="p-1 hover:text-[#B87333] transition-all"><ChevronUp className="w-3.5 h-3.5" /></button>
+                                                    <button onClick={() => setBpm(b => b - 1)} className="p-1 hover:text-[#B87333] transition-all"><ChevronDown className="w-3.5 h-3.5" /></button>
+                                                </div>
+                                            </div>
+
+                                            <button onClick={() => setIsPlayerMinimized(true)} className="p-4 text-slate-500 hover:text-white hover:bg-white/5 rounded-2xl transition-all" title="Encolher">
+                                                <Minimize2 className="w-6 h-6" />
+                                            </button>
+                                        </>
+                                    ) : (
+                                        <div className="flex items-center space-x-4">
+                                            <button onClick={() => setIsAutoScrolling(!isAutoScrolling)} className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all ${isAutoScrolling ? 'bg-[#B87333] text-white shadow-lg' : 'bg-white/5 text-slate-500'}`}>
+                                                {isAutoScrolling ? <Pause className="w-6 h-6" /> : <Play className="w-6 h-6 ml-1" />}
+                                            </button>
+                                            <button onClick={() => setIsPlayerMinimized(false)} className="p-4 text-[#B87333] hover:text-white hover:bg-[#B87333]/20 rounded-2xl transition-all" title="Expandir">
+                                                <Maximize2 className="w-6 h-6" />
                                             </button>
                                         </div>
-                                        <div className="flex flex-col items-center">
-                                            <span className="text-[9px] font-black text-slate-600 uppercase tracking-widest mb-3 leading-none">Ritmagem</span>
-                                            <button onClick={() => setIsRhythmicMode(!isRhythmicMode)} className={`px-6 py-2.5 rounded-full border text-[10px] font-black uppercase transition-all italic tracking-widest ${isRhythmicMode ? 'bg-green-600/80 border-green-600 text-white' : 'bg-white/5 border-white/10 text-slate-700'}`}>
-                                                {isRhythmicMode ? 'Autosync' : 'Manual'}
-                                            </button>
-                                        </div>
-                                    </div>
-
-                                    <div className="flex items-center space-x-6 relative group">
-                                        <div className={`w-14 h-14 rounded-2xl bg-black/40 border-2 flex items-center justify-center transition-all duration-500 ${isBpmSyncing ? 'border-yellow-500 shadow-[0_0_20px_rgba(234,179,8,0.3)]' : 'border-[#B87333]/20 shadow-none'}`}>
-                                            <Zap className={`w-6 h-6 ${isBpmSyncing ? 'text-yellow-500 animate-bounce' : 'text-[#B87333] opacity-40'}`} />
-                                        </div>
-                                        <div className="text-center">
-                                            <p className="text-2xl font-black text-white italic leading-none">{bpm}</p>
-                                            <p className="text-[9px] font-bold text-slate-500 uppercase mt-1 tracking-widest italic">Pulsos/Min</p>
-                                        </div>
-                                        <div className="flex flex-col space-y-1">
-                                            <button onClick={() => setBpm(b => b + 1)} className="p-1 hover:text-[#B87333] transition-all"><ChevronUp className="w-3.5 h-3.5" /></button>
-                                            <button onClick={() => setBpm(b => b - 1)} className="p-1 hover:text-[#B87333] transition-all"><ChevronDown className="w-3.5 h-3.5" /></button>
-                                        </div>
-                                    </div>
+                                    )}
                                 </div>
                             </div>
                         </div>
@@ -1933,7 +2016,7 @@ export default function App() {
                                 </div>
                             </div>
                         </div>
-                        <button onClick={() => setActiveTab('manual')} className="absolute top-10 right-10 p-5 bg-white/5 hover:bg-white/10 rounded-2xl text-white opacity-0 hover:opacity-100 transition-all"><X className="w-8 h-8" /></button>
+                        <button onClick={() => { setIsFullScreenPlayer(false); setActiveTab('manual'); }} className="absolute top-10 right-10 p-5 bg-white/5 hover:bg-white/10 rounded-2xl text-white opacity-0 hover:opacity-100 transition-all"><X className="w-8 h-8" /></button>
                     </div>
                 ) : (
                     <div className="selection-branch-root flex flex-col min-h-[600px] h-full">
@@ -3238,35 +3321,171 @@ export default function App() {
 
                             {/* ABA 3: PLAYER DA FORJA */}
                             {mainNav === 'player' && (
-                                <div className="flex-1 animate-in fade-in slide-in-from-right-8 duration-700">
-                                    <div className="bg-[#16161D]/80 backdrop-blur-xl border border-white/5 rounded-[40px] p-8 shadow-2xl min-h-[500px] flex flex-col items-center justify-center text-center">
-                                        <div className="w-24 h-24 bg-[#B87333]/10 rounded-[32px] flex items-center justify-center mb-8 border border-[#B87333]/20 shadow-2xl shadow-[#B87333]/5 mx-auto transition-transform hover:scale-110">
-                                            <Monitor className="w-10 h-10 text-[#B87333]" />
+                                <div className="flex-1 flex flex-col min-h-0 animate-in fade-in slide-in-from-right-8 duration-700 h-[calc(100vh-140px)]">
+                                    {songs.length === 0 ? (
+                                        <div className="bg-[#16161D]/80 backdrop-blur-xl border border-white/5 rounded-[40px] p-12 shadow-2xl flex flex-col items-center justify-center text-center h-full">
+                                            <div className="w-24 h-24 bg-[#B87333]/10 rounded-[32px] flex items-center justify-center mb-8 border border-[#B87333]/20 shadow-2xl shadow-[#B87333]/5 mx-auto transition-transform hover:scale-110">
+                                                <Monitor className="w-10 h-10 text-[#B87333]" />
+                                            </div>
+                                            <h3 className="text-xl font-black text-white uppercase tracking-widest mb-4">Player da Forja</h3>
+                                            <p className="text-sm text-slate-400 font-medium leading-relaxed mb-8 max-w-sm mx-auto">Vá em 'Escolha de Peças' ou em 'Listas' para carregar músicas para tocar.</p>
                                         </div>
-                                        <h3 className="text-xl font-black text-white uppercase tracking-widest mb-4">Player da Forja</h3>
-                                        <p className="text-sm text-slate-400 font-medium leading-relaxed mb-8 max-w-sm mx-auto">{songs.length === 0 ? "Vá em 'Escolha de Peças' ou em 'Listas' para carregar músicas para tocar." : (songs.length + " peças carregadas e prontas para execução ao vivo.")}</p>
-                                        <button
-                                            onClick={() => { setIsFullScreenPlayer(true); setSelectedManualIndex(songs.length > 0 ? 0 : null); setCurrentLineIndex(0); }}
-                                            className={`px-12 py-6 font-black uppercase tracking-[0.2em] rounded-2xl transition-all shadow-2xl active:scale-95 flex items-center space-x-3 mx-auto ${songs.length === 0 ? 'bg-white/5 text-slate-600 border border-white/5 cursor-not-allowed shadow-none' : 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-900/40'}`}
-                                            disabled={songs.length === 0}
-                                        >
-                                            <Play className="w-6 h-6 inline mr-2" />
-                                            <span>Iniciar Apresentação</span>
-                                        </button>
-                                        {songs.length > 0 && (
-                                            <div className="mt-12 w-full max-w-2xl bg-black/40 border border-white/5 rounded-2xl p-6 text-left mx-auto">
-                                                <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4 border-b border-white/5 pb-2">Setlist Carregado</h4>
-                                                <div className="max-h-48 overflow-y-auto space-y-2 scrollbar-thin">
-                                                    {songs.map((s, idx) => (
-                                                        <div key={idx} className="flex items-center space-x-4">
-                                                            <span className="text-[10px] text-slate-600 font-black">{idx + 1}.</span>
-                                                            <span className="text-xs text-white font-bold uppercase truncate">{s.song_name}</span>
+                                    ) : (
+                                        <div className="flex-1 flex overflow-hidden bg-[#16161D]/60 backdrop-blur-xl border border-white/5 rounded-[40px] shadow-2xl">
+                                            {/* PLAYER LYRICS/CHORDS AREA */}
+                                            <div className="flex-1 relative flex flex-col bg-[url('https://www.transparenttextures.com/patterns/black-paper.png')] overflow-hidden">
+                                                {/* INTEGRATED CONTROLS BAR (Top) */}
+                                                <div className="h-16 bg-black/40 border-b border-white/5 flex items-center justify-between px-6 backdrop-blur-xl shrink-0">
+                                                    <div className="flex-1 min-w-0 mr-4">
+                                                        <h2 className="text-sm font-black text-white uppercase italic tracking-tighter truncate leading-none">{currentSong?.song_name}</h2>
+                                                        <p className="text-[9px] font-bold text-[#B87333] uppercase tracking-widest mt-0.5 opacity-60 italic">{currentSong?.artist_name}</p>
+                                                    </div>
+                                                    <div className="flex items-center space-x-3">
+                                                        <div className="flex items-center space-x-1 bg-black/20 p-1 rounded-lg border border-white/5">
+                                                            <button onClick={() => setPlayerFontSize(prev => Math.max(12, prev - 1))} className="p-1.5 text-slate-500 hover:text-white transition-all"><Minus className="w-3.5 h-3.5" /></button>
+                                                            <span className="text-[10px] font-black text-white w-6 text-center">{playerFontSize}</span>
+                                                            <button onClick={() => setPlayerFontSize(prev => Math.min(45, prev + 1))} className="p-1.5 text-slate-500 hover:text-white transition-all"><Plus className="w-3.5 h-3.5" /></button>
                                                         </div>
-                                                    ))}
+                                                        <button
+                                                            onClick={() => setIncludeTabs(!includeTabs)}
+                                                            className={`p-2 rounded-lg transition-all border ${includeTabs ? 'bg-[#B87333]/20 border-[#B87333] text-[#B87333]' : 'bg-black/40 border-white/5 text-slate-600'}`}
+                                                            title="Tabs"
+                                                        >
+                                                            <FileText className="w-4 h-4" />
+                                                        </button>
+                                                        <button onClick={handlePrint} className="p-2 bg-white/5 hover:bg-white/10 rounded-lg border border-white/5 text-slate-400 hover:text-white"><Printer className="w-4 h-4" /></button>
+                                                    </div>
+                                                </div>
+
+                                                <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-12 scroll-smooth scrollbar-none pb-[300px]">
+                                                    <div className="max-w-3xl mx-auto space-y-1">
+                                                        {(currentSong?.content || "").split('\n').map((line, lIdx) => {
+                                                            const trimmed = line.trim();
+                                                            const isChordLine = !!(line && trimmed.length > 0 && (line.match(CHORD_TOKEN_RE) || []).length > 0 && line.replace(CHORD_TOKEN_RE, '').replace(/[\s|()\-xX0-9:]/g, '').length < Math.max(2, trimmed.length * 0.25));
+                                                            const isTabLine = line.includes('|-') || line.includes('-|') || /^[eBGDAE]\|/.test(trimmed);
+                                                            const isGuitarNote = /guitarra|dedilhado|batida|solo|riff|ritmo|frase|passagem/i.test(line) && (line.includes('(') || line.includes('['));
+                                                            const isRhythmArrow = line.includes('↓') || line.includes('↑');
+
+                                                            const effectivelyIncludeTabs = currentSong?.include_tabs ?? includeTabs;
+                                                            if (!effectivelyIncludeTabs && (isTabLine || isGuitarNote || isRhythmArrow)) return null;
+
+                                                            const isActive = currentLineIndex === lIdx;
+                                                            const isPast = lIdx < currentLineIndex;
+
+                                                            return (
+                                                                <div
+                                                                    key={lIdx}
+                                                                    data-line-index={lIdx}
+                                                                    onClick={() => handleLineClick(lIdx)}
+                                                                    className={`py-1 px-4 rounded-xl cursor-pointer transition-all duration-500 flex items-center group relative
+                                                                        ${isActive ? 'bg-[#B87333]/25 scale-[1.01] z-10' : 'hover:bg-white/5'}
+                                                                        ${isPast ? 'opacity-40 grayscale-[0.5]' : 'opacity-100'}
+                                                                    `}
+                                                                    style={{ fontSize: `${playerFontSize}px` }}
+                                                                >
+                                                                    {isActive && <div className="absolute left-0 w-1.5 h-full bg-[#B87333] rounded-full shadow-[0_0_15px_rgba(184,115,51,0.6)] animate-pulse"></div>}
+                                                                    <pre className={`font-mono leading-relaxed whitespace-pre-wrap transition-colors duration-500
+                                                                        ${isActive ? 'text-white font-black' : isChordLine ? 'text-[#B87333] font-bold italic opacity-80' : 'text-slate-400 font-medium'}
+                                                                    `}>
+                                                                        {isChordLine
+                                                                            ? renderChordLine(line, (chord, anchor, isPersistent) => setChordTooltip({ chord, anchor, isPersistent }))
+                                                                            : (line || ' ')}
+                                                                    </pre>
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+
+                                                {/* INTEGRATED CONTROLS BAR (Floating/Draggable) */}
+                                                <div
+                                                    ref={playerControlsRef}
+                                                    onMouseDown={handlePlayerDragStart}
+                                                    style={{
+                                                        left: playerPos.x !== null ? `${playerPos.x}px` : '50%',
+                                                        top: playerPos.y !== null ? `${playerPos.y}px` : 'auto',
+                                                        bottom: playerPos.y === null ? '40px' : 'auto',
+                                                        transform: playerPos.x === null ? 'translateX(-50%)' : 'none',
+                                                        cursor: isDraggingPlayer ? 'grabbing' : 'auto'
+                                                    }}
+                                                    className={`absolute bg-[#1A1A1A]/95 backdrop-blur-3xl border border-white/10 p-4 rounded-[32px] shadow-[0_20px_60px_rgba(0,0,0,0.8)] flex items-center z-[110] transition-all duration-300 ${isPlayerMinimized ? 'w-auto' : 'space-x-6 px-6'}`}
+                                                >
+                                                    {/* Drag Handle */}
+                                                    <div className="cursor-grab active:cursor-grabbing p-2 text-slate-600 hover:text-slate-400 transition-colors">
+                                                        <GripVertical className="w-5 h-5" />
+                                                    </div>
+
+                                                    {!isPlayerMinimized ? (
+                                                        <>
+                                                            <div className="flex items-center space-x-6">
+                                                                <button onClick={() => setIsAutoScrolling(!isAutoScrolling)} className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${isAutoScrolling ? 'bg-[#B87333] text-white shadow-lg scale-105' : 'bg-white/5 text-slate-500 hover:text-white'}`}>
+                                                                    {isAutoScrolling ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 ml-0.5" />}
+                                                                </button>
+                                                                <div className="w-24">
+                                                                    <div className="flex items-center justify-between mb-1">
+                                                                        <span className="text-[8px] font-black text-slate-600 uppercase tracking-widest">Scroll</span>
+                                                                        <span className="text-[9px] font-black text-white italic">{scrollSpeed}x</span>
+                                                                    </div>
+                                                                    <input type="range" min="0.5" max="5" step="0.5" value={scrollSpeed} onChange={(e) => setScrollSpeed(parseFloat(e.target.value))} className="w-full h-1 bg-white/5 rounded-full appearance-none cursor-pointer accent-[#B87333]" />
+                                                                </div>
+                                                            </div>
+                                                            <div className="h-8 w-px bg-white/10"></div>
+                                                            <div className="flex items-center space-x-4">
+                                                                <div className="flex flex-col items-center">
+                                                                    <button onClick={() => setMicEnabled(!micEnabled)} className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all border ${micEnabled ? 'bg-blue-600 border-blue-600 text-white animate-pulse' : 'bg-white/5 border-white/10 text-slate-600'}`}>
+                                                                        <Mic className="w-4 h-4" />
+                                                                    </button>
+                                                                </div>
+                                                                <div className="flex flex-col items-center">
+                                                                    <button onClick={() => setIsRhythmicMode(!isRhythmicMode)} className={`px-4 py-2 rounded-full border text-[8px] font-black uppercase transition-all italic tracking-widest ${isRhythmicMode ? 'bg-green-600/80 border-green-600 text-white' : 'bg-white/5 border-white/10 text-slate-700'}`}>
+                                                                        {isRhythmicMode ? 'Autosync' : 'Manual'}
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                            <div className="h-8 w-px bg-white/10"></div>
+                                                            <button onClick={() => setIsPlayerMinimized(true)} className="p-3 text-slate-500 hover:text-white hover:bg-white/5 rounded-xl transition-all" title="Encolher">
+                                                                <Minimize2 className="w-4 h-4" />
+                                                            </button>
+                                                        </>
+                                                    ) : (
+                                                        <div className="flex items-center space-x-3">
+                                                            <button onClick={() => setIsAutoScrolling(!isAutoScrolling)} className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${isAutoScrolling ? 'bg-[#B87333] text-white shadow-lg' : 'bg-white/5 text-slate-500'}`}>
+                                                                {isAutoScrolling ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
+                                                            </button>
+                                                            <button onClick={() => setIsPlayerMinimized(false)} className="p-2.5 text-[#B87333] hover:text-white hover:bg-[#B87333]/20 rounded-xl transition-all" title="Expandir">
+                                                                <Maximize2 className="w-4 h-4" />
+                                                            </button>
+                                                        </div>
+                                                    )}
                                                 </div>
                                             </div>
-                                        )}
-                                    </div>
+
+                                            {/* PLAYER PLAYLIST SIDEBAR (Right) */}
+                                            <div className="w-72 bg-black/40 border-l border-white/5 flex flex-col p-6 space-y-4 shrink-0 overflow-hidden">
+                                                <div className="flex items-center space-x-3 mb-2">
+                                                    <LayoutList className="w-4 h-4 text-[#B87333]" />
+                                                    <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Sua Lista</h3>
+                                                </div>
+                                                <div className="flex-1 overflow-y-auto space-y-2 pr-2 scrollbar-thin scrollbar-thumb-[#B87333]/20">
+                                                    {songs.map((s, idx) => (
+                                                        <button key={idx} onClick={() => { setSelectedManualIndex(idx); setCurrentLineIndex(0); currentLineIndexRef.current = 0; }} className={`w-full p-4 rounded-2xl border transition-all text-left flex items-center space-x-3 group relative overflow-hidden ${selectedManualIndex === idx ? 'bg-[#B87333] border-[#B87333] shadow-lg shadow-[#B87333]/20' : 'bg-white/5 border-white/5 hover:border-[#B87333]/30'}`}>
+                                                            <div className={`w-6 h-6 rounded-lg flex items-center justify-center font-black text-[10px] shrink-0 transition-all ${selectedManualIndex === idx ? 'bg-white text-[#B87333]' : 'bg-black/40 text-slate-700 group-hover:text-white'}`}>{idx + 1}</div>
+                                                            <div className="flex-1 min-w-0">
+                                                                <p className={`text-[10px] font-black uppercase italic truncate tracking-tight transition-colors ${selectedManualIndex === idx ? 'text-white' : 'text-slate-400 group-hover:text-slate-200'}`}>{s.song_name}</p>
+                                                                <p className={`text-[8px] font-bold uppercase truncate transition-colors ${selectedManualIndex === idx ? 'text-white/60' : 'text-slate-600'}`}>{s.artist_name}</p>
+                                                            </div>
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                                <div className="pt-4 border-t border-white/5">
+                                                    <button onClick={() => setIsFullScreenPlayer(true)} className="w-full py-3 bg-blue-600/10 hover:bg-blue-600 border border-blue-600/20 text-blue-500 hover:text-white rounded-xl transition-all text-[9px] font-black uppercase tracking-[0.2em] flex items-center justify-center space-x-2 shadow-lg shadow-blue-900/10">
+                                                        <Maximize2 className="w-3.5 h-3.5" />
+                                                        <span>Tela Cheia</span>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             )}
 
