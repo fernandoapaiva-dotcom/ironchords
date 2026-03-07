@@ -298,6 +298,22 @@ function ChordTooltip({ chord, anchor, onClose }) {
 // Improved Regex: enforces word boundaries and also ensures no accented letters follow the chord.
 const CHORD_TOKEN_RE = /(?:^|\s)([A-G][b#]?(?:m|maj|min|M|dim|aug|sus|add|alt|7|9|11|13|6|2|4|5|b5|#5|#11|b9|#9)*(?:\/[A-G][b#]?)?)(?![a-zA-ZáàâãéèêíïóôõöúçñÁÀÂÃÉÈÊÍÏÓÔÕÖÚÇÑ])/g;
 
+function isChordOnlyLine(line) {
+    if (!line || !line.trim()) return false;
+    if (isTablatureLine(line)) return false;
+    const chords = (line.match(CHORD_TOKEN_RE) || []).map(m => m.trim());
+    const cleaned = line.replace(CHORD_TOKEN_RE, '').replace(/[\s|()\-xX0-9:]/g, '');
+    return chords.length > 0 && cleaned.length < Math.max(2, line.trim().length * 0.5);
+}
+
+function isTablatureLine(line) {
+    if (!line) return false;
+    const trimmed = line.trim();
+    if (/^[eEaAdDgGbB]\|/.test(trimmed)) return true;
+    if ((trimmed.match(/-/g) || []).length > 8) return true;
+    return false;
+}
+
 export function renderChordLine(line, onChordClick) {
     const parts = [];
     let last = 0;
@@ -554,6 +570,7 @@ export default function App() {
     // Presentation Mode State
     const [presenterSongIndex, setPresenterSongIndex] = useState(0);
     const [isAutoScrolling, setIsAutoScrolling] = useState(false);
+    const [isDynamicSpeedActive, setIsDynamicSpeedActive] = useState(false);
     const [scrollSpeed, setScrollSpeed] = useState(1);
     const scrollContainerRef = useRef(null);
 
@@ -758,6 +775,8 @@ export default function App() {
     const lastVoiceMatchedIndexRef = useRef(0);
     const silenceTimerRef = useRef(null);
     const lastVoiceTimeRef = useRef(Date.now());
+    const lastJumpRef = useRef(0);
+    const lastMatchTimeRef = useRef(Date.now());
     const micLevelRef = useRef(0);
     const isPausedBySilenceRef = useRef(false);
     useEffect(() => { isPausedBySilenceRef.current = isPausedBySilence; }, [isPausedBySilence]);
@@ -765,15 +784,44 @@ export default function App() {
     // AutoScroll Effect with Mic interaction (Manual / Player / Presentation)
     useEffect(() => {
         let interval;
-        const isPlayerViewActive = activeTab === 'presentation' || activeTab === 'player' || isFullScreenPlayer;
+        const isPlayerViewActive = activeTab === 'presentation' || activeTab === 'player' || isFullScreenPlayer || mainNav === 'player';
         const isManualViewActive = activeTab === 'manual' && isManualAutoScrolling && manualScrollContainerRef.current;
 
         if (isPlayerViewActive && isAutoScrolling && scrollContainerRef.current) {
             interval = setInterval(() => {
-                const threshold = 15;
-                const shouldScroll = !micEnabled || micLevel > threshold;
-                if (shouldScroll) {
-                    scrollContainerRef.current.scrollTop += scrollSpeed;
+                if (isDynamicSpeedActive && micEnabled) {
+                    // IA SYNC: Voice drives position, volume drives speed
+                    // Scroll TOWARD the voice-matched currentLineIndex
+                    const currentEl = scrollContainerRef.current.querySelector(
+                        `[data-line-index="${currentLineIndexRef.current}"]`
+                    );
+                    if (currentEl) {
+                        const containerRect = scrollContainerRef.current.getBoundingClientRect();
+                        const elRect = currentEl.getBoundingClientRect();
+                        // Target: keep current line at ~30% from top
+                        const targetY = containerRect.top + containerRect.height * 0.30;
+                        const diff = elRect.top - targetY;
+
+                        if (Math.abs(diff) > 5) {
+                            // Scroll toward the target, speed proportional to micLevel
+                            const level = micLevelRef.current || 0;
+                            const speed = Math.max(0.5, 0.5 + level * 0.04);
+                            // Move toward target: positive diff = need to scroll down, negative = up
+                            const step = Math.sign(diff) * Math.min(Math.abs(diff), speed * scrollSpeed);
+                            scrollContainerRef.current.scrollTop += step;
+                        }
+                    } else {
+                        // Fallback: simple volume-driven scroll
+                        const level = micLevelRef.current || 0;
+                        const increment = Math.min(scrollSpeed * 3, (scrollSpeed * 0.5) + (level * 0.06));
+                        scrollContainerRef.current.scrollTop += increment;
+                    }
+                } else {
+                    const threshold = 5;
+                    const shouldScroll = !micEnabled || micLevel > threshold;
+                    if (shouldScroll) {
+                        scrollContainerRef.current.scrollTop += scrollSpeed;
+                    }
                 }
             }, 50);
         } else if (isManualViewActive) {
@@ -782,7 +830,7 @@ export default function App() {
             }, 50);
         }
         return () => clearInterval(interval);
-    }, [activeTab, isFullScreenPlayer, isAutoScrolling, scrollSpeed, micEnabled, micLevel, isManualAutoScrolling, manualScrollSpeed]);
+    }, [activeTab, isFullScreenPlayer, mainNav, isAutoScrolling, scrollSpeed, micEnabled, micLevel, isManualAutoScrolling, manualScrollSpeed, isDynamicSpeedActive]);
 
     // Auto-hide controls in fullscreen (Stage View)
     useEffect(() => {
@@ -836,6 +884,95 @@ export default function App() {
         return () => container.removeEventListener('scroll', handleScroll);
     }, [manualPreviewSong, isManualFullscreen]);
 
+    // Auto-track current line based on scroll position in the player (strictly sequential)
+    useEffect(() => {
+        const container = scrollContainerRef.current;
+        if (!container) return;
+
+        const handlePlayerScroll = () => {
+            // When IA Sync is active, voice recognition drives the line — do NOT interfere
+            if (isDynamicSpeedActive) return;
+
+            const song = songs[selectedManualIndex];
+            if (!song) return;
+            const allLines = (song.content || '').split('\n');
+            const currentIdx = currentLineIndexRef.current;
+
+            // Find the DOM element for the current highlighted line
+            const currentEl = container.querySelector(`[data-line-index="${currentIdx}"]`);
+            if (!currentEl) return;
+
+            const containerRect = container.getBoundingClientRect();
+            const currentRect = currentEl.getBoundingClientRect();
+
+            // Reading zone: only advance when the current line scrolls above the top 15%
+            // This keeps the line highlighted much longer before switching
+            const readingZoneBottom = containerRect.top + containerRect.height * 0.15;
+
+            if (currentRect.bottom < readingZoneBottom) {
+                // Current line has scrolled past the reading zone → find next vocal line
+                let nextIdx = currentIdx + 1;
+                while (nextIdx < allLines.length) {
+                    const line = allLines[nextIdx] || '';
+                    if (!line.trim() || isTablatureLine(line)) {
+                        nextIdx++;
+                        continue;
+                    }
+                    if (isChordOnlyLine(line)) {
+                        // Check if this chord has a lyric pair below
+                        let lyricIdx = nextIdx + 1;
+                        while (lyricIdx < allLines.length && (!allLines[lyricIdx].trim() || isTablatureLine(allLines[lyricIdx]))) lyricIdx++;
+                        const lyricLine = allLines[lyricIdx] || '';
+                        if (lyricLine.trim() && !isChordOnlyLine(lyricLine)) {
+                            // It's a chord+lyric pair → highlight the lyric
+                            nextIdx = lyricIdx;
+                            break;
+                        } else {
+                            // Instrumental chord, skip
+                            nextIdx++;
+                            continue;
+                        }
+                    }
+                    // It's a lyric line → use it
+                    break;
+                }
+
+                if (nextIdx < allLines.length && nextIdx !== currentIdx) {
+                    setCurrentLineIndex(nextIdx);
+                    currentLineIndexRef.current = nextIdx;
+                }
+            }
+
+            // Allow backward navigation (user scrolls up manually)
+            const lineEls = container.querySelectorAll('[data-line-index]');
+            if (lineEls.length > 0 && currentRect.top > readingZoneBottom + 100) {
+                // Current line is way below the reading zone — user scrolled up
+                // Find which line is at the reading zone now
+                let closestIdx = currentIdx;
+                let closestDist = Infinity;
+                lineEls.forEach(el => {
+                    const rect = el.getBoundingClientRect();
+                    const dist = Math.abs(rect.top + rect.height / 2 - readingZoneBottom);
+                    const idx = parseInt(el.getAttribute('data-line-index'), 10);
+                    if (dist < closestDist && idx < currentIdx) {
+                        closestDist = dist;
+                        closestIdx = idx;
+                    }
+                });
+                if (closestIdx < currentIdx) {
+                    setCurrentLineIndex(closestIdx);
+                    currentLineIndexRef.current = closestIdx;
+                }
+            }
+        };
+
+        container.addEventListener('scroll', handlePlayerScroll, { passive: true });
+        return () => container.removeEventListener('scroll', handlePlayerScroll);
+    }, [songs, selectedManualIndex, mainNav, activeTab, isFullScreenPlayer, isDynamicSpeedActive]);
+
+    // (IA Sync speed is now handled directly in the auto-scroll interval above — no separate useEffect needed)
+
+
     // Mic Level & Frequency Listener
     const audioTrackerRef = useRef(null);
 
@@ -883,6 +1020,15 @@ export default function App() {
             }
         }
     }, [micEnabled]);
+
+    // Clear Live Transcript after 3 seconds of inactivity
+    useEffect(() => {
+        if (!transcriptRaw) return;
+        const timer = setTimeout(() => {
+            setTranscriptRaw('');
+        }, 3000);
+        return () => clearTimeout(timer);
+    }, [transcriptRaw]);
 
     // Silence Detection Logic (Videoke-style)
     useEffect(() => {
@@ -952,9 +1098,7 @@ export default function App() {
         if (connectionStatus === 'connecting') return { label: 'CONECTANDO', color: '#60A5FA' };
         if (connectionStatus === 'error' || connectionStatus === 'disconnected') return { label: 'OFFLINE', color: '#ef4444' };
         if (isPausedBySilence) return { label: 'SILÊNCIO', color: '#f87171' };
-
         if (isWaitingForVoice) return { label: 'AGUARDANDO', color: '#B87333' };
-
         switch (fsmState.state) {
             case 'SEGUINDO_NORMAL': return { label: 'VOZ+VIOLA', color: '#22c55e' };
             case 'CONGELAR_LETRA_SEGUIR_VIOLA': return { label: 'VIOLA', color: '#FCD34D' };
@@ -963,102 +1107,175 @@ export default function App() {
         }
     };
 
+    // Reset IA Sync state when song/view changes
+    useEffect(() => {
+        setTranscriptRaw('');
+        setCurrentLineIndex(0);
+        currentLineIndexRef.current = 0;
+        setLastVoiceMatchedIndex(0);
+        lastVoiceMatchedIndexRef.current = 0;
+        driftHistoryRef.current = [];
+        lastJumpRef.current = 0;
+        lastMatchTimeRef.current = Date.now();
+        // Option to reset FSM state here if needed
+        setFsmState({ state: 'AGUARDANDO', action: 'freeze' });
+    }, [selectedManualIndex, activeTab, mainNav, isFullScreenPlayer]);
+
     const syncLineByText = (text, isFinal) => {
-        const songIdx = activeTab === 'player' ? selectedManualIndex : selectedManualIndex;
+        const songIdx = (isFullScreenPlayer || activeTab === 'player' || mainNav === 'player') ? selectedManualIndex : null;
         if (songIdx === null || !songs[songIdx]) return;
-        const currentContent = songs[songIdx]?.content || "";
-        const lines = currentContent.split('\n');
 
-        let foundIndex = -1;
-        const start = currentLineIndexRef.current;
+        // Resume if we hear a voice match
+        if (isPausedBySilence) setIsPausedBySilence(false);
+        if (!text || text.trim().length === 0) return;
 
-        // Rules:
-        // 1. If not anchored, search from top (30 lines)
-        // 2. If anchored, search forward within range (8 lines)
-        // 3. If anchored and end of song, search for Chorus/Start (Redirection)
+        const currentSongData = songs[songIdx];
+        const lines = (currentSongData.content || "").split('\n');
 
-        const searchRange = 10;
-        const actualStartSearch = isAnchored ? Math.max(0, start - 2) : 0;
-        const actualEndSearch = isAnchored ? Math.min(lines.length, start + searchRange) : Math.min(lines.length, 30);
+        // Normalize and get tokens
+        const normTranscript = PhoneticMatcher.normalize(PhoneticMatcher.applyAliases(text));
+        const STOP_WORDS = new Set(['o', 'a', 'e', 'de', 'do', 'da', 'no', 'na', 'que', 'se', 'te', 'me', 'um', 'uma', 'os', 'as', 'pra', 'pro', 'ao', 'aos', 'eu', 'voce', 'tu', 'ele', 'ela', 'nos', 'vos', 'eles', 'elas']);
 
-        // Advanced Phonetic Matching using scoreWords logic
-        let bestScore = 0;
-        let bestIdx = -1;
+        const getMeaningfulWords = (phrase) => phrase.split(' ').filter(w => w.length >= 2 && !STOP_WORDS.has(w));
+        const transWords = getMeaningfulWords(normTranscript).slice(-10);
+        if (transWords.length < 1) return;
 
-        for (let i = actualStartSearch; i < actualEndSearch; i++) {
-            const score = PhoneticMatcher.score(text, lines[i]);
-            if (score > bestScore) {
-                bestScore = score;
-                bestIdx = i;
+        const currentIdx = currentLineIndexRef.current;
+        let targetIndex = -1;
+        const now = Date.now();
+
+        // 1. UNIQUE DIFF-BASED SCORING SETUP
+        // We identify the words in the CURRENT line. To advance to a new line, we look for matches 
+        // that are UNIQUE to the new line (meaning the singer has actually moved on to new lyrics).
+        const currentLineStr = currentIdx < lines.length && lines[currentIdx] ? lines[currentIdx] : "";
+        const currentLineWords = new Set(getMeaningfulWords(PhoneticMatcher.normalize(currentLineStr)));
+
+        // Scoring helper returns total matches AND unique matches (words not in current line)
+        const scoreLine = (idx) => {
+            const line = lines[idx];
+            if (!line || !line.trim() || isChordOnlyLine(line) || isTablatureLine(line)) return { score: 0, unique: 0 };
+            const lw = getMeaningfulWords(PhoneticMatcher.normalize(line));
+            if (lw.length === 0) return { score: 0, unique: 0 };
+
+            const matchedWords = new Set();
+            for (const tw of transWords) {
+                if (lw.includes(tw)) matchedWords.add(tw);
+            }
+
+            let uniqueCount = 0;
+            for (const word of matchedWords) {
+                if (!currentLineWords.has(word)) uniqueCount++;
+            }
+
+            return { score: matchedWords.size, unique: uniqueCount };
+        };
+
+        // 2. TIER 1 & 2: FAST SEQUENTIAL ADVANCE (DIFF-BASED)
+        const timeSinceAnchor = now - lastMatchTimeRef.current;
+        for (let offset = 1; offset <= 4; offset++) {
+            const testIdx = currentIdx + offset;
+            if (testIdx < lines.length) {
+                const { score, unique } = scoreLine(testIdx);
+
+                // MAIN RULE: Jump instantly if we matched a word that belongs to the target line 
+                // but DOES NOT belong to the current line (unique >= 1).
+                // We only need 1 unique word to prove they've advanced, regardless of distance (1-4).
+                if (score >= 1 && unique >= 1) {
+                    targetIndex = testIdx;
+                    lastMatchTimeRef.current = now;
+                    break;
+                }
+
+                // FALLBACK RULE: If the target line is EXACTLY the same words as the current line 
+                // (so unique is always 0), prevent cascade by forcing a 3-second wait before advancing.
+                // In this case, we need at least 1 word to match (score >= 1).
+                if (unique === 0 && score >= 1 && timeSinceAnchor > 3000) {
+                    targetIndex = testIdx;
+                    lastMatchTimeRef.current = now;
+                    break;
+                }
             }
         }
 
-        // Threshold and anchor update
-        if (bestIdx !== -1 && bestScore >= 0.38) {
-            foundIndex = bestIdx;
+        // If we didn't advance, check if we are still singing the CURRENT line
+        if (targetIndex === -1 && scoreLine(currentIdx).score >= 1) {
+            targetIndex = currentIdx;
+            lastMatchTimeRef.current = now;
         }
 
-        // Try redirection (Chorus/Start) if nothing strong found in window
-        if (foundIndex === -1 && isAnchored) {
-            const sections = CifraParser.parseSections(currentContent);
-            const chorusStart = CifraParser.getChorusStartLine(sections);
-            const introStart = CifraParser.getStartLine(currentContent);
-
-            const checkJumps = [chorusStart, introStart].filter(v => v !== null && v !== undefined);
-
-            for (const jumpPos of checkJumps) {
-                for (let i = jumpPos; i < Math.min(lines.length, jumpPos + 8); i++) {
-                    const score = PhoneticMatcher.score(text, lines[i]);
-                    if (score > 0.5) { // Be stricter on global jumps
-                        foundIndex = i;
-                        driftHistoryRef.current = [];
+        // 3. TIER 2: EXTENDED LOOKAHEAD
+        if (targetIndex === -1) {
+            for (let offset = 5; offset <= 12; offset++) {
+                const testIdx = currentIdx + offset;
+                if (testIdx < lines.length) {
+                    const { score, unique } = scoreLine(testIdx);
+                    // To jump very far, we need a SOLID match (3 words) and at least 2 must be UNIQUE
+                    if (score >= 3 && unique >= 2) {
+                        targetIndex = testIdx;
+                        lastMatchTimeRef.current = now;
                         break;
                     }
                 }
-                if (foundIndex !== -1) break;
             }
         }
 
-        if (foundIndex !== -1) {
-            // "Strict Forward" safety: if we are anchored and the match is far BEHIND (not a redirection), ignore
-            if (isAnchored && !checkRedirection && foundIndex < start - 2) {
-                return;
+        // 4. TIER 3: AUTO-RESTART (End to Beginning)
+        if (targetIndex === -1 && currentIdx > lines.length - 10) {
+            for (let i = 0; i < 10; i++) {
+                if (scoreLine(i).score >= 2) {
+                    targetIndex = i;
+                    lastMatchTimeRef.current = now;
+                    break;
+                }
             }
+        }
 
-            lastVoiceMatchedIndexRef.current = foundIndex;
-
-            // Start rhythm only after first match
-            if (!isAnchored) {
-                setIsAnchored(true);
-                setIsWaitingForVoice(false);
-                startRhythmicTimer();
-            } else if (isWaitingForVoice) {
-                setIsWaitingForVoice(false);
-                if (isRhythmicMode) startRhythmicTimer();
+        // 5. TIER 4: GLOBAL RESCUE (Locked by time)
+        if (targetIndex === -1 && timeSinceAnchor > 4000 && transWords.length >= 3) {
+            for (let i = currentIdx + 11; i < lines.length; i++) {
+                if (scoreLine(i).score >= 3) { targetIndex = i; break; }
             }
+            if (targetIndex === -1) {
+                for (let i = 0; i < currentIdx; i++) {
+                    if (scoreLine(i).score >= 3) { targetIndex = i; break; }
+                }
+            }
+            if (targetIndex !== -1) {
+                lastMatchTimeRef.current = now;
+            }
+        }
 
-            // Rhythm smoothing (Adjust BPM based on voice drift)
-            if (isRhythmicMode && isAnchored) {
-                const diff = foundIndex - currentLineIndexRef.current;
-                const now = Date.now();
-                driftHistoryRef.current.push(diff);
-                if (driftHistoryRef.current.length > 5) driftHistoryRef.current.shift();
+        if (targetIndex !== -1 && targetIndex !== currentIdx) {
+            const now = Date.now();
+            const diff = targetIndex - currentIdx;
+            driftHistoryRef.current.push(diff);
+            if (driftHistoryRef.current.length > 5) driftHistoryRef.current.shift();
 
-                const timeSinceLastAdjust = now - lastBpmAdjustTimeRef.current;
-                const averageDrift = driftHistoryRef.current.reduce((a, b) => a + b, 0) / driftHistoryRef.current.length;
-
-                if (timeSinceLastAdjust > 2500) {
-                    if (averageDrift < -0.3) {
-                        setBpm(prev => Math.max(40, prev - 1));
-                        lastBpmAdjustTimeRef.current = now;
-                    } else if (averageDrift > 0.8) {
-                        setBpm(prev => Math.min(220, prev + 1));
-                        lastBpmAdjustTimeRef.current = now;
-                    }
+            // Rhythm smoothing (Matched with VideokePlayer)
+            const timeSinceLastAdjust = now - (lastBpmAdjustTimeRef.current || 0);
+            if (timeSinceLastAdjust > 2500) {
+                const averageDrift = driftHistoryRef.current.reduce((a, b) => a + b, 0) / (driftHistoryRef.current.length || 1);
+                if (averageDrift < -0.3) {
+                    setBpm(prev => Math.max(40, prev - 1));
+                    lastBpmAdjustTimeRef.current = now;
+                } else if (averageDrift > 0.8) {
+                    setBpm(prev => Math.min(220, prev + 1));
+                    lastBpmAdjustTimeRef.current = now;
                 }
             }
 
-            updateCurrentLine(foundIndex);
+            if (isWaitingForVoice) {
+                setIsWaitingForVoice(false);
+                setIsAnchored(true);
+                startRhythmicTimer();
+            }
+
+            // Apply Jump with cooling down
+            if (now - (lastJumpRef.current || 0) > 1200) {
+                updateCurrentLine(targetIndex);
+                lastVoiceMatchedIndexRef.current = targetIndex;
+                lastJumpRef.current = now;
+            }
         }
     };
 
@@ -1818,7 +2035,7 @@ export default function App() {
                     </div>
                 </div>
 
-                {(isFullScreenPlayer || activeTab === 'player') ? (
+                {(isFullScreenPlayer || activeTab === 'player' || mainNav === 'player') ? (
                     <div className="fixed inset-0 bg-[#070709] z-[100] flex flex-col animate-in fade-in zoom-in-95 duration-500">
                         {/* PLAYER HEADER UNIFICADO */}
                         <div className="bg-black/40 border-b border-white/5 flex flex-col justify-center px-8 py-3 backdrop-blur-xl shrink-0 no-print gap-3 w-full max-w-full overflow-x-auto scrollbar-none z-50">
@@ -1882,6 +2099,17 @@ export default function App() {
                                         <button onClick={() => setIsAutoScrolling(!isAutoScrolling)} className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${isAutoScrolling ? 'bg-[#B87333] text-white shadow-lg shadow-[#B87333]/30 scale-105' : 'bg-white/5 text-slate-500 hover:text-white'}`}>
                                             {isAutoScrolling ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
                                         </button>
+                                        <button
+                                            onClick={() => {
+                                                setCurrentLineIndex(0);
+                                                currentLineIndexRef.current = 0;
+                                                if (scrollContainerRef.current) scrollContainerRef.current.scrollTop = 0;
+                                            }}
+                                            className="w-10 h-10 rounded-xl flex items-center justify-center transition-all bg-white/5 text-slate-500 hover:text-white hover:bg-white/10"
+                                            title="Reiniciar Música"
+                                        >
+                                            <RotateCcw className="w-4 h-4" />
+                                        </button>
                                         <div className="w-24 pr-2">
                                             <div className="flex items-center justify-between mb-1">
                                                 <span className="text-[8px] font-black text-slate-600 uppercase tracking-widest leading-none">Scrolloff</span>
@@ -1889,41 +2117,53 @@ export default function App() {
                                             </div>
                                             <input type="range" min="0.5" max="5" step="0.5" value={scrollSpeed} onChange={(e) => setScrollSpeed(parseFloat(e.target.value))} className="w-full h-1 bg-white/5 rounded-full appearance-none cursor-pointer accent-[#B87333]" />
                                         </div>
-                                    </div>
-                                    <div className="flex items-center space-x-4 bg-black/20 p-2 rounded-2xl border border-white/5">
-                                        <div className="flex items-center space-x-3">
-                                            <button onClick={() => setMicEnabled(!micEnabled)} className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all border ${micEnabled ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-900/40 animate-pulse' : 'bg-white/5 border-white/10 text-slate-600 hover:text-slate-400'}`}>
-                                                <Mic className="w-4 h-4" />
-                                            </button>
-                                            {micEnabled && (
-                                                <div className="flex flex-col justify-center w-16">
-                                                    <span className="text-[7px] font-black text-blue-400 uppercase tracking-widest mb-1">Ganho {micGain}x</span>
-                                                    <input type="range" min="1" max="5" step="0.5" value={micGain} onChange={(e) => setMicGain(parseFloat(e.target.value))} className="w-full h-1 bg-white/10 rounded-full appearance-none accent-blue-500" />
+                                        <div className="flex flex-col items-center ml-2 border-l border-white/5 pl-4 shrink-0 relative">
+                                            {/* Live Transcript Bubble */}
+                                            {micEnabled && isDynamicSpeedActive && transcriptRaw && (
+                                                <div className="absolute bottom-[calc(100%+8px)] left-1/2 -translate-x-1/2 z-50 pointer-events-none">
+                                                    <div className="bg-blue-600/90 backdrop-blur-md text-white px-3 py-1.5 rounded-2xl shadow-xl shadow-blue-500/20 border border-blue-400/30 whitespace-nowrap flex items-center space-x-2 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                                                        <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></div>
+                                                        <span className="text-[10px] font-bold uppercase tracking-tight antialiased">
+                                                            {transcriptRaw.length > 30 ? '...' + transcriptRaw.slice(-30) : transcriptRaw}
+                                                        </span>
+                                                    </div>
+                                                    <div className="w-2 h-2 bg-blue-600/90 rotate-45 absolute -bottom-1 left-1/2 -translate-x-1/2 border-r border-b border-blue-400/30"></div>
                                                 </div>
                                             )}
-                                        </div>
-                                        <div className="h-6 w-px bg-white/10"></div>
-                                        <div className="flex flex-col justify-center items-center px-2 w-20">
-                                            <button onClick={() => setIsRhythmicMode(!isRhythmicMode)} className={`w-full py-1.5 rounded-lg border text-[9px] font-black uppercase transition-all italic tracking-widest ${isRhythmicMode ? 'bg-green-600/80 border-green-600 text-white shadow-lg' : 'bg-white/5 border-white/10 text-slate-400'}`}>
-                                                {isRhythmicMode ? 'Autosync' : 'Manual'}
-                                            </button>
-                                            {micEnabled && isRhythmicMode && (
-                                                <span className="text-[7px] font-black uppercase mt-1 italic tracking-tighter leading-none" style={{ color: getManualStatusInfo().color }}>{getManualStatusInfo().label}</span>
-                                            )}
+
+                                            <span className="text-[7px] font-black text-slate-600 uppercase mb-1">IA Sync</span>
+                                            <div className="flex items-center space-x-2">
+                                                <button
+                                                    onClick={() => {
+                                                        const newState = !isDynamicSpeedActive;
+                                                        setIsDynamicSpeedActive(newState);
+                                                        if (newState && !micEnabled) setMicEnabled(true);
+                                                    }}
+                                                    className={`p-2 rounded-lg transition-all border ${isDynamicSpeedActive ? 'bg-blue-600 border-blue-600 text-white animate-pulse' : 'bg-white/5 border-white/10 text-slate-600'}`}
+                                                    title="Velocidade Adaptativa (Sincroniza com sua voz)"
+                                                >
+                                                    <Zap className="w-3 h-3" />
+                                                </button>
+                                                {micEnabled && isDynamicSpeedActive && (
+                                                    <div className="flex items-end space-x-0.5 h-3 w-4">
+                                                        <div className="w-1 bg-blue-500/40 rounded-full transition-all duration-75" style={{ height: `${Math.min(100, micLevel * 2)}%` }}></div>
+                                                        <div className="w-1 bg-blue-500/60 rounded-full transition-all duration-75" style={{ height: `${Math.min(100, micLevel * 3)}%` }}></div>
+                                                        <div className="w-1 bg-blue-500 rounded-full transition-all duration-75" style={{ height: `${Math.min(100, micLevel * 4)}%` }}></div>
+                                                    </div>
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
-                                    <div className="flex items-center space-x-3 bg-black/20 p-2 rounded-2xl border border-white/5">
-                                        <div className={`w-10 h-10 rounded-xl bg-black/40 border flex items-center justify-center transition-all duration-500 ${isBpmSyncing ? 'border-yellow-500 shadow-[0_0_15px_rgba(234,179,8,0.2)]' : 'border-[#B87333]/20 shadow-none'}`}>
-                                            <Zap className={`w-4 h-4 ${isBpmSyncing ? 'text-yellow-500 animate-bounce' : 'text-[#B87333] opacity-40'}`} />
-                                        </div>
-                                        <div className="flex flex-col items-center justify-center">
-                                            <p className="text-lg font-black text-white italic leading-none">{bpm}</p>
-                                            <p className="text-[7px] font-bold text-slate-500 uppercase tracking-widest italic mt-0.5">BPM</p>
-                                        </div>
-                                        <div className="flex flex-col space-y-0.5 ml-1">
-                                            <button onClick={() => setBpm(b => b + 1)} className="p-0.5 hover:text-[#B87333] transition-all"><ChevronUp className="w-3 h-3" /></button>
-                                            <button onClick={() => setBpm(b => b - 1)} className="p-0.5 hover:text-[#B87333] transition-all"><ChevronDown className="w-3 h-3" /></button>
-                                        </div>
+                                    {/* Videoke (Sync Mode) */}
+                                    <div className="flex items-center space-x-4 bg-black/20 p-2 rounded-2xl border border-white/5">
+                                        <button
+                                            onClick={() => setIsVideokeOpen(true)}
+                                            className="flex items-center space-x-2 px-4 py-2 bg-[#B87333]/10 hover:bg-[#B87333] border border-[#B87333]/30 text-[#B87333] hover:text-white rounded-xl transition-all font-black uppercase text-[10px] tracking-widest group"
+                                            title="Abrir Modo Videokê com IA de Sincronia"
+                                        >
+                                            <Tv className="w-4 h-4 group-hover:scale-110 transition-transform" />
+                                            <span>Videokê IA</span>
+                                        </button>
                                     </div>
                                 </div>
 
@@ -2034,8 +2274,23 @@ export default function App() {
                                             const effectivelyIncludeTabs = currentSong?.include_tabs ?? includeTabs;
                                             if (!effectivelyIncludeTabs && (isTabLine || isGuitarNote || isRhythmArrow)) return null;
 
-                                            const isActive = currentLineIndex === lIdx;
-                                            const isPast = lIdx < currentLineIndex;
+                                            // Smart highlight:
+                                            // - A lyric line is active when currentLineIndex points to it
+                                            // - The chord line directly above an active lyric is also active (paired)
+                                            // - Purely instrumental chord-only sections are NEVER active
+                                            const allLines = (currentSong?.content || '').split('\n');
+                                            const isLyricActive = !isChordLine && currentLineIndex === lIdx;
+                                            const isPairedChordActive = isChordLine && (() => {
+                                                // Check if there's a lyric right below this chord that is the active line
+                                                let j = lIdx + 1;
+                                                while (j < allLines.length && (!allLines[j].trim() || isTablatureLine(allLines[j]))) j++;
+                                                const nextIsLyric = j < allLines.length && !isChordOnlyLine(allLines[j]);
+                                                return nextIsLyric && currentLineIndex === j;
+                                            })();
+                                            const isActive = isLyricActive || isPairedChordActive;
+
+                                            // Past: only lyric lines count for the "past" fade
+                                            const isPast = !isChordLine && lIdx < currentLineIndex;
 
                                             return (
                                                 <div
@@ -2043,7 +2298,7 @@ export default function App() {
                                                     data-line-index={lIdx}
                                                     onClick={() => handleLineClick(lIdx)}
                                                     className={`py-1 px-4 rounded-xl cursor-pointer transition-all duration-500 flex items-center group relative
-                                                        ${isActive ? 'bg-[#B87333]/25 scale-[1.02] z-10' : 'hover:bg-white/5'}
+                                                        ${isActive ? 'bg-[#B87333]/30 scale-[1.08] z-10 shadow-[0_10px_30px_rgba(0,0,0,0.5)] ring-1 ring-white/10' : 'hover:bg-white/5'}
                                                         ${isPast ? 'opacity-40 grayscale-[0.5]' : 'opacity-100'}
                                                     `}
                                                     style={{ fontSize: `${playerFontSize}px` }}
@@ -2062,30 +2317,17 @@ export default function App() {
                                     </div>
                                 </div>
 
-                                {/* NEXT LINE PREVIEW OVERLAY */}
-                                {currentLineIndex < (currentSong?.content || "").split('\n').length - 1 && (
-                                    <div className="absolute bottom-32 left-1/2 -translate-x-1/2 w-full max-w-2xl px-8 animate-in slide-in-from-bottom-4 duration-500 pointer-events-none">
-                                        <div className="bg-black/60 backdrop-blur-xl border border-white/10 p-4 rounded-2xl shadow-2xl flex items-center space-x-4">
-                                            <div className="flex flex-col">
-                                                <span className="text-[8px] font-black text-[#B87333] uppercase tracking-[0.3em] mb-1">Próxima Linha</span>
-                                                <p className="text-xs font-bold text-slate-300 truncate italic">
-                                                    {(() => {
-                                                        const lines = (currentSong.content || "").split('\n');
-                                                        let nextIdx = currentLineIndex + 1;
-                                                        while (nextIdx < lines.length && (!lines[nextIdx].trim() || !!(lines[nextIdx].match(CHORD_TOKEN_RE) || []).length)) {
-                                                            nextIdx++;
-                                                        }
-                                                        return lines[nextIdx] || "Fim da música";
-                                                    })()}
-                                                </p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
-
-
                             </div>
                         </div>
+
+                        {/* Videokeê Player overlay for the list player */}
+                        {isVideokeOpen && currentSong && (
+                            <VideokePlayer
+                                song={currentSong}
+                                includeTabs={currentSong?.include_tabs ?? includeTabs}
+                                onClose={() => setIsVideokeOpen(false)}
+                            />
+                        )}
                     </div>
                 ) : activeTab === 'presentation' ? (
                     <div className="fixed inset-0 bg-black z-[200] flex flex-col cursor-none">
@@ -3400,194 +3642,7 @@ export default function App() {
                                 );
                             })()}
 
-                            {/* ABA 3: PLAYER DA FORJA */}
-                            {mainNav === 'player' && (
-                                <div className="flex-1 flex flex-col min-h-0 animate-in fade-in slide-in-from-right-8 duration-700 h-[calc(100vh-140px)]">
-                                    {songs.length === 0 ? (
-                                        <div className="bg-[#16161D]/80 backdrop-blur-xl border border-white/5 rounded-[40px] p-12 shadow-2xl flex flex-col items-center justify-center text-center h-full">
-                                            <div className="w-24 h-24 bg-[#B87333]/10 rounded-[32px] flex items-center justify-center mb-8 border border-[#B87333]/20 shadow-2xl shadow-[#B87333]/5 mx-auto transition-transform hover:scale-110">
-                                                <Monitor className="w-10 h-10 text-[#B87333]" />
-                                            </div>
-                                            <h3 className="text-xl font-black text-white uppercase tracking-widest mb-4">Player da Forja</h3>
-                                            <p className="text-sm text-slate-400 font-medium leading-relaxed mb-8 max-w-sm mx-auto">Vá em 'Escolha de Peças' ou em 'Listas' para carregar músicas para tocar.</p>
-                                        </div>
-                                    ) : (
-                                        <div className="flex-1 flex overflow-hidden bg-[#16161D]/60 backdrop-blur-xl border border-white/5 rounded-[40px] shadow-2xl">
-                                            {/* PLAYER LYRICS/CHORDS AREA */}
-                                            <div className="flex-1 relative flex flex-col bg-[url('https://www.transparenttextures.com/patterns/black-paper.png')] overflow-hidden">
-                                                {/* INTEGRATED CONTROLS BAR (Top) */}
-                                                <div className="h-16 bg-black/40 border-b border-white/5 flex items-center justify-between px-6 backdrop-blur-xl shrink-0">
-                                                    <div className="flex-1 min-w-0 mr-4">
-                                                        <h2 className="text-sm font-black text-white uppercase italic tracking-tighter truncate leading-none">{currentSong?.song_name}</h2>
-                                                        <p className="text-[9px] font-bold text-[#B87333] uppercase tracking-widest mt-0.5 opacity-60 italic">{currentSong?.artist_name}</p>
-                                                    </div>
-                                                    <div className="flex items-center space-x-3">
-                                                        <div className="flex items-center space-x-1 bg-black/20 p-1 rounded-lg border border-white/5">
-                                                            <button onClick={() => setPlayerFontSize(prev => Math.max(12, prev - 1))} className="p-1.5 text-slate-500 hover:text-white transition-all"><Minus className="w-3.5 h-3.5" /></button>
-                                                            <span className="text-[10px] font-black text-white w-6 text-center">{playerFontSize}</span>
-                                                            <button onClick={() => setPlayerFontSize(prev => Math.min(45, prev + 1))} className="p-1.5 text-slate-500 hover:text-white transition-all"><Plus className="w-3.5 h-3.5" /></button>
-                                                        </div>
-                                                        <button
-                                                            onClick={() => setIncludeTabs(!includeTabs)}
-                                                            className={`p-2 rounded-lg transition-all border ${includeTabs ? 'bg-[#B87333]/20 border-[#B87333] text-[#B87333]' : 'bg-black/40 border-white/5 text-slate-600'}`}
-                                                            title="Tabs"
-                                                        >
-                                                            <FileText className="w-4 h-4" />
-                                                        </button>
-                                                        <button onClick={handlePrint} className="p-2 bg-white/5 hover:bg-white/10 rounded-lg border border-white/5 text-slate-400 hover:text-white"><Printer className="w-4 h-4" /></button>
-                                                    </div>
-                                                </div>
 
-                                                <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-12 scroll-smooth scrollbar-none pb-[300px]">
-                                                    <div className="max-w-3xl mx-auto space-y-1">
-                                                        {(currentSong?.content || "").split('\n').map((line, lIdx) => {
-                                                            const trimmed = line.trim();
-                                                            const isChordLine = !!(line && trimmed.length > 0 && (line.match(CHORD_TOKEN_RE) || []).length > 0 && line.replace(CHORD_TOKEN_RE, '').replace(/[\s|()\-xX0-9:]/g, '').length < Math.max(2, trimmed.length * 0.25));
-                                                            const isTabLine = line.includes('|-') || line.includes('-|') || /^[eBGDAE]\|/.test(trimmed);
-                                                            const isGuitarNote = /guitarra|dedilhado|batida|solo|riff|ritmo|frase|passagem/i.test(line) && (line.includes('(') || line.includes('['));
-                                                            const isRhythmArrow = line.includes('↓') || line.includes('↑');
-
-                                                            const effectivelyIncludeTabs = currentSong?.include_tabs ?? includeTabs;
-                                                            if (!effectivelyIncludeTabs && (isTabLine || isGuitarNote || isRhythmArrow)) return null;
-
-                                                            const isActive = currentLineIndex === lIdx;
-                                                            const isPast = lIdx < currentLineIndex;
-
-                                                            return (
-                                                                <div
-                                                                    key={lIdx}
-                                                                    data-line-index={lIdx}
-                                                                    onClick={() => handleLineClick(lIdx)}
-                                                                    className={`py-1 px-4 rounded-xl cursor-pointer transition-all duration-500 flex items-center group relative
-                                                                        ${isActive ? 'bg-[#B87333]/25 scale-[1.01] z-10' : 'hover:bg-white/5'}
-                                                                        ${isPast ? 'opacity-40 grayscale-[0.5]' : 'opacity-100'}
-                                                                    `}
-                                                                    style={{ fontSize: `${playerFontSize}px` }}
-                                                                >
-                                                                    {isActive && <div className="absolute left-0 w-1.5 h-full bg-[#B87333] rounded-full shadow-[0_0_15px_rgba(184,115,51,0.6)] animate-pulse"></div>}
-                                                                    <pre className={`font-mono leading-relaxed whitespace-pre-wrap transition-colors duration-500
-                                                                        ${isActive ? 'text-white font-black' : isChordLine ? 'text-[#B87333] font-bold italic opacity-80' : 'text-slate-400 font-medium'}
-                                                                    `}>
-                                                                        {isChordLine
-                                                                            ? renderChordLine(line, (chord, anchor, isPersistent) => setChordTooltip({ chord, anchor, isPersistent }))
-                                                                            : (line || ' ')}
-                                                                    </pre>
-                                                                </div>
-                                                            );
-                                                        })}
-                                                    </div>
-                                                </div>
-
-                                                {/* INTEGRATED CONTROLS BAR (Floating/Draggable) */}
-                                                <div
-                                                    ref={playerControlsRef}
-                                                    onMouseDown={handlePlayerDragStart}
-                                                    onTouchStart={handlePlayerDragStart}
-                                                    style={{
-                                                        left: playerPos.x !== null ? `${playerPos.x}px` : '50%',
-                                                        top: playerPos.y !== null ? `${playerPos.y}px` : 'auto',
-                                                        bottom: playerPos.y === null ? '40px' : 'auto',
-                                                        transform: playerPos.x === null ? 'translateX(-50%)' : 'none',
-                                                        cursor: isDraggingPlayer ? 'grabbing' : 'auto',
-                                                        transition: isDraggingPlayer ? 'none' : 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
-                                                    }}
-                                                    className={`absolute bg-[#1A1A1A]/95 backdrop-blur-3xl border border-white/10 p-4 rounded-[32px] shadow-[0_20px_60px_rgba(0,0,0,0.8)] flex items-center z-[110] touch-none ${isPlayerMinimized ? 'w-auto' : 'space-x-6 px-6'}`}
-                                                >
-                                                    {/* Drag Handle */}
-                                                    <div className="cursor-grab active:cursor-grabbing p-2 text-slate-600 hover:text-slate-400 transition-colors">
-                                                        <GripVertical className="w-5 h-5" />
-                                                    </div>
-
-                                                    {!isPlayerMinimized ? (
-                                                        <>
-                                                            <div className="flex items-center space-x-6">
-                                                                <button onClick={() => setIsAutoScrolling(!isAutoScrolling)} className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${isAutoScrolling ? 'bg-[#B87333] text-white shadow-lg scale-105' : 'bg-white/5 text-slate-500 hover:text-white'}`}>
-                                                                    {isAutoScrolling ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 ml-0.5" />}
-                                                                </button>
-                                                                <div className="w-24">
-                                                                    <div className="flex items-center justify-between mb-1">
-                                                                        <span className="text-[8px] font-black text-slate-600 uppercase tracking-widest">Scroll</span>
-                                                                        <span className="text-[9px] font-black text-white italic">{scrollSpeed}x</span>
-                                                                    </div>
-                                                                    <input type="range" min="0.5" max="5" step="0.5" value={scrollSpeed} onChange={(e) => setScrollSpeed(parseFloat(e.target.value))} className="w-full h-1 bg-white/5 rounded-full appearance-none cursor-pointer accent-[#B87333]" />
-                                                                </div>
-                                                            </div>
-                                                            <div className="h-8 w-px bg-white/10"></div>
-                                                            <div className="flex items-center space-x-4">
-                                                                <div className="flex flex-col items-center">
-                                                                    <div className="flex flex-col items-center space-y-1">
-                                                                        <button onClick={() => setMicEnabled(!micEnabled)} className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all border ${micEnabled ? 'bg-blue-600 border-blue-600 text-white animate-pulse' : 'bg-white/5 border-white/10 text-slate-600'}`}>
-                                                                            <Mic className="w-4 h-4" />
-                                                                        </button>
-                                                                        {micEnabled && (
-                                                                            <div className="flex items-center space-x-1 px-1">
-                                                                                <input
-                                                                                    type="range" min="1" max="5" step="1"
-                                                                                    value={micGain}
-                                                                                    onChange={(e) => setMicGain(parseFloat(e.target.value))}
-                                                                                    className="w-8 h-0.5 bg-white/10 rounded-full appearance-none accent-blue-500"
-                                                                                />
-                                                                            </div>
-                                                                        )}
-                                                                    </div>
-                                                                </div>
-                                                                <div className="flex flex-col items-center">
-                                                                    <button onClick={() => setIsRhythmicMode(!isRhythmicMode)} className={`px-4 py-2 rounded-full border text-[8px] font-black uppercase transition-all italic tracking-widest ${isRhythmicMode ? 'bg-green-600/80 border-green-600 text-white shadow-lg' : 'bg-white/5 border-white/10 text-slate-700'}`}>
-                                                                        {isRhythmicMode ? 'Autosync' : 'Manual'}
-                                                                    </button>
-                                                                    {micEnabled && isRhythmicMode && (
-                                                                        <span className="text-[7px] font-black uppercase mt-1" style={{ color: getManualStatusInfo().color }}>
-                                                                            {getManualStatusInfo().label}
-                                                                        </span>
-                                                                    )}
-                                                                </div>
-                                                            </div>
-                                                            <div className="h-8 w-px bg-white/10"></div>
-                                                            <button onClick={() => setIsPlayerMinimized(true)} className="p-3 text-slate-500 hover:text-white hover:bg-white/5 rounded-xl transition-all" title="Encolher">
-                                                                <Minimize2 className="w-4 h-4" />
-                                                            </button>
-                                                        </>
-                                                    ) : (
-                                                        <div className="flex items-center space-x-3">
-                                                            <button onClick={() => setIsAutoScrolling(!isAutoScrolling)} className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${isAutoScrolling ? 'bg-[#B87333] text-white shadow-lg' : 'bg-white/5 text-slate-500'}`}>
-                                                                {isAutoScrolling ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
-                                                            </button>
-                                                            <button onClick={() => setIsPlayerMinimized(false)} className="p-2.5 text-[#B87333] hover:text-white hover:bg-[#B87333]/20 rounded-xl transition-all" title="Expandir">
-                                                                <Maximize2 className="w-4 h-4" />
-                                                            </button>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
-
-                                            {/* PLAYER PLAYLIST SIDEBAR (Right) */}
-                                            <div className="w-72 bg-black/40 border-l border-white/5 flex flex-col p-6 space-y-4 shrink-0 overflow-hidden">
-                                                <div className="flex items-center space-x-3 mb-2">
-                                                    <LayoutList className="w-4 h-4 text-[#B87333]" />
-                                                    <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Sua Lista</h3>
-                                                </div>
-                                                <div className="flex-1 overflow-y-auto space-y-2 pr-2 scrollbar-thin scrollbar-thumb-[#B87333]/20">
-                                                    {songs.map((s, idx) => (
-                                                        <button key={idx} onClick={() => { setSelectedManualIndex(idx); setCurrentLineIndex(0); currentLineIndexRef.current = 0; }} className={`w-full p-4 rounded-2xl border transition-all text-left flex items-center space-x-3 group relative overflow-hidden ${selectedManualIndex === idx ? 'bg-[#B87333] border-[#B87333] shadow-lg shadow-[#B87333]/20' : 'bg-white/5 border-white/5 hover:border-[#B87333]/30'}`}>
-                                                            <div className={`w-6 h-6 rounded-lg flex items-center justify-center font-black text-[10px] shrink-0 transition-all ${selectedManualIndex === idx ? 'bg-white text-[#B87333]' : 'bg-black/40 text-slate-700 group-hover:text-white'}`}>{idx + 1}</div>
-                                                            <div className="flex-1 min-w-0">
-                                                                <p className={`text-[10px] font-black uppercase italic truncate tracking-tight transition-colors ${selectedManualIndex === idx ? 'text-white' : 'text-slate-400 group-hover:text-slate-200'}`}>{s.song_name}</p>
-                                                                <p className={`text-[8px] font-bold uppercase truncate transition-colors ${selectedManualIndex === idx ? 'text-white/60' : 'text-slate-600'}`}>{s.artist_name}</p>
-                                                            </div>
-                                                        </button>
-                                                    ))}
-                                                </div>
-                                                <div className="pt-4 border-t border-white/5">
-                                                    <button onClick={() => setIsFullScreenPlayer(true)} className="w-full py-3 bg-blue-600/10 hover:bg-blue-600 border border-blue-600/20 text-blue-500 hover:text-white rounded-xl transition-all text-[9px] font-black uppercase tracking-[0.2em] flex items-center justify-center space-x-2 shadow-lg shadow-blue-900/10">
-                                                        <Maximize2 className="w-3.5 h-3.5" />
-                                                        <span>Tela Cheia</span>
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
 
 
                             {/* Export Livreto Modal */}
@@ -4261,4 +4316,3 @@ export default function App() {
         </div>
     );
 }
-

@@ -41,6 +41,8 @@ export class AudioTracker {
                     autoGainControl: false
                 }
             });
+            this.stream = stream;
+
             this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
             if (this.audioContext.state === 'suspended') {
                 await this.audioContext.resume();
@@ -53,10 +55,15 @@ export class AudioTracker {
             this.mediaStreamSource.connect(this.gainNode);
 
             this.analyser = this.audioContext.createAnalyser();
-            this.analyser.fftSize = 256; // Smaller for faster level updates
+            this.analyser.fftSize = 256;
             this.gainNode.connect(this.analyser);
 
-            await this.setupWebSocket();
+            // WebSocket is OPTIONAL — if it fails, mic + speech still work
+            try {
+                await this.setupWebSocket();
+            } catch (wsErr) {
+                console.warn("[AudioTracker] WebSocket unavailable (non-fatal):", wsErr.message || wsErr);
+            }
 
             try {
                 await this.audioContext.audioWorklet.addModule('/AlignmentWorklet.js');
@@ -173,9 +180,11 @@ export class AudioTracker {
         };
 
         this.recognition.onend = () => {
-            if (this.isMicActive && !this.recognition) {
-                // If it ended and we didn't manually null it, restart
-                setTimeout(() => this.startSpeechRecognition(), 500);
+            // The browser's Speech Recognition engine automatically stops after a while.
+            // If the user still has IA Sync ON (isMicActive), we MUST restart it instantly.
+            if (this.isMicActive) {
+                this.recognition = null; // Clear old instance
+                setTimeout(() => this.startSpeechRecognition(), 200);
             }
         };
 
@@ -264,9 +273,19 @@ export class AudioTracker {
             this.workletNode = null;
         }
 
+        if (this.mediaStreamSource) {
+            this.mediaStreamSource.disconnect();
+            this.mediaStreamSource = null;
+        }
+
         if (this.audioContext) {
             this.audioContext.close();
             this.audioContext = null;
+        }
+
+        if (this.stream) {
+            this.stream.getTracks().forEach(track => track.stop());
+            this.stream = null;
         }
     }
 }
