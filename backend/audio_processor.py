@@ -20,6 +20,11 @@ class IronChordsPlayer:
         self.vocal_energy_threshold = 0.002 # Baseline energy for voice
         self.instr_rms_threshold = 0.015 # Higher threshold to avoid false instr from noise
         
+        # Initialize attributes for lazy loading
+        self.model = None
+        self.get_speech_timestamps = None
+        self.read_audio = None
+
     def _load_vad(self):
         if hasattr(self, 'model') and self.model is not None:
             return
@@ -70,6 +75,7 @@ class IronChordsPlayer:
             return self._generate_response()
 
     def _detect_voice(self, audio_data):
+        self._load_vad() # Ensure model is loaded if possible
         if self.model is None:
             rms = np.sqrt(np.mean(audio_data**2))
             return float(rms) > self.vocal_energy_threshold, 0.0
