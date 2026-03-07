@@ -532,6 +532,12 @@ export default function App() {
     const [selectedAcervoItems, setSelectedAcervoItems] = useState([]);
     const [batchLinkLoading, setBatchLinkLoading] = useState(false);
 
+    // Lists Management State
+    const [listSearchTerm, setListSearchTerm] = useState('');
+    const [selectedLists, setSelectedLists] = useState([]);
+    const [editingList, setEditingList] = useState(null); // { id, name, songs }
+    const [editListName, setEditListName] = useState('');
+
     // Filter Suggestions State
     const [editingChord, setEditingChord] = useState(null);
     const [editFormData, setEditFormData] = useState({ song_name: '', artist_name: '', song_key: '', content: '', capo: 0, include_tabs: true });
@@ -648,6 +654,9 @@ export default function App() {
 
         setSaveListModalOpen(false);
         setSaveListName('');
+        setSavedPlaylists(JSON.parse(localStorage.getItem('iron_chords_playlists') || '[]'));
+        setShowSaveSuccess(true);
+        setTimeout(() => setShowSaveSuccess(false), 2000);
 
         if (conflictsFound.length > 0) {
             setConflictQueue(conflictsFound);
@@ -1247,9 +1256,15 @@ export default function App() {
             } catch (err) { alert(err); }
         } else if (deleteTarget.type === 'lista') {
             const existing = JSON.parse(localStorage.getItem('iron_chords_playlists') || '[]');
-            existing.splice(deleteTarget.id, 1);
-            localStorage.setItem('iron_chords_playlists', JSON.stringify(existing));
-            setSavedPlaylists(existing);
+            const updated = existing.filter((_, i) => i !== deleteTarget.id);
+            localStorage.setItem('iron_chords_playlists', JSON.stringify(updated));
+            setSavedPlaylists(updated);
+        } else if (deleteTarget.type === 'lista_multi') {
+            const existing = JSON.parse(localStorage.getItem('iron_chords_playlists') || '[]');
+            const updated = existing.filter(pl => !deleteTarget.id.includes(pl.id));
+            localStorage.setItem('iron_chords_playlists', JSON.stringify(updated));
+            setSavedPlaylists(updated);
+            setSelectedLists([]);
         }
         setDeleteModalOpen(false);
     };
@@ -2912,76 +2927,175 @@ export default function App() {
 
 
                             {/* ABA 2: LISTAS */}
-                            {mainNav === 'listas' && (
-                                <div className="flex-1 animate-in fade-in slide-in-from-right-8 duration-700">
-                                    <div className="bg-[#16161D]/80 backdrop-blur-xl border border-white/5 rounded-[40px] p-8 shadow-2xl min-h-[500px]">
-                                        <div className="flex items-center space-x-4 mb-10">
-                                            <div className="w-2 h-10 bg-[#B87333] rounded-full shadow-[0_0_15px_rgba(184,115,51,0.4)]"></div>
-                                            <h2 className="text-2xl font-black text-white uppercase italic tracking-tighter">Listas Salvas</h2>
+                            {mainNav === 'listas' && (() => {
+                                const allPlaylists = Array.isArray(savedPlaylists) ? savedPlaylists : JSON.parse(localStorage.getItem('iron_chords_playlists') || '[]');
+                                const filteredPlaylists = allPlaylists.filter(pl => pl.name.toLowerCase().includes(listSearchTerm.toLowerCase()));
+                                const allSelected = filteredPlaylists.length > 0 && filteredPlaylists.every(pl => selectedLists.includes(pl.id));
+                                return (
+                                    <div className="flex-1 animate-in fade-in slide-in-from-right-8 duration-700">
+                                        <div className="bg-[#16161D]/80 backdrop-blur-xl border border-white/5 rounded-[40px] p-8 shadow-2xl min-h-[500px]">
+                                            {/* Header */}
+                                            <div className="flex items-center justify-between mb-6">
+                                                <div className="flex items-center space-x-4">
+                                                    <div className="w-2 h-10 bg-[#B87333] rounded-full shadow-[0_0_15px_rgba(184,115,51,0.4)]"></div>
+                                                    <h2 className="text-2xl font-black text-white uppercase italic tracking-tighter">Listas Salvas</h2>
+                                                    <span className="text-[10px] font-black text-slate-600 bg-white/5 px-3 py-1 rounded-full border border-white/5">{allPlaylists.length}</span>
+                                                </div>
+                                                {selectedLists.length > 0 && (
+                                                    <button onClick={() => { setDeleteTarget({ type: 'lista_multi', id: selectedLists, name: `${selectedLists.length} lista(s)` }); setDeleteModalOpen(true); }} className="px-4 py-2 bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white border border-red-600/30 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center space-x-2">
+                                                        <Trash2 className="w-3.5 h-3.5" /><span>Excluir {selectedLists.length} Lista(s)</span>
+                                                    </button>
+                                                )}
+                                            </div>
+
+                                            {/* Search */}
+                                            <div className="relative mb-6">
+                                                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-600" />
+                                                <input type="text" placeholder="Buscar lista pelo nome..." value={listSearchTerm} onChange={e => setListSearchTerm(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-2xl pl-11 pr-4 py-3.5 text-sm font-bold text-white outline-none focus:border-[#B87333]/50 transition-all placeholder:text-slate-700" />
+                                            </div>
+
+                                            {/* Select All Bar */}
+                                            {filteredPlaylists.length > 0 && (
+                                                <div className="flex items-center space-x-3 mb-4 px-2">
+                                                    <label className="flex items-center space-x-2 cursor-pointer">
+                                                        <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${allSelected ? 'bg-[#B87333] border-[#B87333]' : 'border-white/20'}`} onClick={() => { if (allSelected) setSelectedLists([]); else setSelectedLists(filteredPlaylists.map(pl => pl.id)); }}>
+                                                            {allSelected && <Check className="w-3 h-3 text-white" />}
+                                                        </div>
+                                                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Selecionar Todas</span>
+                                                    </label>
+                                                </div>
+                                            )}
+
+                                            {filteredPlaylists.length === 0 ? (
+                                                <div className="py-20 flex col-span-3 items-center justify-center flex-col text-center border-2 border-dashed border-white/5 rounded-[40px] bg-black/20 w-full min-h-[300px]">
+                                                    <LayoutList className="w-16 h-16 text-slate-800 mx-auto mb-6 opacity-20" />
+                                                    <p className="text-xs font-black text-slate-600 uppercase tracking-[0.3em]">{listSearchTerm ? 'Nenhuma lista encontrada.' : 'Nenhuma lista salva ainda.'}</p>
+                                                </div>
+                                            ) : (
+                                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                                    {filteredPlaylists.map((pl, idx) => (
+                                                        <div key={pl.id || idx} className={`bg-black/40 border rounded-[32px] p-6 transition-all group flex flex-col h-[380px] ${selectedLists.includes(pl.id) ? 'border-[#B87333]/40 bg-[#B87333]/5' : 'border-white/5 hover:border-[#B87333]/30'}`}>
+                                                            <div className="flex items-start justify-between mb-4">
+                                                                {/* Checkbox */}
+                                                                <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 mt-1 cursor-pointer transition-all ${selectedLists.includes(pl.id) ? 'bg-[#B87333] border-[#B87333]' : 'border-white/20 hover:border-white/40'}`} onClick={() => setSelectedLists(prev => prev.includes(pl.id) ? prev.filter(id => id !== pl.id) : [...prev, pl.id])}>
+                                                                    {selectedLists.includes(pl.id) && <Check className="w-3 h-3 text-white" />}
+                                                                </div>
+                                                                <h3 className="text-lg font-black text-white uppercase italic tracking-tighter line-clamp-2 flex-1 mx-3">{pl.name}</h3>
+                                                                <div className="flex items-center space-x-1">
+                                                                    <button onClick={() => { setEditingList({ ...pl, songs: [...(pl.songs || [])] }); setEditListName(pl.name); }} className="p-2 bg-white/5 hover:bg-[#B87333]/20 text-slate-500 hover:text-[#B87333] rounded-lg transition-all border border-white/5" title="Editar Lista"><Edit3 className="w-3.5 h-3.5" /></button>
+                                                                    <button onClick={() => { setDeleteTarget({ type: 'lista', id: idx, name: pl.name }); setDeleteModalOpen(true); }} className="p-2 bg-white/5 hover:bg-red-600/20 text-slate-500 hover:text-red-500 rounded-lg transition-all border border-white/5" title="Excluir"><Trash2 className="w-3.5 h-3.5" /></button>
+                                                                </div>
+                                                            </div>
+                                                            <div className="mb-4">
+                                                                <span className="text-[10px] font-black bg-white/5 text-[#B87333] py-1 px-3 rounded-full border border-white/5 uppercase tracking-widest">{pl.songs?.length || 0} Peças</span>
+                                                            </div>
+                                                            <div className="flex-1 overflow-y-auto mb-4 pr-2 scrollbar-thin scrollbar-thumb-white/10 space-y-2 bg-[#1A1A1A] p-4 rounded-2xl border border-white/5">
+                                                                {(pl.songs || []).map((s, i) => (
+                                                                    <div key={i} className="flex flex-col border-b border-white/5 last:border-0 pb-2 last:pb-0">
+                                                                        <span className="text-xs text-slate-300 uppercase font-bold truncate tracking-tight">{i + 1}. {s.song_name}</span>
+                                                                        <span className="text-[9px] text-slate-500 uppercase tracking-widest">{s.artist_name}</span>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                            <div className="flex items-center justify-between mt-auto space-x-2 pt-4 border-t border-white/5">
+                                                                <button onClick={() => { setSongs(pl.songs || []); setMainNav('player'); setSelectedManualIndex(0); }} className="flex-1 bg-white/5 hover:bg-white/10 text-white border border-white/10 py-3 rounded-xl transition-all text-[10px] font-black uppercase tracking-widest flex justify-center items-center space-x-2">
+                                                                    <Play className="w-4 h-4" /><span>Tocar</span>
+                                                                </button>
+                                                                <button onClick={() => { setSongs(pl.songs || []); setCurrentExportList(pl); setExportStep(1); setDownloadUrl(null); setExportFormat('docx'); setCoverImage(null); setShowExportModal(true); }} className="flex-1 bg-[#B87333]/10 hover:bg-[#B87333] text-[#B87333] hover:text-white border border-[#B87333]/20 py-3 rounded-xl transition-all text-[10px] font-black uppercase tracking-widest flex justify-center items-center space-x-2">
+                                                                    <FileText className="w-4 h-4" /><span>Livreto</span>
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
                                         </div>
 
-                                        {Object.keys(savedPlaylists).length === 0 && JSON.parse(localStorage.getItem('iron_chords_playlists') || '[]').length === 0 ? (
-                                            <div className="py-20 flex col-span-3 items-center justify-center flex-col text-center border-2 border-dashed border-white/5 rounded-[40px] bg-black/20 w-full min-h-[300px]">
-                                                <LayoutList className="w-16 h-16 text-slate-800 mx-auto mb-6 opacity-20" />
-                                                <p className="text-xs font-black text-slate-600 uppercase tracking-[0.3em]">Nenhuma lista salva ainda.</p>
-                                            </div>
-                                        ) : (
-                                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                                {JSON.parse(localStorage.getItem('iron_chords_playlists') || '[]').map((pl, idx) => (
-                                                    <div key={idx} className="bg-black/40 border border-white/5 hover:border-[#B87333]/30 rounded-[32px] p-6 transition-all group flex flex-col h-[380px]">
-                                                        <div className="flex items-center justify-between mb-4">
-                                                            <h3 className="text-xl font-black text-white uppercase italic tracking-tighter line-clamp-2">{pl.name}</h3>
+                                        {/* Edit List Modal */}
+                                        {editingList && (
+                                            <div className="fixed inset-0 z-[250] flex items-center justify-center bg-[#070709]/90 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-300 p-4">
+                                                <div className="bg-[#16161D] border border-[#B87333]/30 rounded-[32px] shadow-[0_0_50px_rgba(0,0,0,0.8)] w-full max-w-4xl flex flex-col max-h-[90vh]">
+                                                    {/* Modal Header */}
+                                                    <div className="flex items-center justify-between p-8 border-b border-white/5 shrink-0">
+                                                        <div className="flex items-center space-x-4 flex-1">
+                                                            <div className="w-1.5 h-6 bg-[#B87333] rounded-full"></div>
+                                                            <input
+                                                                type="text"
+                                                                value={editListName}
+                                                                onChange={e => setEditListName(e.target.value)}
+                                                                className="bg-transparent text-2xl font-black text-white uppercase italic tracking-tighter outline-none border-b-2 border-transparent focus:border-[#B87333]/50 transition-all flex-1"
+                                                                placeholder="Nome da Lista..."
+                                                            />
+                                                            <span className="text-[10px] text-slate-500 font-black uppercase tracking-widest shrink-0">{editingList.songs.length} músicas</span>
+                                                        </div>
+                                                        <div className="flex items-center space-x-2 ml-4">
                                                             <button onClick={() => {
-                                                                setDeleteTarget({ type: 'lista', id: idx, name: pl.name });
-                                                                setDeleteModalOpen(true);
-                                                            }} className="p-2 bg-white/5 hover:bg-red-600/20 text-slate-500 hover:text-red-500 rounded-lg transition-all border border-white/5 flex items-center justify-center"><Trash2 className="w-3.5 h-3.5" /></button>
-                                                        </div>
-                                                        <div className="mb-4">
-                                                            <span className="text-[10px] font-black bg-white/5 text-[#B87333] py-1 px-3 rounded-full border border-white/5 uppercase tracking-widest">{pl.songs?.length || 0} Peças</span>
-                                                        </div>
-                                                        <div className="flex-1 overflow-y-auto mb-6 pr-2 scrollbar-thin scrollbar-thumb-white/10 space-y-2 bg-[#1A1A1A] p-4 rounded-2xl border border-white/5">
-                                                            {(pl.songs || []).map((s, i) => (
-                                                                <div key={i} className="flex flex-col border-b border-white/5 last:border-0 pb-2 last:pb-0">
-                                                                    <span className="text-xs text-slate-300 uppercase font-bold truncate tracking-tight">{i + 1}. {s.song_name}</span>
-                                                                    <span className="text-[9px] text-slate-500 uppercase tracking-widest">{s.artist_name}</span>
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                        <div className="flex items-center justify-between mt-auto space-x-3 pt-4 border-t border-white/5">
-                                                            <button
-                                                                onClick={() => {
-                                                                    setSongs(pl.songs || []);
-                                                                    setMainNav('player');
-                                                                    setSelectedManualIndex(0);
-                                                                }}
-                                                                className="flex-1 bg-white/5 hover:bg-white/10 text-white border border-white/10 py-4 rounded-xl transition-all shadow-lg text-[10px] font-black uppercase tracking-widest flex justify-center items-center space-x-2"
-                                                            >
-                                                                <Play className="w-4 h-4" />
-                                                                <span>Tocar Lista</span>
+                                                                const all = Array.isArray(savedPlaylists) ? savedPlaylists : JSON.parse(localStorage.getItem('iron_chords_playlists') || '[]');
+                                                                const updated = all.map(pl => pl.id === editingList.id ? { ...pl, name: editListName, songs: editingList.songs } : pl);
+                                                                localStorage.setItem('iron_chords_playlists', JSON.stringify(updated));
+                                                                setSavedPlaylists(updated);
+                                                                setEditingList(null);
+                                                                setShowSaveSuccess(true);
+                                                                setTimeout(() => setShowSaveSuccess(false), 2000);
+                                                            }} className="px-6 py-2.5 bg-[#B87333] hover:bg-[#A86323] text-white font-black uppercase text-[10px] tracking-widest rounded-xl transition-all">
+                                                                <Save className="w-4 h-4 inline mr-1" />Salvar
                                                             </button>
-                                                            <button
-                                                                onClick={() => {
-                                                                    setSongs(pl.songs || []);
-                                                                    setCurrentExportList(pl);
-                                                                    setExportStep(1);
-                                                                    setDownloadUrl(null);
-                                                                    setExportFormat('docx');
-                                                                    setCoverImage(null);
-                                                                    setShowExportModal(true);
-                                                                }}
-                                                                className="flex-1 bg-[#B87333]/10 hover:bg-[#B87333] text-[#B87333] hover:text-white border border-[#B87333]/20 py-4 rounded-xl transition-all shadow-lg text-[10px] font-black uppercase tracking-widest flex justify-center items-center space-x-2"
-                                                            >
-                                                                <FileText className="w-4 h-4" />
-                                                                <span>Gerar Livreto</span>
-                                                            </button>
+                                                            <button onClick={() => setEditingList(null)} className="p-2.5 bg-white/5 hover:bg-white/10 rounded-xl border border-white/5"><X className="w-5 h-5 text-slate-400" /></button>
                                                         </div>
                                                     </div>
-                                                ))}
+
+                                                    {/* Song list */}
+                                                    <div className="overflow-y-auto p-6 space-y-3 scrollbar-thin scrollbar-thumb-white/10">
+                                                        {editingList.songs.length === 0 && (
+                                                            <div className="py-12 text-center text-slate-600 font-black uppercase text-xs tracking-widest">Nenhuma música nesta lista.</div>
+                                                        )}
+                                                        {editingList.songs.map((song, si) => (
+                                                            <div key={si} className="bg-black/40 border border-white/5 rounded-2xl p-5 flex items-start space-x-4">
+                                                                <span className="text-[10px] font-black text-slate-600 mt-1 shrink-0 w-5 text-right">{si + 1}</span>
+                                                                <div className="flex-1 min-w-0">
+                                                                    <p className="font-black text-white uppercase italic tracking-tight truncate">{song.song_name}</p>
+                                                                    <p className="text-[10px] text-slate-500 uppercase tracking-widest">{song.artist_name}</p>
+                                                                    {/* Controls */}
+                                                                    <div className="flex items-center flex-wrap gap-2 mt-3">
+                                                                        {/* Key display */}
+                                                                        <span className="text-[10px] font-black bg-[#B87333]/10 text-[#B87333] border border-[#B87333]/20 px-2.5 py-1 rounded-lg">Tom: {song.sounding_key || song.song_key || '?'}</span>
+                                                                        {/* Capo */}
+                                                                        <span className="text-[10px] font-black bg-white/5 text-slate-400 border border-white/10 px-2.5 py-1 rounded-lg">Capo: {song.capo || 0}</span>
+                                                                        {/* Transpose Down */}
+                                                                        <button onClick={async () => {
+                                                                            const res = await fetch('http://127.0.0.1:8000/api/transpose', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: song.content, current_key: song.sounding_key || song.song_key || 'C', semitones: -1 }) });
+                                                                            const d = await res.json();
+                                                                            if (d.transposed_content) { const s2 = [...editingList.songs]; s2[si] = { ...s2[si], content: d.transposed_content, sounding_key: d.new_key, song_key: d.new_key }; setEditingList({ ...editingList, songs: s2 }); }
+                                                                        }} className="w-7 h-7 bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white rounded-lg border border-white/5 flex items-center justify-center text-xs font-black transition-all" title="Meio Tom Abaixo">♭-</button>
+                                                                        {/* Transpose Up */}
+                                                                        <button onClick={async () => {
+                                                                            const res = await fetch('http://127.0.0.1:8000/api/transpose', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: song.content, current_key: song.sounding_key || song.song_key || 'C', semitones: 1 }) });
+                                                                            const d = await res.json();
+                                                                            if (d.transposed_content) { const s2 = [...editingList.songs]; s2[si] = { ...s2[si], content: d.transposed_content, sounding_key: d.new_key, song_key: d.new_key }; setEditingList({ ...editingList, songs: s2 }); }
+                                                                        }} className="w-7 h-7 bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white rounded-lg border border-white/5 flex items-center justify-center text-xs font-black transition-all" title="Meio Tom Acima">♯+</button>
+                                                                        {/* Capo -1 */}
+                                                                        <button onClick={() => { const s2 = [...editingList.songs]; s2[si] = { ...s2[si], capo: Math.max(0, (s2[si].capo || 0) - 1) }; setEditingList({ ...editingList, songs: s2 }); }} className="w-7 h-7 bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white rounded-lg border border-white/5 flex items-center justify-center text-[10px] font-black transition-all" title="Diminuir Capo">C-</button>
+                                                                        {/* Capo +1 */}
+                                                                        <button onClick={() => { const s2 = [...editingList.songs]; s2[si] = { ...s2[si], capo: Math.min(11, (s2[si].capo || 0) + 1) }; setEditingList({ ...editingList, songs: s2 }); }} className="w-7 h-7 bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white rounded-lg border border-white/5 flex items-center justify-center text-[10px] font-black transition-all" title="Aumentar Capo">C+</button>
+                                                                        {/* Print */}
+                                                                        <button onClick={() => { const w = window.open('', '_blank'); w.document.write(`<pre style="font-family:monospace;font-size:14px;white-space:pre-wrap;padding:24px">${song.song_name}\n${song.artist_name}\nTom: ${song.sounding_key || song.song_key}  Capo: ${song.capo || 0}\n\n${song.content}</pre>`); w.document.close(); w.print(); }} className="w-7 h-7 bg-white/5 hover:bg-white/10 text-slate-400 hover:text-[#B87333] rounded-lg border border-white/5 flex items-center justify-center transition-all" title="Imprimir">
+                                                                            <Printer className="w-3.5 h-3.5" />
+                                                                        </button>
+                                                                        {/* Remove from list */}
+                                                                        <button onClick={() => { const s2 = editingList.songs.filter((_, i) => i !== si); setEditingList({ ...editingList, songs: s2 }); }} className="w-7 h-7 bg-red-600/10 hover:bg-red-600/30 text-red-500 rounded-lg border border-red-600/20 flex items-center justify-center transition-all ml-auto" title="Remover da Lista">
+                                                                            <X className="w-3.5 h-3.5" />
+                                                                        </button>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
                                             </div>
                                         )}
                                     </div>
-                                </div>
-                            )}
+                                );
+                            })()}
 
                             {/* ABA 3: PLAYER DA FORJA */}
                             {mainNav === 'player' && (
