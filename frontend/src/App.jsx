@@ -3060,22 +3060,27 @@ export default function App() {
                                                         {editingList.songs.map((song, si) => {
                                                             const isExpanded = expandedListSongIdx === si;
                                                             const KEYS = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B', 'Db', 'Eb', 'Gb', 'Ab', 'Bb'];
+                                                            const KEY_SEMITONES = { 'C': 0, 'C#': 1, 'Db': 1, 'D': 2, 'D#': 3, 'Eb': 3, 'E': 4, 'F': 5, 'F#': 6, 'Gb': 6, 'G': 7, 'G#': 8, 'Ab': 8, 'A': 9, 'A#': 10, 'Bb': 10, 'B': 11 };
                                                             const updateSong = (patch) => {
                                                                 const s2 = [...editingList.songs];
                                                                 s2[si] = { ...s2[si], ...patch };
                                                                 setEditingList({ ...editingList, songs: s2 });
                                                             };
-                                                            const transpose = async (semitones) => {
+                                                            const transpose = async (semitones, targetKey = null) => {
                                                                 try {
-                                                                    const res = await fetch('http://127.0.0.1:8000/api/transpose', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: song.content, current_key: song.sounding_key || song.song_key || 'C', semitones }) });
+                                                                    const currentKey = song.sounding_key || song.song_key || 'C';
+                                                                    const actualSemitones = targetKey !== null
+                                                                        ? ((KEY_SEMITONES[targetKey] ?? 0) - (KEY_SEMITONES[currentKey] ?? 0) + 12) % 12
+                                                                        : semitones;
+                                                                    if (actualSemitones === 0 && targetKey !== null) { updateSong({ song_key: targetKey, sounding_key: targetKey }); return; }
+                                                                    const res = await fetch('http://127.0.0.1:8000/api/transpose', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: song.content, current_key: currentKey, semitones: actualSemitones }) });
                                                                     const d = await res.json();
-                                                                    if (d.transposed_content) updateSong({ content: d.transposed_content, sounding_key: d.new_key, song_key: d.new_key });
+                                                                    if (d.transposed_content) updateSong({ content: d.transposed_content, sounding_key: targetKey || d.new_key, song_key: targetKey || d.new_key });
                                                                 } catch (e) { console.error(e); }
                                                             };
                                                             const printSong = () => {
-                                                                const w = window.open('', '_blank');
-                                                                w.document.write(`<pre style="font-family:monospace;font-size:14px;white-space:pre-wrap;padding:24px">${song.song_name}\n${song.artist_name}\nTom: ${song.sounding_key || song.song_key}  Capo: ${song.capo || 0}\n\n${song.content}</pre>`);
-                                                                w.document.close(); w.print();
+                                                                setManualPreviewSong({ ...song, requested_key: song.sounding_key || song.song_key, original_key: song.sounding_key || song.song_key });
+                                                                setTimeout(() => window.print(), 300);
                                                             };
 
                                                             return (
@@ -3114,7 +3119,7 @@ export default function App() {
                                                                             <div className="flex items-end flex-wrap gap-3">
                                                                                 <div>
                                                                                     <label className="block text-[10px] font-black uppercase text-slate-500 mb-1.5 tracking-widest">Tom Original</label>
-                                                                                    <select value={song.sounding_key || song.song_key || 'C'} onChange={e => updateSong({ song_key: e.target.value, sounding_key: e.target.value })} className="bg-black/60 border border-white/10 rounded-xl px-4 py-2.5 text-white font-bold text-sm outline-none cursor-pointer appearance-none">
+                                                                                    <select value={song.sounding_key || song.song_key || 'C'} onChange={e => transpose(0, e.target.value)} className="bg-black/60 border border-white/10 rounded-xl px-4 py-2.5 text-white font-bold text-sm outline-none cursor-pointer appearance-none">
                                                                                         {KEYS.map(k => <option key={k} value={k}>{k}</option>)}
                                                                                     </select>
                                                                                 </div>
