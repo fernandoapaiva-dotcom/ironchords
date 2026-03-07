@@ -848,10 +848,12 @@ export default function App() {
     const isPausedBySilenceRef = useRef(false);
     useEffect(() => { isPausedBySilenceRef.current = isPausedBySilence; }, [isPausedBySilence]);
 
-    // AutoScroll Effect with Mic interaction
+    // AutoScroll Effect with Mic interaction (Manual / Player / Presentation)
     useEffect(() => {
         let interval;
         const isPlayerViewActive = activeTab === 'presentation' || activeTab === 'player' || isFullScreenPlayer;
+        const isManualViewActive = activeTab === 'manual' && isManualAutoScrolling && manualScrollContainerRef.current;
+
         if (isPlayerViewActive && isAutoScrolling && scrollContainerRef.current) {
             interval = setInterval(() => {
                 const threshold = 15;
@@ -860,20 +862,13 @@ export default function App() {
                     scrollContainerRef.current.scrollTop += scrollSpeed;
                 }
             }, 50);
-        }
-        return () => clearInterval(interval);
-    }, [activeTab, isFullScreenPlayer, isAutoScrolling, scrollSpeed, micEnabled, micLevel]);
-
-    // Manual Preview AutoScroll Effect
-    useEffect(() => {
-        let interval;
-        if (activeTab === 'manual' && isManualAutoScrolling && manualScrollContainerRef.current) {
+        } else if (isManualViewActive) {
             interval = setInterval(() => {
                 manualScrollContainerRef.current.scrollTop += manualScrollSpeed;
             }, 50);
         }
         return () => clearInterval(interval);
-    }, [activeTab, isManualAutoScrolling, manualScrollSpeed]);
+    }, [activeTab, isFullScreenPlayer, isAutoScrolling, scrollSpeed, micEnabled, micLevel, isManualAutoScrolling, manualScrollSpeed]);
 
     // Auto-hide controls in fullscreen (Stage View)
     useEffect(() => {
@@ -1186,6 +1181,32 @@ export default function App() {
             if (lineElement) lineElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
     };
+
+    // Auto-manage Rhythmic Timer based on state
+    useEffect(() => {
+        if (isRhythmicMode) {
+            // If no mic, or if mic is on and already anchored, we start timer
+            if (!micEnabled || isAnchored) {
+                setIsWaitingForVoice(false);
+                startRhythmicTimer();
+            } else {
+                // Mic is ON, but not anchored yet. Wait for voice.
+                setIsWaitingForVoice(true);
+            }
+        } else {
+            // Manual Mode: stop the timer
+            if (advanceTimerRef.current) {
+                clearInterval(advanceTimerRef.current);
+                advanceTimerRef.current = null;
+            }
+        }
+        // Cleanup on unmount
+        return () => {
+            if (advanceTimerRef.current) {
+                clearInterval(advanceTimerRef.current);
+            }
+        };
+    }, [isRhythmicMode, micEnabled, isAnchored, bpm]);
 
     const handleLineClick = (index) => {
         updateCurrentLine(index);
