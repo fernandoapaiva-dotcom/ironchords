@@ -119,6 +119,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.get("/")
+def health_check():
+    return {"status": "online", "message": "IronChords API is running."}
+
 @app.websocket("/ws/videoke")
 async def videoke_stream(websocket: WebSocket):
     await websocket.accept()

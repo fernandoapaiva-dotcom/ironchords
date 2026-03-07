@@ -20,7 +20,10 @@ class IronChordsPlayer:
         self.vocal_energy_threshold = 0.002 # Baseline energy for voice
         self.instr_rms_threshold = 0.015 # Higher threshold to avoid false instr from noise
         
-        # Load Silero VAD
+    def _load_vad(self):
+        if hasattr(self, 'model') and self.model is not None:
+            return
+        logger.info("Lazy loading Silero VAD...")
         try:
             self.model, utils = torch.hub.load(repo_or_dir='snakers4/silero-vad',
                                               model='silero_vad',

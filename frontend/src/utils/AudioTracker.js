@@ -187,22 +187,10 @@ export class AudioTracker {
     }
 
     async setupWebSocket() {
-        // Use the same base URL as the API, but convert http/https to ws/wss
-        let baseUrl = "";
-        try {
-            // We import it dynamically to avoid circular dependencies if possible, 
-            // but in this simple structure we can assume it's available or provided.
-            // For now, let's use a robust detection if not passed in.
-            const apiBase = (window.API_BASE_URL_OVERRIDE) ||
-                (import.meta.env.VITE_API_BASE_URL) ||
-                (window.location.hostname === 'localhost' ? 'http://127.0.0.1:8000' : window.location.origin);
-
-            baseUrl = apiBase.replace(/^http/, 'ws');
-        } catch (e) {
-            baseUrl = `ws://${window.location.hostname}:8000`;
-        }
-
-        const wsUrl = `${baseUrl.replace(/\/$/, '')}/ws/videoke`;
+        // Use the centralized API_BASE_URL and convert http/https to ws/wss
+        const apiBase = API_BASE_URL;
+        const baseUrl = apiBase.replace(/^http/, 'ws');
+        const wsUrl = `${baseUrl}/ws/videoke`;
 
         if (this.onConnectionStatus) this.onConnectionStatus('connecting');
 
