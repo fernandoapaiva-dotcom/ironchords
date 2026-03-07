@@ -187,10 +187,22 @@ export class AudioTracker {
     }
 
     async setupWebSocket() {
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        // Always target port 8000 for the backend, regardless of which port the frontend is on
-        const host = `${window.location.hostname}:8000`;
-        const wsUrl = `${protocol}//${host}/ws/videoke`;
+        // Use the same base URL as the API, but convert http/https to ws/wss
+        let baseUrl = "";
+        try {
+            // We import it dynamically to avoid circular dependencies if possible, 
+            // but in this simple structure we can assume it's available or provided.
+            // For now, let's use a robust detection if not passed in.
+            const apiBase = (window.API_BASE_URL_OVERRIDE) ||
+                (import.meta.env.VITE_API_BASE_URL) ||
+                (window.location.hostname === 'localhost' ? 'http://127.0.0.1:8000' : window.location.origin);
+
+            baseUrl = apiBase.replace(/^http/, 'ws');
+        } catch (e) {
+            baseUrl = `ws://${window.location.hostname}:8000`;
+        }
+
+        const wsUrl = `${baseUrl.replace(/\/$/, '')}/ws/videoke`;
 
         if (this.onConnectionStatus) this.onConnectionStatus('connecting');
 

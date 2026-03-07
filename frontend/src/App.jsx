@@ -9,10 +9,10 @@ import { AudioTracker } from './utils/AudioTracker';
 import { CifraParser } from './utils/CifraParser';
 
 // Dynamic API Base URL detection
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (
     window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
         ? 'http://127.0.0.1:8000'
-        : `http://${window.location.hostname}:8000`
+        : (window.location.port ? `${window.location.protocol}//${window.location.hostname}:8000` : window.location.origin)
 );
 
 // -------------------------------------------------------------------
