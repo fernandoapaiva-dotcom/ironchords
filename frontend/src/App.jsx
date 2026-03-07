@@ -556,93 +556,7 @@ export default function App() {
     const [isAutoScrolling, setIsAutoScrolling] = useState(false);
     const [scrollSpeed, setScrollSpeed] = useState(1);
     const scrollContainerRef = useRef(null);
-    const [isPlayerMinimized, setIsPlayerMinimized] = useState(() => {
-        const saved = localStorage.getItem('iron_player_minimized');
-        return saved ? JSON.parse(saved) : false;
-    });
-    const [playerPos, setPlayerPos] = useState(() => {
-        const saved = localStorage.getItem('iron_player_pos');
-        return saved ? JSON.parse(saved) : { x: null, y: null };
-    });
-    const [isDraggingPlayer, setIsDraggingPlayer] = useState(false);
-    const playerDragOffset = useRef({ x: 0, y: 0 });
-    const playerControlsRef = useRef(null);
 
-    useEffect(() => {
-        localStorage.setItem('iron_player_minimized', JSON.stringify(isPlayerMinimized));
-    }, [isPlayerMinimized]);
-
-    useEffect(() => {
-        localStorage.setItem('iron_player_pos', JSON.stringify(playerPos));
-    }, [playerPos]);
-
-    const handlePlayerDragStart = (e) => {
-        if (e.target.closest('button') || e.target.closest('input')) return;
-
-        setIsDraggingPlayer(true);
-        const rect = playerControlsRef.current.getBoundingClientRect();
-
-        // Handle both Mouse and Touch events
-        const clientX = e.type.startsWith('touch') ? e.touches[0].clientX : e.clientX;
-        const clientY = e.type.startsWith('touch') ? e.touches[0].clientY : e.clientY;
-
-        playerDragOffset.current = {
-            x: clientX - rect.left,
-            y: clientY - rect.top
-        };
-
-        // Prevent scroll while dragging on mobile
-        if (e.type.startsWith('touch')) {
-            // we can't always e.preventDefault() here if we want buttons to work, 
-            // but the handleTouchMove will handle it.
-        }
-    };
-
-    useEffect(() => {
-        const handleMove = (e) => {
-            if (!isDraggingPlayer) return;
-
-            // Handle both Mouse and Touch events
-            const clientX = e.type.startsWith('touch') ? e.touches[0].clientX : e.clientX;
-            const clientY = e.type.startsWith('touch') ? e.touches[0].clientY : e.clientY;
-
-            // Calculate new position
-            let newX = clientX - playerDragOffset.current.x;
-            let newY = clientY - playerDragOffset.current.y;
-
-            // Boundary checks
-            const rect = playerControlsRef.current?.getBoundingClientRect();
-            if (rect) {
-                const maxX = window.innerWidth - rect.width;
-                const maxY = window.innerHeight - rect.height;
-                newX = Math.max(0, Math.min(newX, maxX));
-                newY = Math.max(0, Math.min(newY, maxY));
-            }
-
-            setPlayerPos({ x: newX, y: newY });
-
-            // Prevent scrolling on touch devices while dragging
-            if (e.type.startsWith('touch')) {
-                e.preventDefault();
-            }
-        };
-
-        const handleEnd = () => setIsDraggingPlayer(false);
-
-        if (isDraggingPlayer) {
-            window.addEventListener('mousemove', handleMove);
-            window.addEventListener('mouseup', handleEnd);
-            window.addEventListener('touchmove', handleMove, { passive: false });
-            window.addEventListener('touchend', handleEnd);
-        }
-
-        return () => {
-            window.removeEventListener('mousemove', handleMove);
-            window.removeEventListener('mouseup', handleEnd);
-            window.removeEventListener('touchmove', handleMove);
-            window.removeEventListener('touchend', handleEnd);
-        };
-    }, [isDraggingPlayer]);
 
     // Save List State
     const [saveListModalOpen, setSaveListModalOpen] = useState(false);
@@ -1906,122 +1820,139 @@ export default function App() {
 
                 {(isFullScreenPlayer || activeTab === 'player') ? (
                     <div className="fixed inset-0 bg-[#070709] z-[100] flex flex-col animate-in fade-in zoom-in-95 duration-500">
-                        {/* PLAYER HEADER */}
-                        <div className="h-20 bg-black/40 border-b border-white/5 flex items-center justify-between px-8 backdrop-blur-xl shrink-0 no-print">
-                            <div className="flex items-center space-x-6">
-                                <button onClick={() => { setIsFullScreenPlayer(false); setActiveTab('manual'); setMainNav('escolha'); }} className="p-3 bg-white/5 hover:bg-white/10 rounded-xl transition-all border border-white/5 text-slate-400 hover:text-white"><ArrowLeft className="w-5 h-5" /></button>
-                                <div>
-                                    <h2 className="text-xl font-black text-white uppercase italic tracking-tighter leading-none">{currentSong?.song_name}</h2>
-                                    <p className="text-[10px] font-bold text-[#B87333] uppercase tracking-widest mt-1 opacity-60 italic">{currentSong?.artist_name}</p>
-                                </div>
-                            </div>
-                            <div className="flex items-center space-x-6">
-                                <div className="flex items-center space-x-2 border-r border-white/10 pr-6">
-                                    <button
-                                        onClick={handlePrint}
-                                        className="p-3 bg-white/5 hover:bg-white/10 rounded-xl transition-all border border-white/5 text-slate-400 hover:text-white"
-                                        title="Imprimir Cifra"
-                                    >
-                                        <Printer className="w-5 h-5" />
-                                    </button>
-                                    <button
-                                        onClick={async () => {
-                                            if (currentSong) {
-                                                const alreadySaved = acervo.some(
-                                                    a => a.song_name.toLowerCase() === currentSong.song_name.toLowerCase()
-                                                );
-                                                if (alreadySaved) {
-                                                    setShowSaveConflict(true);
-                                                    setTimeout(() => setShowSaveConflict(false), 2500);
-                                                    return;
-                                                }
-                                                const res = await saveOneChordToAcervo(currentSong, true);
-                                                if (res.success) {
-                                                    fetchAcervo();
-                                                    setShowSaveSuccess(true);
-                                                    setTimeout(() => setShowSaveSuccess(false), 2000);
-                                                }
-                                            }
-                                        }}
-                                        className="p-3 bg-white/5 hover:bg-[#B87333]/20 rounded-xl transition-all border border-white/5 text-slate-400 hover:text-[#B87333]"
-                                        title="Salvar no Acervo"
-                                    >
-                                        <Archive className="w-5 h-5" />
-                                    </button>
-                                </div>
-                                <div className="flex flex-col items-end">
-                                    <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Capotraste</span>
-                                    <div className="flex items-center space-x-2 bg-black/40 p-1 rounded-xl border border-white/5">
-                                        <button
-                                            onClick={() => {
-                                                if (selectedManualIndex !== null && songs[selectedManualIndex]) {
-                                                    const next = [...songs];
-                                                    next[selectedManualIndex].capo = Math.max(0, (next[selectedManualIndex].capo || 0) - 1);
-                                                    setSongs(next);
-                                                }
-                                            }}
-                                            className="p-1.5 text-slate-500 hover:text-white transition-all">
-                                            <Minus className="w-3.5 h-3.5" />
-                                        </button>
-                                        <span className="text-xs font-black text-[#B87333] w-6 text-center">{currentSong?.capo || 0}</span>
-                                        <button
-                                            onClick={() => {
-                                                if (selectedManualIndex !== null && songs[selectedManualIndex]) {
-                                                    const next = [...songs];
-                                                    next[selectedManualIndex].capo = Math.min(11, (next[selectedManualIndex].capo || 0) + 1);
-                                                    setSongs(next);
-                                                }
-                                            }}
-                                            className="p-1.5 text-slate-500 hover:text-white transition-all">
-                                            <Plus className="w-3.5 h-3.5" />
-                                        </button>
+                        {/* PLAYER HEADER UNIFICADO */}
+                        <div className="bg-black/40 border-b border-white/5 flex flex-col justify-center px-8 py-3 backdrop-blur-xl shrink-0 no-print gap-3 w-full max-w-full overflow-x-auto scrollbar-none z-50">
+                            {/* TOP ROW: Title & Main Actions */}
+                            <div className="flex items-center justify-between min-w-max w-full">
+                                <div className="flex items-center space-x-6">
+                                    <button onClick={() => { setIsFullScreenPlayer(false); setActiveTab('manual'); setMainNav('escolha'); }} className="p-3 bg-white/5 hover:bg-white/10 rounded-xl transition-all border border-white/5 text-slate-400 hover:text-white"><ArrowLeft className="w-5 h-5" /></button>
+                                    <div>
+                                        <h2 className="text-xl font-black text-white uppercase italic tracking-tighter leading-none">{currentSong?.song_name}</h2>
+                                        <p className="text-[10px] font-bold text-[#B87333] uppercase tracking-widest mt-1 opacity-60 italic">{currentSong?.artist_name}</p>
                                     </div>
                                 </div>
-                                <div className="flex flex-col items-end">
-                                    <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Tom Atual</span>
-                                    <div className="flex items-center space-x-2 bg-black/40 p-1 rounded-xl border border-[#B87333]/20 shadow-[0_0_15px_rgba(184,115,51,0.1)]">
-                                        <button
-                                            onClick={() => transposeSong(selectedManualIndex, -1)}
-                                            disabled={isTransposing}
-                                            className="p-1.5 text-slate-500 hover:text-white transition-all disabled:opacity-50">
-                                            <Minus className="w-3.5 h-3.5" />
+                                <div className="flex items-center space-x-4">
+                                    <div className="flex items-center space-x-2 border-r border-white/10 pr-6">
+                                        <button onClick={handlePrint} className="p-3 bg-white/5 hover:bg-white/10 rounded-xl transition-all border border-white/5 text-slate-400 hover:text-white" title="Imprimir Cifra">
+                                            <Printer className="w-5 h-5" />
                                         </button>
-                                        <div className="flex items-center space-x-1 px-2 pointer-events-none">
-                                            <Music className="w-3.5 h-3.5 text-[#B87333]" />
-                                            <span className="text-sm font-black text-white uppercase italic min-w-[1.5rem] text-center">
-                                                {isTransposing ? '...' : getSoundingKey(currentSong)}
-                                            </span>
+                                        <button
+                                            onClick={async () => {
+                                                if (currentSong) {
+                                                    const alreadySaved = acervo.some(a => a.song_name.toLowerCase() === currentSong.song_name.toLowerCase());
+                                                    if (alreadySaved) {
+                                                        setShowSaveConflict(true);
+                                                        setTimeout(() => setShowSaveConflict(false), 2500);
+                                                        return;
+                                                    }
+                                                    const res = await saveOneChordToAcervo(currentSong, true);
+                                                    if (res.success) {
+                                                        fetchAcervo();
+                                                        setShowSaveSuccess(true);
+                                                        setTimeout(() => setShowSaveSuccess(false), 2000);
+                                                    }
+                                                }
+                                            }}
+                                            className="p-3 bg-white/5 hover:bg-[#B87333]/20 rounded-xl transition-all border border-white/5 text-slate-400 hover:text-[#B87333]" title="Salvar no Acervo">
+                                            <Archive className="w-5 h-5" />
+                                        </button>
+                                    </div>
+                                    <div className="flex flex-col items-center">
+                                        <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Escala</span>
+                                        <div className="flex items-center space-x-2 bg-black/40 p-1 rounded-xl border border-white/5">
+                                            <button onClick={() => setPlayerFontSize(prev => Math.max(12, prev - 1))} className="p-2 text-slate-500 hover:text-white transition-all"><Minus className="w-4 h-4" /></button>
+                                            <span className="text-xs font-black text-white w-8 text-center">{playerFontSize}</span>
+                                            <button onClick={() => setPlayerFontSize(prev => Math.min(45, prev + 1))} className="p-2 text-slate-500 hover:text-white transition-all"><Plus className="w-4 h-4" /></button>
                                         </div>
-                                        <button
-                                            onClick={() => transposeSong(selectedManualIndex, 1)}
-                                            disabled={isTransposing}
-                                            className="p-1.5 text-slate-500 hover:text-white transition-all disabled:opacity-50">
-                                            <Plus className="w-3.5 h-3.5" />
-                                        </button>
-                                    </div>
-                                </div>
-                                <div className="flex flex-col items-end opacity-40">
-                                    <span className="text-[9px] font-black text-slate-600 uppercase tracking-widest mb-1">Original</span>
-                                    <div className="flex items-center space-x-3 bg-black/20 px-4 py-1.5 rounded-xl border border-white/5">
-                                        <span className="text-xs font-black text-slate-400 uppercase italic">{currentSong?.original_key || currentSong?.song_key}</span>
-                                    </div>
-                                </div>
-                                <div className="flex flex-col items-center">
-                                    <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Escala</span>
-                                    <div className="flex items-center space-x-2 bg-black/40 p-1 rounded-xl border border-white/5">
-                                        <button onClick={() => setPlayerFontSize(prev => Math.max(12, prev - 1))} className="p-2 text-slate-500 hover:text-white transition-all"><Minus className="w-4 h-4" /></button>
-                                        <span className="text-xs font-black text-white w-8 text-center">{playerFontSize}</span>
-                                        <button onClick={() => setPlayerFontSize(prev => Math.min(45, prev + 1))} className="p-2 text-slate-500 hover:text-white transition-all"><Plus className="w-4 h-4" /></button>
                                     </div>
                                     <div className="flex flex-col items-center">
                                         <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Tabs</span>
-                                        <button
-                                            onClick={() => setIncludeTabs(!includeTabs)}
-                                            className={`p-3 rounded-xl transition-all border ${includeTabs ? 'bg-[#B87333]/20 border-[#B87333] text-[#B87333]' : 'bg-black/40 border-white/5 text-slate-600 hover:text-slate-400'}`}
-                                            title={includeTabs ? "Esconder Tablaturas" : "Mostrar Tablaturas"}
-                                        >
+                                        <button onClick={() => setIncludeTabs(!includeTabs)} className={`p-3 rounded-xl transition-all border ${includeTabs ? 'bg-[#B87333]/20 border-[#B87333] text-[#B87333]' : 'bg-black/40 border-white/5 text-slate-600 hover:text-slate-400'}`} title={includeTabs ? "Esconder Tablaturas" : "Mostrar Tablaturas"}>
                                             <FileText className="w-5 h-5" />
                                         </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* BOTTOM ROW: Playback, Pitch & Layout Controls */}
+                            <div className="flex items-center justify-between border-t border-white/5 pt-3 min-w-max w-full">
+                                {/* Playback Group (Scroll, Autosync, BPM) */}
+                                <div className="flex items-center space-x-6">
+                                    <div className="flex items-center space-x-4 bg-black/20 p-2 rounded-2xl border border-white/5">
+                                        <button onClick={() => setIsAutoScrolling(!isAutoScrolling)} className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${isAutoScrolling ? 'bg-[#B87333] text-white shadow-lg shadow-[#B87333]/30 scale-105' : 'bg-white/5 text-slate-500 hover:text-white'}`}>
+                                            {isAutoScrolling ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
+                                        </button>
+                                        <div className="w-24 pr-2">
+                                            <div className="flex items-center justify-between mb-1">
+                                                <span className="text-[8px] font-black text-slate-600 uppercase tracking-widest leading-none">Scrolloff</span>
+                                                <span className="text-[9px] font-black text-white italic">{scrollSpeed}x</span>
+                                            </div>
+                                            <input type="range" min="0.5" max="5" step="0.5" value={scrollSpeed} onChange={(e) => setScrollSpeed(parseFloat(e.target.value))} className="w-full h-1 bg-white/5 rounded-full appearance-none cursor-pointer accent-[#B87333]" />
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center space-x-4 bg-black/20 p-2 rounded-2xl border border-white/5">
+                                        <div className="flex items-center space-x-3">
+                                            <button onClick={() => setMicEnabled(!micEnabled)} className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all border ${micEnabled ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-900/40 animate-pulse' : 'bg-white/5 border-white/10 text-slate-600 hover:text-slate-400'}`}>
+                                                <Mic className="w-4 h-4" />
+                                            </button>
+                                            {micEnabled && (
+                                                <div className="flex flex-col justify-center w-16">
+                                                    <span className="text-[7px] font-black text-blue-400 uppercase tracking-widest mb-1">Ganho {micGain}x</span>
+                                                    <input type="range" min="1" max="5" step="0.5" value={micGain} onChange={(e) => setMicGain(parseFloat(e.target.value))} className="w-full h-1 bg-white/10 rounded-full appearance-none accent-blue-500" />
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div className="h-6 w-px bg-white/10"></div>
+                                        <div className="flex flex-col justify-center items-center px-2 w-20">
+                                            <button onClick={() => setIsRhythmicMode(!isRhythmicMode)} className={`w-full py-1.5 rounded-lg border text-[9px] font-black uppercase transition-all italic tracking-widest ${isRhythmicMode ? 'bg-green-600/80 border-green-600 text-white shadow-lg' : 'bg-white/5 border-white/10 text-slate-400'}`}>
+                                                {isRhythmicMode ? 'Autosync' : 'Manual'}
+                                            </button>
+                                            {micEnabled && isRhythmicMode && (
+                                                <span className="text-[7px] font-black uppercase mt-1 italic tracking-tighter leading-none" style={{ color: getManualStatusInfo().color }}>{getManualStatusInfo().label}</span>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center space-x-3 bg-black/20 p-2 rounded-2xl border border-white/5">
+                                        <div className={`w-10 h-10 rounded-xl bg-black/40 border flex items-center justify-center transition-all duration-500 ${isBpmSyncing ? 'border-yellow-500 shadow-[0_0_15px_rgba(234,179,8,0.2)]' : 'border-[#B87333]/20 shadow-none'}`}>
+                                            <Zap className={`w-4 h-4 ${isBpmSyncing ? 'text-yellow-500 animate-bounce' : 'text-[#B87333] opacity-40'}`} />
+                                        </div>
+                                        <div className="flex flex-col items-center justify-center">
+                                            <p className="text-lg font-black text-white italic leading-none">{bpm}</p>
+                                            <p className="text-[7px] font-bold text-slate-500 uppercase tracking-widest italic mt-0.5">BPM</p>
+                                        </div>
+                                        <div className="flex flex-col space-y-0.5 ml-1">
+                                            <button onClick={() => setBpm(b => b + 1)} className="p-0.5 hover:text-[#B87333] transition-all"><ChevronUp className="w-3 h-3" /></button>
+                                            <button onClick={() => setBpm(b => b - 1)} className="p-0.5 hover:text-[#B87333] transition-all"><ChevronDown className="w-3 h-3" /></button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Pitch & Layout Group */}
+                                <div className="flex items-center space-x-6">
+                                    <div className="flex flex-col items-end">
+                                        <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Capotraste</span>
+                                        <div className="flex items-center space-x-2 bg-black/40 p-1 rounded-xl border border-white/5">
+                                            <button onClick={() => { if (selectedManualIndex !== null && songs[selectedManualIndex]) { const next = [...songs]; next[selectedManualIndex].capo = Math.max(0, (next[selectedManualIndex].capo || 0) - 1); setSongs(next); } }} className="p-1.5 text-slate-500 hover:text-white transition-all"><Minus className="w-3.5 h-3.5" /></button>
+                                            <span className="text-xs font-black text-[#B87333] w-6 text-center">{currentSong?.capo || 0}</span>
+                                            <button onClick={() => { if (selectedManualIndex !== null && songs[selectedManualIndex]) { const next = [...songs]; next[selectedManualIndex].capo = Math.min(11, (next[selectedManualIndex].capo || 0) + 1); setSongs(next); } }} className="p-1.5 text-slate-500 hover:text-white transition-all"><Plus className="w-3.5 h-3.5" /></button>
+                                        </div>
+                                    </div>
+                                    <div className="flex flex-col items-end">
+                                        <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Tom Atual</span>
+                                        <div className="flex items-center space-x-2 bg-black/40 p-1 rounded-xl border border-[#B87333]/20 shadow-[0_0_15px_rgba(184,115,51,0.1)]">
+                                            <button onClick={() => transposeSong(selectedManualIndex, -1)} disabled={isTransposing} className="p-1.5 text-slate-500 hover:text-white transition-all disabled:opacity-50"><Minus className="w-3.5 h-3.5" /></button>
+                                            <div className="flex items-center space-x-1 px-2 pointer-events-none">
+                                                <Music className="w-3.5 h-3.5 text-[#B87333]" />
+                                                <span className="text-sm font-black text-white uppercase italic min-w-[1.5rem] text-center">{isTransposing ? '...' : getSoundingKey(currentSong)}</span>
+                                            </div>
+                                            <button onClick={() => transposeSong(selectedManualIndex, 1)} disabled={isTransposing} className="p-1.5 text-slate-500 hover:text-white transition-all disabled:opacity-50"><Plus className="w-3.5 h-3.5" /></button>
+                                        </div>
+                                    </div>
+                                    <div className="flex flex-col items-end opacity-40">
+                                        <span className="text-[9px] font-black text-slate-600 uppercase tracking-widest mb-1">Original</span>
+                                        <div className="flex items-center space-x-3 bg-black/20 px-4 py-1.5 rounded-xl border border-white/5">
+                                            <span className="text-xs font-black text-slate-400 uppercase italic">{currentSong?.original_key || currentSong?.song_key}</span>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -2152,103 +2083,7 @@ export default function App() {
                                     </div>
                                 )}
 
-                                {/* PLAYER CONTROLS FLOATING PANEL */}
-                                {/* PLAYER CONTROLS FLOATING PANEL */}
-                                <div
-                                    ref={playerControlsRef}
-                                    onMouseDown={handlePlayerDragStart}
-                                    style={{
-                                        left: playerPos.x !== null ? `${playerPos.x}px` : '50%',
-                                        top: playerPos.y !== null ? `${playerPos.y}px` : 'auto',
-                                        bottom: playerPos.y === null ? '40px' : 'auto',
-                                        transform: playerPos.x === null ? 'translateX(-50%)' : 'none',
-                                        cursor: isDraggingPlayer ? 'grabbing' : 'auto'
-                                    }}
-                                    className={`absolute bg-[#1A1A1A]/95 backdrop-blur-3xl border border-white/10 p-6 rounded-[40px] shadow-[0_20px_60px_rgba(0,0,0,0.8)] flex items-center z-[110] no-print transition-all duration-300 ${isPlayerMinimized ? 'w-auto' : 'space-x-10 px-10'}`}
-                                >
-                                    {/* Drag Handle */}
-                                    <div className="cursor-grab active:cursor-grabbing p-2 text-slate-600 hover:text-slate-400 transition-colors">
-                                        <GripVertical className="w-6 h-6" />
-                                    </div>
 
-                                    {!isPlayerMinimized ? (
-                                        <>
-                                            <div className="flex items-center space-x-6 pr-10 border-r border-white/10">
-                                                <button onClick={() => setIsAutoScrolling(!isAutoScrolling)} className={`w-16 h-16 rounded-[24px] flex items-center justify-center transition-all ${isAutoScrolling ? 'bg-[#B87333] text-white shadow-xl shadow-[#B87333]/30 scale-105' : 'bg-white/5 text-slate-500 hover:text-white'}`}>
-                                                    {isAutoScrolling ? <Pause className="w-7 h-7" /> : <Play className="w-7 h-7 ml-1" />}
-                                                </button>
-                                                <div className="w-32">
-                                                    <div className="flex items-center justify-between mb-2">
-                                                        <span className="text-[9px] font-black text-slate-600 uppercase tracking-widest leading-none">Scrolloff</span>
-                                                        <span className="text-[10px] font-black text-white italic">{scrollSpeed}x</span>
-                                                    </div>
-                                                    <input type="range" min="0.5" max="5" step="0.5" value={scrollSpeed} onChange={(e) => setScrollSpeed(parseFloat(e.target.value))} className="w-full h-1.5 bg-white/5 rounded-full appearance-none cursor-pointer accent-[#B87333]" />
-                                                </div>
-                                            </div>
-
-                                            <div className="flex items-center space-x-10 pr-10 border-r border-white/10">
-                                                <div className="flex flex-col items-center">
-                                                    <span className="text-[9px] font-black text-slate-600 uppercase tracking-widest mb-3 leading-none">Microfone</span>
-                                                    <div className="flex flex-col items-center space-y-2">
-                                                        <button onClick={() => setMicEnabled(!micEnabled)} className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all border ${micEnabled ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-900/40 animate-pulse' : 'bg-white/5 border-white/10 text-slate-600 hover:text-slate-400'}`}>
-                                                            <Mic className="w-5 h-5" />
-                                                        </button>
-                                                        {micEnabled && (
-                                                            <div className="flex items-center space-x-2">
-                                                                <input
-                                                                    type="range" min="1" max="5" step="0.5"
-                                                                    value={micGain}
-                                                                    onChange={(e) => setMicGain(parseFloat(e.target.value))}
-                                                                    className="w-12 h-1 bg-white/10 rounded-full appearance-none accent-blue-500"
-                                                                />
-                                                                <span className="text-[8px] font-black text-blue-400">{micGain}x</span>
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                                <div className="flex flex-col items-center">
-                                                    <span className="text-[9px] font-black text-slate-600 uppercase tracking-widest mb-3 leading-none">Ritmagem</span>
-                                                    <button onClick={() => setIsRhythmicMode(!isRhythmicMode)} className={`px-6 py-2.5 rounded-full border text-[10px] font-black uppercase transition-all italic tracking-widest ${isRhythmicMode ? 'bg-green-600/80 border-green-600 text-white shadow-lg' : 'bg-white/5 border-white/10 text-slate-700'}`}>
-                                                        {isRhythmicMode ? 'Autosync' : 'Manual'}
-                                                    </button>
-                                                    {micEnabled && isRhythmicMode && (
-                                                        <span className="text-[9px] font-black uppercase mt-3 italic tracking-tighter" style={{ color: getManualStatusInfo().color }}>
-                                                            {getManualStatusInfo().label}
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            </div>
-
-                                            {/* BPM Section */}
-                                            <div className="flex items-center space-x-6 pr-10 border-r border-white/10 relative group">
-                                                <div className={`w-14 h-14 rounded-2xl bg-black/40 border-2 flex items-center justify-center transition-all duration-500 ${isBpmSyncing ? 'border-yellow-500 shadow-[0_0_20px_rgba(234,179,8,0.3)]' : 'border-[#B87333]/20 shadow-none'}`}>
-                                                    <Zap className={`w-6 h-6 ${isBpmSyncing ? 'text-yellow-500 animate-bounce' : 'text-[#B87333] opacity-40'}`} />
-                                                </div>
-                                                <div className="text-center">
-                                                    <p className="text-2xl font-black text-white italic leading-none">{bpm}</p>
-                                                    <p className="text-[9px] font-bold text-slate-500 uppercase mt-1 tracking-widest italic">Pulsos/Min</p>
-                                                </div>
-                                                <div className="flex flex-col space-y-1">
-                                                    <button onClick={() => setBpm(b => b + 1)} className="p-1 hover:text-[#B87333] transition-all"><ChevronUp className="w-3.5 h-3.5" /></button>
-                                                    <button onClick={() => setBpm(b => b - 1)} className="p-1 hover:text-[#B87333] transition-all"><ChevronDown className="w-3.5 h-3.5" /></button>
-                                                </div>
-                                            </div>
-
-                                            <button onClick={() => setIsPlayerMinimized(true)} className="p-4 text-slate-500 hover:text-white hover:bg-white/5 rounded-2xl transition-all" title="Encolher">
-                                                <Minimize2 className="w-6 h-6" />
-                                            </button>
-                                        </>
-                                    ) : (
-                                        <div className="flex items-center space-x-4">
-                                            <button onClick={() => setIsAutoScrolling(!isAutoScrolling)} className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all ${isAutoScrolling ? 'bg-[#B87333] text-white shadow-lg' : 'bg-white/5 text-slate-500'}`}>
-                                                {isAutoScrolling ? <Pause className="w-6 h-6" /> : <Play className="w-6 h-6 ml-1" />}
-                                            </button>
-                                            <button onClick={() => setIsPlayerMinimized(false)} className="p-4 text-[#B87333] hover:text-white hover:bg-[#B87333]/20 rounded-2xl transition-all" title="Expandir">
-                                                <Maximize2 className="w-6 h-6" />
-                                            </button>
-                                        </div>
-                                    )}
-                                </div>
                             </div>
                         </div>
                     </div>
