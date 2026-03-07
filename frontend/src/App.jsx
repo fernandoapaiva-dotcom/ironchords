@@ -538,6 +538,7 @@ export default function App() {
     const [editingList, setEditingList] = useState(null); // { id, name, songs }
     const [editListName, setEditListName] = useState('');
     const [expandedListSongIdx, setExpandedListSongIdx] = useState(null);
+    const [selectedListSongs, setSelectedListSongs] = useState([]);
 
     // Filter Suggestions State
     const [editingChord, setEditingChord] = useState(null);
@@ -3055,9 +3056,30 @@ export default function App() {
                                                         </div>
                                                     </div>
 
-                                                    {/* Tip */}
-                                                    <div className="px-8 py-3 bg-[#B87333]/5 border-b border-white/5 shrink-0">
-                                                        <p className="text-[10px] text-[#B87333]/70 font-bold uppercase tracking-widest">💡 Clique no nome de uma música para expandir e editar suas opções</p>
+                                                    {/* Action bar: select-all + bulk delete */}
+                                                    <div className="px-6 py-3 bg-black/20 border-b border-white/5 shrink-0 flex items-center justify-between">
+                                                        <label className="flex items-center space-x-2.5 cursor-pointer" onClick={() => {
+                                                            const all = editingList.songs.map((_, i) => i);
+                                                            setSelectedListSongs(prev => prev.length === editingList.songs.length ? [] : all);
+                                                        }}>
+                                                            <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${selectedListSongs.length === editingList.songs.length && editingList.songs.length > 0 ? 'bg-[#B87333] border-[#B87333]' : 'border-white/20'}`}>
+                                                                {selectedListSongs.length === editingList.songs.length && editingList.songs.length > 0 && <Check className="w-3 h-3 text-white" />}
+                                                            </div>
+                                                            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Selecionar Todas</span>
+                                                        </label>
+                                                        {selectedListSongs.length > 0 && (
+                                                            <button onClick={() => {
+                                                                const remaining = editingList.songs.filter((_, i) => !selectedListSongs.includes(i));
+                                                                setEditingList({ ...editingList, songs: remaining });
+                                                                setSelectedListSongs([]);
+                                                                setExpandedListSongIdx(null);
+                                                            }} className="flex items-center space-x-1.5 px-4 py-1.5 bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white border border-red-600/30 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all">
+                                                                <Trash2 className="w-3.5 h-3.5" /><span>Excluir {selectedListSongs.length} Música(s)</span>
+                                                            </button>
+                                                        )}
+                                                        {selectedListSongs.length === 0 && (
+                                                            <p className="text-[10px] text-[#B87333]/50 font-bold uppercase tracking-widest">💡 Clique no nome para editar</p>
+                                                        )}
                                                     </div>
 
                                                     {/* Song list */}
@@ -3104,15 +3126,19 @@ export default function App() {
                                                             };
 
                                                             return (
-                                                                <div key={si} className={`rounded-2xl border transition-all duration-300 overflow-hidden ${isExpanded ? 'border-[#B87333]/40 bg-[#B87333]/5' : 'border-white/5 bg-black/30 hover:border-white/10'}`}>
-                                                                    {/* Collapsed row — clickable header */}
-                                                                    <div className="flex items-center p-4 cursor-pointer group" onClick={() => setExpandedListSongIdx(isExpanded ? null : si)}>
-                                                                        <span className="text-[10px] font-black text-slate-600 shrink-0 w-6 text-right mr-3">{si + 1}</span>
-                                                                        <div className="flex-1 min-w-0">
+                                                                <div key={si} className={`rounded-2xl border transition-all duration-300 overflow-hidden ${isExpanded ? 'border-[#B87333]/40 bg-[#B87333]/5' : selectedListSongs.includes(si) ? 'border-red-500/30 bg-red-600/5' : 'border-white/5 bg-black/30 hover:border-white/10'}`}>
+                                                                    {/* Collapsed row — checkbox + clickable title */}
+                                                                    <div className="flex items-center p-4 group">
+                                                                        {/* Checkbox */}
+                                                                        <div onClick={e => { e.stopPropagation(); setSelectedListSongs(prev => prev.includes(si) ? prev.filter(i => i !== si) : [...prev, si]); }} className={`w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 mr-3 cursor-pointer transition-all ${selectedListSongs.includes(si) ? 'bg-red-500 border-red-500' : 'border-white/20 hover:border-white/40'}`}>
+                                                                            {selectedListSongs.includes(si) && <Check className="w-3 h-3 text-white" />}
+                                                                        </div>
+                                                                        {/* Expand toggle */}
+                                                                        <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setExpandedListSongIdx(isExpanded ? null : si)}>
                                                                             <p className={`font-black uppercase italic tracking-tight truncate transition-colors ${isExpanded ? 'text-[#B87333]' : 'text-white group-hover:text-[#B87333]'}`}>{song.song_name}</p>
                                                                             <p className="text-[10px] text-slate-500 uppercase tracking-widest">{song.artist_name}</p>
                                                                         </div>
-                                                                        <div className="flex items-center space-x-2 ml-4 shrink-0">
+                                                                        <div className="flex items-center space-x-2 ml-4 shrink-0" onClick={e => e.stopPropagation()}>
                                                                             <span className="text-[10px] font-black bg-[#B87333]/10 text-[#B87333] border border-[#B87333]/20 px-2.5 py-1 rounded-lg">Tom: {song.sounding_key || song.song_key || '?'}</span>
                                                                             <span className="text-[10px] font-black bg-white/5 text-slate-400 border border-white/10 px-2.5 py-1 rounded-lg">Capo {song.capo || 0}</span>
                                                                             <ChevronDown className={`w-4 h-4 text-slate-500 transition-transform duration-300 ${isExpanded ? 'rotate-180 text-[#B87333]' : ''}`} />
