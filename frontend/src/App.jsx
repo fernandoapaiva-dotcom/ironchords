@@ -686,9 +686,16 @@ export default function App() {
 
         const updated = allPlaylists.map(pl => {
             if (selectedListsToAddTo.includes(pl.id)) {
-                const existingNames = new Set(pl.songs.map(s => s.song_name.toLowerCase()));
-                const toAdd = newSongsData.filter(s => !existingNames.has(s.song_name.toLowerCase()));
-                return { ...pl, songs: [...pl.songs, ...toAdd] };
+                // Replace existing songs with same name, append brand-new ones
+                const newByName = new Map(newSongsData.map(s => [s.song_name.toLowerCase(), s]));
+                const merged = pl.songs.map(existing => {
+                    const replacement = newByName.get(existing.song_name.toLowerCase());
+                    if (replacement) { newByName.delete(existing.song_name.toLowerCase()); return replacement; }
+                    return existing;
+                });
+                // Append songs not already in the list
+                const brandNew = Array.from(newByName.values());
+                return { ...pl, songs: [...merged, ...brandNew] };
             }
             return pl;
         });
@@ -3177,7 +3184,7 @@ export default function App() {
                                                                                 </div>
                                                                                 <div>
                                                                                     <label className="block text-[10px] font-black uppercase text-slate-500 mb-1.5 tracking-widest">Tablatura</label>
-                                                                                    <button onClick={() => updateSong({ include_tabs: !song.include_tabs })} className={`px-4 py-2.5 rounded-xl border font-black uppercase text-[10px] tracking-widest transition-all ${song.include_tabs !== false ? 'bg-[#B87333]/20 border-[#B87333] text-[#B87333]' : 'bg-black/60 border-white/10 text-slate-500'}`}>
+                                                                                    <button onClick={() => updateSong({ include_tabs: !(song.include_tabs !== false) })} className={`px-4 py-2.5 rounded-xl border font-black uppercase text-[10px] tracking-widest transition-all ${song.include_tabs !== false ? 'bg-[#B87333]/20 border-[#B87333] text-[#B87333]' : 'bg-black/60 border-white/10 text-slate-500'}`}>
                                                                                         {song.include_tabs !== false ? '✓ Com Tabs' : '✗ Sem Tabs'}
                                                                                     </button>
                                                                                 </div>
