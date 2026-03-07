@@ -546,6 +546,7 @@ export default function App() {
     const [saveListModalOpen, setSaveListModalOpen] = useState(false);
     const [saveListName, setSaveListName] = useState('');
     const [showSaveSuccess, setShowSaveSuccess] = useState(false);
+    const [showSaveConflict, setShowSaveConflict] = useState(false);
 
     // Deletion Modal State
     const [deleteModalOpen, setDeleteModalOpen] = useState(false);
@@ -1124,6 +1125,7 @@ export default function App() {
         }).join('\n');
     };
 
+    useEffect(() => { fetchAcervo(); }, []);
     useEffect(() => { if (activeTab === 'acervo') fetchAcervo(); }, [activeTab]);
     useEffect(() => {
         const delayDebounceFn = setTimeout(() => {
@@ -1633,8 +1635,17 @@ export default function App() {
                                     <button
                                         onClick={async () => {
                                             if (currentSong) {
+                                                const alreadySaved = acervo.some(
+                                                    a => a.song_name.toLowerCase() === currentSong.song_name.toLowerCase()
+                                                );
+                                                if (alreadySaved) {
+                                                    setShowSaveConflict(true);
+                                                    setTimeout(() => setShowSaveConflict(false), 2500);
+                                                    return;
+                                                }
                                                 const res = await saveOneChordToAcervo(currentSong, true);
                                                 if (res.success) {
+                                                    fetchAcervo();
                                                     setShowSaveSuccess(true);
                                                     setTimeout(() => setShowSaveSuccess(false), 2000);
                                                 }
@@ -2143,10 +2154,10 @@ export default function App() {
                                                                                 setSongName('');
                                                                                 setArtistName('');
                                                                             }}
-                                                                            className="px-6 py-3 bg-[#B87333] hover:bg-[#A86323] text-white font-black uppercase text-[10px] tracking-widest rounded-xl transition-all shadow-lg active:scale-95 flex items-center space-x-2 shrink-0"
+                                                                            className="px-6 py-3 bg-white/10 hover:bg-white/20 text-white font-black uppercase text-[10px] tracking-widest rounded-xl transition-all shadow-lg active:scale-95 flex items-center space-x-2 shrink-0"
                                                                         >
                                                                             <Plus className="w-3.5 h-3.5" />
-                                                                            <span>Salvar Lista</span>
+                                                                            <span>Add à Forja</span>
                                                                         </button>
 
                                                                         {/* Fullscreen/Exit/Print */}
@@ -2161,17 +2172,27 @@ export default function App() {
                                                                             <button
                                                                                 onClick={async () => {
                                                                                     if (manualPreviewSong) {
+                                                                                        const alreadySaved = acervo.some(
+                                                                                            a => a.song_name.toLowerCase() === manualPreviewSong.song_name.toLowerCase()
+                                                                                        );
+                                                                                        if (alreadySaved) {
+                                                                                            setShowSaveConflict(true);
+                                                                                            setTimeout(() => setShowSaveConflict(false), 2500);
+                                                                                            return;
+                                                                                        }
                                                                                         const res = await saveOneChordToAcervo(manualPreviewSong, true);
                                                                                         if (res.success) {
+                                                                                            fetchAcervo();
                                                                                             setShowSaveSuccess(true);
                                                                                             setTimeout(() => setShowSaveSuccess(false), 2000);
                                                                                         }
                                                                                     }
                                                                                 }}
-                                                                                className="w-10 h-10 bg-white/5 hover:bg-[#B87333]/20 text-slate-400 hover:text-[#B87333] rounded-xl transition-all border border-white/5 flex items-center justify-center"
+                                                                                className="px-5 py-3 bg-[#B87333] hover:bg-[#A86323] text-white font-black uppercase text-[10px] tracking-widest rounded-xl transition-all shadow-lg active:scale-95 flex items-center space-x-2 shrink-0"
                                                                                 title="Salvar no Acervo"
                                                                             >
-                                                                                <Archive className="w-5 h-5" />
+                                                                                <Archive className="w-4 h-4" />
+                                                                                <span>Salvar no Acervo</span>
                                                                             </button>
                                                                             <button
                                                                                 onClick={() => setIsVideokeOpen(true)}
@@ -3277,6 +3298,20 @@ export default function App() {
                         </div>
                         <h2 className="text-3xl font-black text-white uppercase italic tracking-tighter drop-shadow-md">Lista Forjada</h2>
                         <p className="text-green-400/80 font-bold uppercase tracking-[0.2em] text-xs mt-2">Salva com Sucesso no Acervo Local</p>
+                    </div>
+                </div>
+            )}
+
+            {/* Save Conflict Notification */}
+            {showSaveConflict && (
+                <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/40 backdrop-blur-sm animate-in fade-in duration-300 pointer-events-none">
+                    <div className="bg-yellow-500/10 border border-yellow-500/20 p-10 rounded-[40px] shadow-[0_0_50px_rgba(234,179,8,0.3)] flex flex-col items-center animate-in zoom-in-50 duration-500 spring-gentle">
+                        <div className="w-24 h-24 bg-yellow-500/20 rounded-full flex items-center justify-center relative mb-6">
+                            <div className="absolute inset-0 bg-yellow-500/20 rounded-full animate-pulse"></div>
+                            <AlertCircle className="w-12 h-12 text-yellow-400 drop-shadow-[0_0_15px_rgba(234,179,8,0.8)]" />
+                        </div>
+                        <h2 className="text-3xl font-black text-white uppercase italic tracking-tighter drop-shadow-md">Atenção</h2>
+                        <p className="text-yellow-400/80 font-bold uppercase tracking-[0.2em] text-xs mt-2">A música já está salva no acervo</p>
                     </div>
                 </div>
             )}

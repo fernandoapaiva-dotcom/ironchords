@@ -1,5 +1,7 @@
 import sqlite3
 import os
+import re
+from typing import Optional
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "chords.db")
 
@@ -53,7 +55,7 @@ def init_db():
     conn.commit()
     conn.close()
 
-def get_chord(song_name: str, artist_name: str, song_key: str = None):
+def get_chord(song_name: str, artist_name: str, song_key: Optional[str] = None):
     conn = get_db_connection()
     # Now we prioritize finding by Name/Artist since it's unique
     chord = conn.execute(
@@ -77,14 +79,13 @@ def save_chord(song_name: str, artist_name: str, song_key: str, content: str, so
     tabs_val = 1 if include_tabs else 0
     
     # Sanitize key (remove "tom: ", etc)
-    import re
     # Match root (A-G), accidental (# or b), and 'm' for minor
     clean_key = re.search(r"([A-G][b#]?m?)", song_key, re.IGNORECASE)
     key_to_save = clean_key.group(1) if clean_key else "C"
     # Normalize: Root always uppercase, 'b' and 'm' lowercase
     if len(key_to_save) > 1:
-        root = key_to_save[0].upper()
-        rest = key_to_save[1:]
+        root = str(key_to_save[0]).upper()
+        rest = str(key_to_save[1:])
         key_to_save = root + rest
     else:
         key_to_save = key_to_save.upper()

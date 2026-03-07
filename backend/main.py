@@ -236,7 +236,8 @@ def add_manual_music(request: ManualEntryRequest):
                 # If everything failed, try to return smart suggestions
                 song_clean = clean_song_name(request.song_name)
                 artist_clean = clean_song_name(request.artist_name)
-                artist_first_words = " ".join(artist_clean.split()[:2])
+                words = cast(List[str], artist_clean.split())
+                artist_first_words = " ".join(words[0:2])
                 
                 # Send artist first words alongside to vastly improve Solr match capability and bypass typos
                 # Also include the original requested names to ensure we find what the user typed
@@ -259,7 +260,7 @@ def add_manual_music(request: ManualEntryRequest):
                     detail={
                         "error": "not_found",
                         "message": "Música não encontrada.",
-                        "suggestions": all_s[:15]
+                        "suggestions": cast(List[Any], all_s)[0:15]
                     }
                 )
         else:
@@ -272,7 +273,7 @@ def add_manual_music(request: ManualEntryRequest):
 
     # Se Capo for aplicado, a cifra bruta (visual_key) desce de tom para que o som mantenha-se igual ao req_key.
     visual_key = req_key
-    if request.capo and request.capo > 0:
+    if request.capo is not None and request.capo > 0:
         import re
         from chord_utils import get_note_index, NOTES
         match = re.search(r"([A-G][b#]?)", req_key, re.IGNORECASE)
@@ -281,7 +282,7 @@ def add_manual_music(request: ManualEntryRequest):
             idx = get_note_index(base_note)
             new_idx = (idx - request.capo) % 12
             new_base = NOTES[new_idx]
-            rest = req_key[len(base_note):]
+            rest = str(req_key)[len(base_note):]
             visual_key = f"{new_base}{rest}"
 
     final_content = process_chords(chord_data['content'], chord_data['key'], visual_key)
@@ -324,8 +325,7 @@ def transpose_endpoint(request: TransposeRequest):
             new_idx = (idx + request.semitones) % 12
             new_key = NOTES[new_idx]
             # Preserve minor/other info if present
-            k_str = str(request.current_key)
-            rest = cast(str, k_str)[len(base_note):]
+            rest = str(request.current_key)[len(base_note):]
             new_key = f"{new_key}{rest}"
 
         # Transpose content
@@ -410,7 +410,7 @@ def add_batch_music(request: BatchRequest):
                     req_key = chord_data['key']
                     
                 visual_key = req_key
-                if row.capo and row.capo > 0:
+                if row.capo is not None and row.capo > 0:
                     import re
                     from chord_utils import get_note_index, NOTES
                     match = re.search(r"([A-G][b#]?)", req_key, re.IGNORECASE)
@@ -419,7 +419,7 @@ def add_batch_music(request: BatchRequest):
                         idx = get_note_index(base_note)
                         new_idx = (idx - row.capo) % 12
                         new_base = NOTES[new_idx]
-                        rest = req_key[len(base_note):]
+                        rest = str(req_key)[len(base_note):]
                         visual_key = f"{new_base}{rest}"
 
                 final_content = process_chords(chord_data['content'], chord_data['key'], visual_key)
@@ -498,7 +498,7 @@ async def extract_pdf_table(file: UploadFile = File(...)):
         
         if is_header:
             headers = [str(h) for h in first_row]
-            body = cast(List[Any], data)[1:]
+            body = cast(List[Any], data)[1:len(data)]
         else:
             # Generic headers if not obvious
             headers = ["Música", "Artista", "Tom"]
