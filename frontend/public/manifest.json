@@ -1,0 +1,22 @@
+{
+    "short_name": "IronChords",
+    "name": "IronChords Forge",
+    "icons": [
+        {
+            "src": "logo.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "any maskable"
+        },
+        {
+            "src": "favicon.svg",
+            "sizes": "any",
+            "type": "image/svg+xml"
+        }
+    ],
+    "start_url": ".",
+    "display": "standalone",
+    "theme_color": "#070709",
+    "background_color": "#070709",
+    "description": "Forge your sound with IronChords."
+}

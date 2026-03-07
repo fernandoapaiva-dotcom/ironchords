@@ -8,6 +8,13 @@ import { SVGuitarChord } from 'svguitar';
 import { AudioTracker } from './utils/AudioTracker';
 import { CifraParser } from './utils/CifraParser';
 
+// Dynamic API Base URL detection
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (
+    window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+        ? 'http://127.0.0.1:8000'
+        : `http://${window.location.hostname}:8000`
+);
+
 // -------------------------------------------------------------------
 // CHORD DICTIONARY  (ported from chord_drawer.py)
 // Format: each chord maps to one or more voicings.
@@ -624,7 +631,7 @@ export default function App() {
         if (!force) {
             // Check for conflict
             try {
-                const res = await fetch(`http://127.0.0.1:8000/api/chords/check?name=${encodeURIComponent(songToSave.song_name)}`);
+                const res = await fetch(`${API_BASE_URL}/api/chords/check?name=${encodeURIComponent(songToSave.song_name)}`);
                 const data = await res.json();
                 if (data.exists) {
                     return { conflict: true, existing: data.chord, newSong: songToSave };
@@ -634,7 +641,7 @@ export default function App() {
 
         // No conflict or forced, save it
         try {
-            await fetch('http://127.0.0.1:8000/api/chords', {
+            await fetch(`${API_BASE_URL}/api/chords`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(songToSave)
@@ -1043,7 +1050,7 @@ export default function App() {
         const currentKeyToUse = song.requested_key || song.song_key || 'C';
         setIsTransposing(true);
         try {
-            const res = await fetch('http://127.0.0.1:8000/api/transpose', {
+            const res = await fetch(`${API_BASE_URL}/api/transpose`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ content: song.content, current_key: currentKeyToUse, semitones: semitones })
@@ -1078,7 +1085,7 @@ export default function App() {
         if (!item || item.status !== 'success') return;
         const currentKeyToUse = item.sounding_key || item.requested_key || item.original_key || 'C';
         try {
-            const res = await fetch('http://127.0.0.1:8000/api/transpose', {
+            const res = await fetch(`${API_BASE_URL}/api/transpose`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ content: item.content, current_key: currentKeyToUse, semitones: semitones })
@@ -1111,7 +1118,7 @@ export default function App() {
         if (!batchFixData?.song_name || !batchFixData?.artist_name) return;
         setBatchLinkLoading(true);
         try {
-            const res = await fetch('http://127.0.0.1:8000/api/music/manual', {
+            const res = await fetch(`${API_BASE_URL}/api/music/manual`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -1145,7 +1152,7 @@ export default function App() {
         const item = batchResults[index];
         if (!item || item.status !== 'success') return;
         try {
-            const res = await fetch('http://127.0.0.1:8000/api/music/manual', {
+            const res = await fetch(`${API_BASE_URL}/api/music/manual`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -1239,7 +1246,7 @@ export default function App() {
 
     const fetchSuggestions = async (name) => {
         try {
-            const res = await fetch(`http://127.0.0.1:8000/api/search/suggestions?q=${encodeURIComponent(name)}`);
+            const res = await fetch(`${API_BASE_URL}/api/search/suggestions?q=${encodeURIComponent(name)}`);
             const data = await res.json();
             let results = data.suggestions || [];
             results = results.filter(s => !s.song.toLowerCase().includes('agape') && !s.artist.toLowerCase().includes('agape'));
@@ -1249,7 +1256,7 @@ export default function App() {
 
     const fetchSongMetadata = async (song, artist) => {
         try {
-            const res = await fetch(`http://127.0.0.1:8000/api/music/metadata?song_name=${encodeURIComponent(song)}&artist_name=${encodeURIComponent(artist)}`);
+            const res = await fetch(`${API_BASE_URL}/api/music/metadata?song_name=${encodeURIComponent(song)}&artist_name=${encodeURIComponent(artist)}`);
             const data = await res.json();
             if (data.key) setSongKey(normalizeNote(data.key));
         } catch (err) { console.error(err); }
@@ -1264,7 +1271,7 @@ export default function App() {
 
     const fetchVersions = async (artistSlug, songSlug) => {
         try {
-            const res = await fetch(`http://127.0.0.1:8000/api/song/versions?artist_slug=${artistSlug}&song_slug=${songSlug}`);
+            const res = await fetch(`${API_BASE_URL}/api/song/versions?artist_slug=${artistSlug}&song_slug=${songSlug}`);
             const data = await res.json();
             if (data.versions && data.versions.length > 0) {
                 setAvailableVersions(data.versions);
@@ -1283,7 +1290,7 @@ export default function App() {
     const fetchAcervo = async () => {
         setAcervoLoading(true);
         try {
-            const res = await fetch('http://127.0.0.1:8000/api/chords');
+            const res = await fetch(`${API_BASE_URL}/api/chords`);
             const data = await res.json();
             setAcervo(data.chords);
         } catch (err) { console.error(err); }
@@ -1298,7 +1305,7 @@ export default function App() {
     const confirmDelete = async () => {
         if (deleteTarget.type === 'acervo') {
             try {
-                await fetch(`http://127.0.0.1:8000/api/chords/${deleteTarget.id}`, { method: 'DELETE' });
+                await fetch(`${API_BASE_URL}/api/chords/${deleteTarget.id}`, { method: 'DELETE' });
                 fetchAcervo();
                 setSelectedAcervoItems(prev => prev.filter(id => id !== deleteTarget.id));
             } catch (err) { alert(err); }
@@ -1306,7 +1313,7 @@ export default function App() {
             try {
                 // Delete sequentially (or via possible bulk endpoint if added in backend)
                 for (const id of deleteTarget.id) {
-                    await fetch(`http://127.0.0.1:8000/api/chords/${id}`, { method: 'DELETE' });
+                    await fetch(`${API_BASE_URL}/api/chords/${id}`, { method: 'DELETE' });
                 }
                 fetchAcervo();
                 setSelectedAcervoItems([]);
@@ -1328,7 +1335,7 @@ export default function App() {
 
     const handleEditOpen = async (id) => {
         try {
-            const res = await fetch(`http://127.0.0.1:8000/api/chords/${id}`);
+            const res = await fetch(`${API_BASE_URL}/api/chords/${id}`);
             const data = await res.json();
             setEditingChord(data.id);
             setEditFormData({
@@ -1345,7 +1352,7 @@ export default function App() {
     const handleEditSave = async (e) => {
         if (e) e.preventDefault();
         try {
-            await fetch(`http://127.0.0.1:8000/api/chords/${editingChord}`, {
+            await fetch(`${API_BASE_URL}/api/chords/${editingChord}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(editFormData)
@@ -1359,7 +1366,7 @@ export default function App() {
         const currentKeyToUse = editFormData.song_key || 'C';
         setIsTransposing(true);
         try {
-            const res = await fetch('http://127.0.0.1:8000/api/transpose', {
+            const res = await fetch(`${API_BASE_URL}/api/transpose`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ content: editFormData.content, current_key: currentKeyToUse, semitones: semitones })
@@ -1397,7 +1404,7 @@ export default function App() {
         setManualLoading(true);
         setManualError('');
         try {
-            const res = await fetch('http://127.0.0.1:8000/api/music/manual', {
+            const res = await fetch(`${API_BASE_URL}/api/music/manual`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -1454,7 +1461,7 @@ export default function App() {
             try {
                 const formData = new FormData();
                 formData.append('file', file);
-                const res = await fetch('http://127.0.0.1:8000/api/music/batch/pdf', {
+                const res = await fetch(`${API_BASE_URL}/api/music/batch/pdf`, {
                     method: 'POST',
                     body: formData
                 });
@@ -1551,7 +1558,7 @@ export default function App() {
 
             // 2. If not in Acervo, fetch from API
             try {
-                const res = await fetch('http://127.0.0.1:8000/api/music/manual', {
+                const res = await fetch(`${API_BASE_URL}/api/music/manual`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(song)
@@ -1601,7 +1608,7 @@ export default function App() {
     const handleTryBatchSuggestion = async (idx, suggestion) => {
         setBatchLoading(true);
         try {
-            const res = await fetch('http://127.0.0.1:8000/api/music/manual', {
+            const res = await fetch(`${API_BASE_URL}/api/music/manual`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -1658,7 +1665,7 @@ export default function App() {
             formData.append('songs_data', JSON.stringify(validSongs));
             formData.append('export_format', exportFormat);
             if (coverImage) formData.append('cover_image', coverImage);
-            const res = await fetch('http://127.0.0.1:8000/api/generate_book', { method: 'POST', body: formData });
+            const res = await fetch(`${API_BASE_URL}/api/generate_book`, { method: 'POST', body: formData });
 
             if (!res.ok) {
                 let errText = await res.text();
@@ -2240,7 +2247,7 @@ export default function App() {
                                                                                 <button onClick={async () => {
                                                                                     const currentKeyToUse = manualPreviewSong.sounding_key || manualPreviewSong.song_key || 'C';
                                                                                     try {
-                                                                                        const res = await fetch('http://127.0.0.1:8000/api/transpose', {
+                                                                                        const res = await fetch(`${API_BASE_URL}/api/transpose`, {
                                                                                             method: 'POST',
                                                                                             headers: { 'Content-Type': 'application/json' },
                                                                                             body: JSON.stringify({ content: manualPreviewSong.content, current_key: currentKeyToUse, semitones: -1 })
@@ -2258,7 +2265,7 @@ export default function App() {
                                                                                 <button onClick={async () => {
                                                                                     const currentKeyToUse = manualPreviewSong.sounding_key || manualPreviewSong.song_key || 'C';
                                                                                     try {
-                                                                                        const res = await fetch('http://127.0.0.1:8000/api/transpose', {
+                                                                                        const res = await fetch(`${API_BASE_URL}/api/transpose`, {
                                                                                             method: 'POST',
                                                                                             headers: { 'Content-Type': 'application/json' },
                                                                                             body: JSON.stringify({ content: manualPreviewSong.content, current_key: currentKeyToUse, semitones: 1 })
@@ -2508,7 +2515,7 @@ export default function App() {
                                                                                     onClick={async (e) => {
                                                                                         e.stopPropagation();
                                                                                         try {
-                                                                                            const res = await fetch('http://127.0.0.1:8000/api/music/manual', {
+                                                                                            const res = await fetch(`${API_BASE_URL}/api/music/manual`, {
                                                                                                 method: 'POST',
                                                                                                 headers: { 'Content-Type': 'application/json' },
                                                                                                 body: JSON.stringify({
@@ -3196,13 +3203,13 @@ export default function App() {
                                                                         const origContent = song._orig_content || song.content || '';
                                                                         const diff = ((KEY_SEMITONES[targetKey] ?? 0) - (KEY_SEMITONES[origKey] ?? 0) + 12) % 12;
                                                                         if (diff === 0) { updateSong({ song_key: targetKey, sounding_key: targetKey, content: origContent }); return; }
-                                                                        const res = await fetch('http://127.0.0.1:8000/api/transpose', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: origContent, current_key: origKey, semitones: diff }) });
+                                                                        const res = await fetch(`${API_BASE_URL}/api/transpose`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: origContent, current_key: origKey, semitones: diff }) });
                                                                         const d = await res.json();
                                                                         if (d.transposed_content) updateSong({ content: d.transposed_content, sounding_key: targetKey, song_key: targetKey });
                                                                     } else {
                                                                         // ♭/♯ buttons: transpose incrementally from current content
                                                                         const currentKey = song.sounding_key || song.song_key || 'C';
-                                                                        const res = await fetch('http://127.0.0.1:8000/api/transpose', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: song.content, current_key: currentKey, semitones }) });
+                                                                        const res = await fetch(`${API_BASE_URL}/api/transpose`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: song.content, current_key: currentKey, semitones }) });
                                                                         const d = await res.json();
                                                                         if (d.transposed_content) {
                                                                             setEditingList(prev => {

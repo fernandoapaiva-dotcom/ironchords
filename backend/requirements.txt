@@ -7,7 +7,6 @@ python-docx
 pydantic
 sqlalchemy
 pdfplumber
-pypiwin32
 Pillow
 python-multipart
 websockets

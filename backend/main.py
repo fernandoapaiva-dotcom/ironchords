@@ -12,6 +12,7 @@ import tempfile
 import zipfile
 import requests
 import re
+import platform
 
 import unicodedata
 
@@ -59,6 +60,8 @@ from document_generator import generate_docx
 from audio_processor import IronChordsPlayer
 
 def fix_pywin32():
+    if platform.system() != "Windows":
+        return False
     import os
     import sys
     try:

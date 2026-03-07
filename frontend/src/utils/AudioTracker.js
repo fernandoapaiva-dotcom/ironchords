@@ -188,7 +188,8 @@ export class AudioTracker {
 
     async setupWebSocket() {
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const host = window.location.hostname === 'localhost' ? 'localhost:8000' : window.location.host;
+        // Always target port 8000 for the backend, regardless of which port the frontend is on
+        const host = `${window.location.hostname}:8000`;
         const wsUrl = `${protocol}//${host}/ws/videoke`;
 
         if (this.onConnectionStatus) this.onConnectionStatus('connecting');
