@@ -3249,40 +3249,162 @@ export default function App() {
                         if (!songToPrint) return null;
 
                         return (
-                            <div className="max-w-4xl mx-auto p-12">
+                            <div className="w-full max-w-5xl mx-auto px-12 py-8 print:px-4 print:py-4">
                                 {/* Logo */}
-                                <div className="flex flex-col items-center mb-10 border-b-2 border-black pb-8">
-                                    <div className="flex items-center space-x-4">
-                                        <Flame className="w-10 h-10 text-black" />
-                                        <h1 className="text-5xl font-black italic tracking-tighter uppercase leading-none">IRON<span className="text-black">CHORDS</span></h1>
+                                <div className="flex justify-between items-start mb-10 print:mb-8 pb-4 border-b-2 border-[#ea580c] print:border-[#ea580c]">
+                                    <h1 className="text-5xl print:text-5xl font-black tracking-tighter leading-none text-black">
+                                        {songToPrint.song_name}
+                                    </h1>
+                                    <div className="flex items-center space-x-2 opacity-50">
+                                        <Flame className="w-8 h-8 print:w-6 print:h-6 text-black" />
+                                        <span className="text-2xl print:text-xl font-black italic tracking-tighter uppercase leading-none">IRON<span className="text-[#ea580c]">CHORDS</span></span>
                                     </div>
                                 </div>
 
                                 {/* Metadata */}
-                                <div className="mb-10">
-                                    <h1 className="text-5xl font-black uppercase italic tracking-tighter mb-2">{songToPrint.song_name}</h1>
-                                    <div className="flex justify-between items-end">
-                                        <p className="text-2xl font-bold uppercase">{songToPrint.artist_name}</p>
-                                        <p className="text-3xl font-black uppercase italic tracking-widest">Tom: {songToPrint.sounding_key || songToPrint.song_key}</p>
+                                <div className="mb-8 print:mb-8 font-sans">
+                                    <p className="text-3xl print:text-2xl font-bold uppercase text-[#ea580c] mb-6">{songToPrint.artist_name}</p>
+                                    <div className="flex items-center space-x-2">
+                                        <span className="text-lg print:text-base font-bold text-gray-800">Tom:</span>
+                                        <span className="text-lg print:text-base font-bold text-[#ea580c]">{songToPrint.sounding_key || songToPrint.song_key}</span>
                                     </div>
                                 </div>
 
                                 {/* Chords Content */}
-                                <div className="space-y-1">
-                                    {(songToPrint.content || "").split('\n').map((line, lIdx) => {
-                                        const isChordLine = !!(line && line.trim().length > 0 && (line.match(CHORD_TOKEN_RE) || []).length > 0 && line.replace(CHORD_TOKEN_RE, '').replace(/[\s|()\-xX0-9:]/g, '').length < Math.max(2, line.trim().length * 0.25));
-                                        const isTabLine = line.includes('|-') || line.includes('-|');
+                                {(() => {
+                                    const rawLines = (songToPrint.content || "").split('\n');
+                                    const blocks = [];
+                                    let currentBlock = [];
 
-                                        // Skip tab lines if includeTabs is false
-                                        if (!includeTabs && isTabLine) return null;
+                                    for (let i = 0; i < rawLines.length; i++) {
+                                        const line = rawLines[i].replace(/\r/g, '');
+                                        const trimmed = line.trim();
 
-                                        return (
-                                            <pre key={lIdx} className={`font-mono leading-relaxed whitespace-pre-wrap ${isChordLine ? 'text-black font-black italic border-b border-gray-100' : 'text-gray-800 font-medium'}`} style={{ fontSize: '16px' }}>
-                                                {isChordLine ? line : (line || ' ')}
-                                            </pre>
-                                        );
-                                    })}
-                                </div>
+                                        // 1. Remove setas de ritmo e batida (famosos lixos visuais)
+                                        if (line.includes('↓') || line.includes('↑')) continue;
+
+                                        // 2. Remove tabs e instruções de bateria/guitarra/frases desnecessárias
+                                        const isTabLine = line.includes('|-') || line.includes('-|') || /^[eBGDAE]\|/.test(trimmed);
+                                        const isGuitarNote = /guitarra|dedilhado|batida|solo|riff|ritmo|frase|passagem/i.test(line) && (line.includes('(') || line.includes('['));
+
+                                        if (!includeTabs && (isTabLine || isGuitarNote)) continue;
+
+                                        const isChordLine = !!(line && trimmed.length > 0 && (line.match(CHORD_TOKEN_RE) || []).length > 0 && line.replace(CHORD_TOKEN_RE, '').replace(/[\s|()\-xX0-9:]/g, '').length < Math.max(2, trimmed.length * 0.25));
+
+                                        // 3. Agrupar linhas em blocos
+                                        if (trimmed.length === 0) {
+                                            // Se for uma linha em branco, só quebra o bloco se o bloco atual tiver letras (texto verbal) ou se já tiveros 2 linhas em branco seguidas.
+                                            // Em outras palavras: se estamos num bloco PÚRO de cifras instrumentais (Intro/Solo), ignoramos linhas em branco singulares para que as cifras grudem no mesmo bloco e ativem o "Lado a Lado" (Grid).
+                                            if (currentBlock.length > 0) {
+                                                const hasLyrics = currentBlock.some(l => !l.isChordLine && !l.text.trim().startsWith('['));
+
+                                                // Verifica a próxima linha válida olhando para frente no rawLines
+                                                let nextValidLineIsChord = false;
+                                                for (let j = i + 1; j < rawLines.length; j++) {
+                                                    const nextL = rawLines[j].trim();
+                                                    if (nextL.length > 0) {
+                                                        const nextLIsChord = !!(nextL && (nextL.match(CHORD_TOKEN_RE) || []).length > 0 && nextL.replace(CHORD_TOKEN_RE, '').replace(/[\s|()\-xX0-9:]/g, '').length < Math.max(2, nextL.length * 0.25));
+                                                        nextValidLineIsChord = nextLIsChord;
+                                                        break;
+                                                    }
+                                                }
+
+                                                // Se não tem vocais E a próxima linha de conteúdo útil também é só Acorde, engolimos essa linha em branco e continuamos agrupando os acordes!
+                                                if (!hasLyrics && nextValidLineIsChord) {
+                                                    continue; // ignora a quebra de linha em branco
+                                                }
+
+                                                blocks.push(currentBlock);
+                                                currentBlock = [];
+                                            }
+                                        } else {
+                                            currentBlock.push({ text: line, isChordLine });
+                                        }
+                                    }
+                                    if (currentBlock.length > 0) blocks.push(currentBlock);
+
+                                    // 4. Colapsar acordes repetidos consecutivos no mesmo bloco
+                                    const collapsedBlocks = blocks.map(block => {
+                                        const newBlock = [];
+                                        let lastNormChord = null;
+                                        let originalChordText = null;
+                                        let chordCount = 0;
+
+                                        const commitChord = () => {
+                                            if (chordCount === 1) {
+                                                newBlock.push({ text: originalChordText, isChordLine: true });
+                                            } else if (chordCount > 1) {
+                                                newBlock.push({ text: `${originalChordText.trim()} (x${chordCount})`, isChordLine: true });
+                                            }
+                                            lastNormChord = null;
+                                            originalChordText = null;
+                                            chordCount = 0;
+                                        };
+
+                                        for (const lineObj of block) {
+                                            if (lineObj.isChordLine) {
+                                                const normChord = lineObj.text.trim().replace(/\s+/g, ' ');
+                                                if (normChord === lastNormChord) {
+                                                    chordCount++;
+                                                } else {
+                                                    commitChord();
+                                                    lastNormChord = normChord;
+                                                    originalChordText = lineObj.text;
+                                                    chordCount = 1;
+                                                }
+                                            } else {
+                                                commitChord();
+                                                newBlock.push(lineObj);
+                                            }
+                                        }
+                                        commitChord();
+                                        return newBlock;
+                                    });
+
+                                    // Determina se deve usar 2 colunas com base no número total de linhas a serem renderizadas
+                                    const totalLines = collapsedBlocks.reduce((acc, b) => acc + b.length, 0);
+                                    // Limite flexível para ativar as colunas, previne quebra bizarra em músicas médias
+                                    const useColumns = totalLines > 65;
+
+                                    return (
+                                        <div className={`mt-8 print:mt-6 font-sans ${useColumns ? 'print:columns-2 print:gap-16' : ''}`}>
+                                            {collapsedBlocks.map((block, bIdx) => {
+                                                const textCount = block.filter(l => !l.isChordLine).length;
+                                                // Verifica se é um bloco estritamente instrumental para aplicar a compressão de acordes
+                                                const isInstrumentalBlock = block.length >= 2 && (textCount === 0 || (textCount === 1 && block[0].text.includes('[') && block[0].text.length < 25));
+
+                                                return (
+                                                    <div key={bIdx} className="break-inside-avoid print:break-inside-avoid mb-8 print:mb-6 flex flex-col space-y-0">
+                                                        {block.map((lineObj, lIdx) => {
+                                                            // Identifica se a linha é um título de sessão (ex: [Refrão], [Intro])
+                                                            const isSectionTitle = lineObj.text.trim().startsWith('[') && lineObj.text.trim().endsWith(']');
+
+                                                            // Na ausência de frases (letras), se for uma cifra com espaçamentos manuais longos,
+                                                            // comprimi-los e jogar para a esquerda (justificado lado a lado).
+                                                            const displayText = (isInstrumentalBlock && lineObj.isChordLine && !isSectionTitle)
+                                                                ? lineObj.text.trim().replace(/\s+/g, '   ')
+                                                                : lineObj.text;
+
+                                                            return (
+                                                                <pre
+                                                                    key={lIdx}
+                                                                    className={`whitespace-pre-wrap ${lineObj.isChordLine ? 'font-mono text-[#ea580c] print:text-[#ea580c] font-bold print:leading-snug' : isSectionTitle ? 'font-sans font-bold text-gray-900 mt-2 mb-1 print:text-[15px]' : 'font-sans text-gray-900 print:leading-normal print:text-[15px]'}`}
+                                                                    style={{
+                                                                        fontSize: lineObj.isChordLine ? '14px' : '15px',
+                                                                        marginTop: lineObj.isChordLine && lIdx > 0 && !block[lIdx - 1].isChordLine && !isSectionTitle ? '0.25rem' : '0'
+                                                                    }}
+                                                                >
+                                                                    {displayText}
+                                                                </pre>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    );
+                                })()}
+
                             </div>
                         );
                     })()}
