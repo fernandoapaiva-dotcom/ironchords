@@ -539,6 +539,7 @@ class ChordEdit(BaseModel):
     artist_name: str
     song_key: str
     content: str
+    include_tabs: Optional[bool] = True
     capo: Optional[int] = 0
 
 @app.get("/api/chords")
@@ -550,7 +551,7 @@ def get_chords():
 def create_chord(data: ChordEdit):
     try:
         from database import save_chord
-        save_chord(data.song_name, data.artist_name, data.song_key, data.content, "manual", data.capo or 0)
+        save_chord(data.song_name, data.artist_name, data.song_key, data.content, "manual", data.capo or 0, data.include_tabs)
         return {"status": "ok"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -574,9 +575,9 @@ async def update_chord(chord_id: int, chord: ChordEdit):
     try:
         cursor.execute('''
             UPDATE chords
-            SET song_name=?, artist_name=?, song_key=?, content=?, capo=?
+            SET song_name=?, artist_name=?, song_key=?, content=?, capo=?, include_tabs=?
             WHERE id=?
-        ''', (chord.song_name, chord.artist_name, chord.song_key, chord.content, chord.capo, chord_id))
+        ''', (chord.song_name, chord.artist_name, chord.song_key, chord.content, chord.capo, 1 if chord.include_tabs else 0, chord_id))
         conn.commit()
         if cursor.rowcount == 0:
             raise HTTPException(status_code=404, detail="Cifra não encontrada no banco local.")

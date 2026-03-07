@@ -2,7 +2,7 @@
 import { createPortal } from 'react-dom';
 import { PhoneticMatcher } from './utils/PhoneticMatcher';
 import VideokePlayer from './components/VideokePlayer';
-import { Music, UploadCloud, Plus, FileText, CheckCircle, AlertCircle, FileAudio, Info, X, Guitar, Settings2, Image as ImageIcon, Database, Edit3, Trash2, ArrowRight, Play, Maximize, Maximize2, Pause, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Download, ArrowLeft, SkipBack, SkipForward, Save, FolderHeart, Flame, Hammer, Sparkles, RefreshCw, Zap, ShieldCheck, Monitor, Tv, Check, LayoutList, Layout, Mic, Search, RotateCcw, Printer, Archive } from 'lucide-react';
+import { Music, UploadCloud, Plus, FileText, CheckCircle, AlertCircle, Eye, EyeOff, FileAudio, Info, X, Guitar, Settings2, Image as ImageIcon, Database, Edit3, Trash2, ArrowRight, Play, Maximize, Maximize2, Pause, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Download, ArrowLeft, SkipBack, SkipForward, Save, FolderHeart, Flame, Hammer, Sparkles, RefreshCw, Zap, ShieldCheck, Monitor, Tv, Check, LayoutList, Layout, Mic, Search, RotateCcw, Printer, Archive } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { SVGuitarChord } from 'svguitar';
 import { AudioTracker } from './utils/AudioTracker';
@@ -534,7 +534,7 @@ export default function App() {
 
     // Filter Suggestions State
     const [editingChord, setEditingChord] = useState(null);
-    const [editFormData, setEditFormData] = useState({ song_name: '', artist_name: '', song_key: '', content: '', capo: 0 });
+    const [editFormData, setEditFormData] = useState({ song_name: '', artist_name: '', song_key: '', content: '', capo: 0, include_tabs: true });
 
     // Presentation Mode State
     const [presenterSongIndex, setPresenterSongIndex] = useState(0);
@@ -1082,15 +1082,46 @@ export default function App() {
     };
 
     const NOTES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+
     const normalizeNote = (note) => {
-        if (!note) return 'C';
-        let n = note.trim().split(/[ \/]/)[0]; // get first part, handle "A/B"
-        const match = n.match(/([A-G][b#]?)/i);
-        if (!match) return 'C';
-        let base = match[1].charAt(0).toUpperCase() + match[1].slice(1).toLowerCase();
-        const map = { 'Db': 'C#', 'Eb': 'D#', 'Gb': 'F#', 'Ab': 'G#', 'Bb': 'A#', 'Cb': 'B', 'Fb': 'E', 'E#': 'F', 'B#': 'C' };
-        let final = map[base] || base.toUpperCase();
-        return NOTES.includes(final) ? final : 'C';
+        if (!note) return '';
+        return note.replace(/b/g, 'b').replace(/#/g, '#');
+    };
+
+    const getSoundingKey = (song) => {
+        if (!song) return '';
+        if (song.sounding_key) return song.sounding_key;
+        const baseKey = song.requested_key || song.song_key || 'C';
+        if (!song.capo) return baseKey;
+
+        const NOTES_ARR = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+        let baseMatch = baseKey.match(/([A-G][b#]?)/i);
+        let base = baseMatch ? baseMatch[1] : null;
+
+        if (base) {
+            let idx = NOTES_ARR.indexOf(base);
+            if (idx === -1) {
+                // Handle flat variants
+                const flatMap = { 'Db': 'C#', 'Eb': 'D#', 'Gb': 'F#', 'Ab': 'G#', 'Bb': 'A#' };
+                idx = NOTES_ARR.indexOf(flatMap[base] || base);
+            }
+            if (idx !== -1) {
+                const final_idx = (idx + song.capo) % 12;
+                return baseKey.replace(base, NOTES_ARR[final_idx]);
+            }
+        }
+        return baseKey;
+    };
+
+    const getFilteredContent = (content) => {
+        if (!content) return "";
+        return content.split('\n').filter(line => {
+            const trimmed = line.trim();
+            const isTabLine = line.includes('|-') || line.includes('-|') || /^[eBGDAE]\|/.test(trimmed);
+            const isGuitarNote = /guitarra|dedilhado|batida|solo|riff|ritmo|frase|passagem/i.test(line) && (line.includes('(') || line.includes('['));
+            const isRhythmArrow = line.includes('↓') || line.includes('↑');
+            return !(isTabLine || isGuitarNote || isRhythmArrow);
+        }).join('\n');
     };
 
     useEffect(() => { if (activeTab === 'acervo') fetchAcervo(); }, [activeTab]);
@@ -1190,12 +1221,19 @@ export default function App() {
             const res = await fetch(`http://127.0.0.1:8000/api/chords/${id}`);
             const data = await res.json();
             setEditingChord(data.id);
-            setEditFormData({ song_name: data.song_name, artist_name: data.artist_name, song_key: data.song_key, content: data.content, capo: data.capo || 0 });
+            setEditFormData({
+                song_name: data.song_name,
+                artist_name: data.artist_name,
+                song_key: data.song_key,
+                content: data.content,
+                capo: data.capo || 0,
+                include_tabs: data.include_tabs !== undefined ? data.include_tabs : true
+            });
         } catch (err) { alert(err); }
     };
 
     const handleEditSave = async (e) => {
-        e.preventDefault();
+        if (e) e.preventDefault();
         try {
             await fetch(`http://127.0.0.1:8000/api/chords/${editingChord}`, {
                 method: 'PUT',
@@ -1205,6 +1243,27 @@ export default function App() {
             setEditingChord(null);
             fetchAcervo();
         } catch (err) { alert(err); }
+    };
+
+    const handleEditTranspose = async (semitones) => {
+        const currentKeyToUse = editFormData.song_key || 'C';
+        setIsTransposing(true);
+        try {
+            const res = await fetch('http://127.0.0.1:8000/api/transpose', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ content: editFormData.content, current_key: currentKeyToUse, semitones: semitones })
+            });
+            const data = await res.json();
+            if (data.transposed_content) {
+                setEditFormData(prev => ({
+                    ...prev,
+                    content: data.transposed_content,
+                    song_key: data.new_key
+                }));
+            }
+        } catch (err) { console.error(err); }
+        finally { setIsTransposing(false); }
     };
 
     // Auto-update Manual Preview when Key, Capo or Tabs change (DISABLED to decouple player from search form)
@@ -1591,7 +1650,7 @@ export default function App() {
                                     <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Tom Atual</span>
                                     <div className="flex items-center space-x-3 bg-black/40 px-5 py-2 rounded-xl border border-[#B87333]/20 shadow-[0_0_15px_rgba(184,115,51,0.1)]">
                                         <Music className="w-4 h-4 text-[#B87333]" />
-                                        <span className="text-sm font-black text-white uppercase italic">{currentSong?.sounding_key || currentSong?.song_key}</span>
+                                        <span className="text-sm font-black text-white uppercase italic">{getSoundingKey(currentSong)}</span>
                                     </div>
                                 </div>
                                 <div className="flex flex-col items-end opacity-40">
@@ -1684,14 +1743,18 @@ export default function App() {
                                             <h1 className="text-5xl font-black uppercase italic tracking-tighter mb-2">{currentSong?.song_name}</h1>
                                             <div className="flex justify-between items-end">
                                                 <p className="text-xl font-bold text-slate-700 uppercase">{currentSong?.artist_name}</p>
-                                                <p className="text-2xl font-black uppercase italic tracking-widest">Tom: {currentSong?.sounding_key || currentSong?.song_key}</p>
+                                                <p className="text-2xl font-black uppercase italic tracking-widest">Tom: {getSoundingKey(currentSong)}</p>
                                             </div>
                                         </div>
                                         {(currentSong?.content || "").split('\n').map((line, lIdx) => {
-                                            const isChordLine = !!(line && line.trim().length > 0 && (line.match(CHORD_TOKEN_RE) || []).length > 0 && line.replace(CHORD_TOKEN_RE, '').replace(/[\s|()\-xX0-9:]/g, '').length < Math.max(2, line.trim().length * 0.25));
-                                            const isTabLine = line.includes('|-') || line.includes('-|');
+                                            const trimmed = line.trim();
+                                            const isChordLine = !!(line && trimmed.length > 0 && (line.match(CHORD_TOKEN_RE) || []).length > 0 && line.replace(CHORD_TOKEN_RE, '').replace(/[\s|()\-xX0-9:]/g, '').length < Math.max(2, trimmed.length * 0.25));
+                                            const isTabLine = line.includes('|-') || line.includes('-|') || /^[eBGDAE]\|/.test(trimmed);
+                                            const isGuitarNote = /guitarra|dedilhado|batida|solo|riff|ritmo|frase|passagem/i.test(line) && (line.includes('(') || line.includes('['));
+                                            const isRhythmArrow = line.includes('↓') || line.includes('↑');
 
-                                            if (!includeTabs && isTabLine) return null;
+                                            const effectivelyIncludeTabs = currentSong?.include_tabs ?? includeTabs;
+                                            if (!effectivelyIncludeTabs && (isTabLine || isGuitarNote || isRhythmArrow)) return null;
 
                                             const isActive = currentLineIndex === lIdx;
                                             const isPast = lIdx < currentLineIndex;
@@ -1701,14 +1764,14 @@ export default function App() {
                                                     key={lIdx}
                                                     data-line-index={lIdx}
                                                     onClick={() => handleLineClick(lIdx)}
-                                                    className={`py-1 px-4 rounded-xl cursor-pointer transition-all duration-500 flex items-center group relative 
+                                                    className={`py-1 px-4 rounded-xl cursor-pointer transition-all duration-500 flex items-center group relative
                                                         ${isActive ? 'bg-[#B87333]/25 scale-[1.02] z-10' : 'hover:bg-white/5'}
                                                         ${isPast ? 'opacity-40 grayscale-[0.5]' : 'opacity-100'}
                                                     `}
                                                     style={{ fontSize: `${playerFontSize}px` }}
                                                 >
                                                     {isActive && <div className="absolute left-0 w-2 h-full bg-[#B87333] rounded-full shadow-[0_0_20px_rgba(184,115,51,0.8)] animate-pulse"></div>}
-                                                    <pre className={`font-mono leading-relaxed whitespace-pre-wrap transition-colors duration-500 
+                                                    <pre className={`font-mono leading-relaxed whitespace-pre-wrap transition-colors duration-500
                                                         ${isActive ? 'text-white font-black' : isChordLine ? 'text-[#B87333] font-bold italic opacity-80' : 'text-slate-400 font-medium'}
                                                     `}>
                                                         {isChordLine
@@ -1921,7 +1984,7 @@ export default function App() {
                                                         <div className={`
                                                             ${isManualFullscreen
                                                                 ? 'fixed inset-0 z-[9999] bg-[#070709] bg-grid-white/[0.02]'
-                                                                : 'bg-[#16161D] border border-white/10 rounded-[40px] shadow-2xl mt-12'} 
+                                                                : 'bg-[#16161D] border border-white/10 rounded-[40px] shadow-2xl mt-12'}
                                                             animate-in fade-in slide-in-from-top-10 duration-700 overflow-hidden flex flex-col transition-all printable-area
                                                         `}>
 
@@ -2059,7 +2122,7 @@ export default function App() {
                                                                         <div className="flex items-center space-x-4 border-l border-white/5 pl-6">
                                                                             <button
                                                                                 onClick={() => setIsManualAutoScrolling(!isManualAutoScrolling)}
-                                                                                className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${isManualAutoScrolling ? 'bg-[#B87333] text-white shadow-lg shadow-[#B87333]/40' : 'bg-white/5 text-slate-500 hover:text-white'}`}
+                                                                                className="w-10 h-10 rounded-xl flex items-center justify-center transition-all ${isManualAutoScrolling ? 'bg-[#B87333] text-white shadow-lg shadow-[#B87333]/40' : 'bg-white/5 text-slate-500 hover:text-white'}"
                                                                             >
                                                                                 {isManualAutoScrolling ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
                                                                             </button>
@@ -2137,7 +2200,7 @@ export default function App() {
                                                             <div
                                                                 ref={manualScrollContainerRef}
                                                                 className={`
-                                                                    flex-1 overflow-y-auto ${isManualFullscreen ? 'p-10 md:p-20 pt-16 md:pt-24' : 'p-10'} 
+                                                                    flex-1 overflow-y-auto ${isManualFullscreen ? 'p-10 md:p-20 pt-16 md:pt-24' : 'p-10'}
                                                                     scrollbar-none pb-32 transition-all
                                                                 `}
                                                                 style={{ maxHeight: isManualFullscreen ? '100vh' : '500px' }}
@@ -2154,7 +2217,7 @@ export default function App() {
                                                                         <h1 className="text-5xl font-black uppercase italic tracking-tighter mb-2">{manualPreviewSong?.song_name}</h1>
                                                                         <div className="flex justify-between items-end">
                                                                             <p className="text-xl font-bold text-slate-700 uppercase">{manualPreviewSong?.artist_name}</p>
-                                                                            <p className="text-2xl font-black uppercase italic tracking-widest">Tom: {manualPreviewSong?.sounding_key || manualPreviewSong?.song_key}</p>
+                                                                            <p className="text-2xl font-black uppercase italic tracking-widest">Tom: {getSoundingKey(manualPreviewSong)}</p>
                                                                         </div>
                                                                     </div>
 
@@ -2703,11 +2766,11 @@ export default function App() {
                                                         {acervoLoading ? (
                                                             <div className="col-span-full py-20 text-center"><RefreshCw className="w-10 h-10 animate-spin text-[#B87333] mx-auto mb-4" /><p className="text-[10px] font-black text-slate-600 uppercase tracking-widest">Sincronizando Banco...</p></div>
                                                         ) : acervo.filter(item => item.song_name.toLowerCase().includes(acervoSearchTerm.toLowerCase()) || item.artist_name.toLowerCase().includes(acervoSearchTerm.toLowerCase())).map((item, idx) => (
-                                                            <div key={idx} className={`bg-black/40 border p-6 rounded-[28px] flex items-center justify-between transition-all group relative overflow-hidden flex-col sm:flex-row gap-4 ${selectedAcervoItems.includes(item.id) ? 'border-[#B87333]/50 bg-[#B87333]/5' : 'border-white/5 hover:border-[#B87333]/30'}`}>
+                                                            <div key={idx} className={`bg-black/40 border p-6 rounded-[32px] flex flex-col transition-all group relative overflow-hidden gap-5 ${selectedAcervoItems.includes(item.id) ? 'border-[#B87333]/50 bg-[#B87333]/5' : 'border-white/5 hover:border-[#B87333]/30'}`}>
                                                                 <div className={`absolute top-0 left-0 w-1 h-full transition-all ${selectedAcervoItems.includes(item.id) ? 'bg-[#B87333]' : 'bg-[#B87333]/20 group-hover:bg-[#B87333]"'}`}></div>
 
-                                                                {/* Checkbox */}
-                                                                <div className="absolute top-4 left-4 z-10 w-full flex justify-start sm:w-auto sm:relative sm:top-0 sm:left-0 sm:h-full sm:items-center sm:pr-2">
+                                                                <div className="flex items-start justify-between w-full">
+                                                                    {/* Checkbox */}
                                                                     <label className="cursor-pointer relative flex items-center justify-center p-2 -m-2">
                                                                         <input
                                                                             type="checkbox"
@@ -2722,25 +2785,62 @@ export default function App() {
                                                                             <Check className="w-3.5 h-3.5 text-white opacity-0 peer-checked:opacity-100 transition-opacity" />
                                                                         </div>
                                                                     </label>
+
+                                                                    <div className="flex-1 min-w-0 px-4">
+                                                                        <p className="text-base font-black text-white uppercase italic truncate leading-tight">{item.song_name}</p>
+                                                                        <p className="text-[10px] font-bold text-slate-500 mt-1 uppercase tracking-widest transition-colors group-hover:text-[#B87333]/80 truncate">
+                                                                            {item.artist_name} • {item.song_key}
+                                                                        </p>
+                                                                    </div>
                                                                 </div>
 
-                                                                <div className="flex-1 min-w-0 px-2 w-full text-left mt-6 sm:mt-0 sm:pr-4">
-                                                                    <p className="text-sm font-black text-white uppercase italic truncate">{item.song_name}</p>
-                                                                    <p className="text-[10px] font-bold text-slate-600 mt-1 uppercase transition-colors group-hover:text-[#B87333]/60">
-                                                                        {item.artist_name} • {item.song_key}
-                                                                        {item.capo > 0 && <span className="ml-3 px-2 py-0.5 bg-[#B87333]/20 text-[#B87333] rounded-md font-bold tracking-widest text-[8px] animate-pulse whitespace-nowrap">CAPO NA {item.capo}ª CASA</span>}
-                                                                    </p>
-                                                                </div>
-                                                                <div className="flex items-center space-x-2 w-full sm:w-auto justify-end">
-                                                                    <button onClick={() => setSongs([...songs, { ...item, requested_key: item.song_key, sounding_key: item.song_key, capo: item.capo || 0, show_chords: true }])} className="w-10 h-10 bg-white/5 hover:bg-[#B87333] text-slate-600 hover:text-white rounded-xl flex items-center justify-center transition-all shadow-xl active:scale-90 flex-shrink-0" title="Adicionar à Forja">
-                                                                        <Plus className="w-4 h-4" />
-                                                                    </button>
-                                                                    <button onClick={() => handleEditOpen(item.id)} className="w-10 h-10 bg-white/5 hover:bg-blue-600 text-slate-600 hover:text-white rounded-xl flex items-center justify-center transition-all shadow-xl active:scale-90 flex-shrink-0" title="Editar">
-                                                                        <Edit3 className="w-4 h-4" />
-                                                                    </button>
-                                                                    <button onClick={() => handleDeleteAcervo(item.id, item.song_name)} className="w-10 h-10 bg-white/5 hover:bg-red-600 text-slate-600 hover:text-white rounded-xl flex items-center justify-center transition-all shadow-xl active:scale-90 flex-shrink-0" title="Excluir">
-                                                                        <Trash2 className="w-4 h-4" />
-                                                                    </button>
+                                                                {item.capo > 0 && (
+                                                                    <div className="px-4">
+                                                                        <span className="inline-flex px-3 py-1 bg-[#B87333]/15 text-[#B87333] rounded-lg font-black tracking-[0.2em] text-[8px] border border-[#B87333]/20 uppercase">
+                                                                            Capo: {item.capo}ª Casa
+                                                                        </span>
+                                                                    </div>
+                                                                )}
+
+                                                                <div className="flex items-center gap-2 px-2 pt-2 border-t border-white/5 w-full justify-between">
+                                                                    <div className="flex items-center gap-2">
+                                                                        <button
+                                                                            onClick={() => {
+                                                                                setManualPreviewSong(item);
+                                                                                setTimeout(() => window.print(), 300);
+                                                                            }}
+                                                                            className="w-10 h-10 bg-white/5 hover:bg-[#ea580c] text-slate-500 hover:text-white rounded-xl flex items-center justify-center transition-all border border-white/5 active:scale-95"
+                                                                            title="Imprimir Cifra"
+                                                                        >
+                                                                            <Printer className="w-4 h-4" />
+                                                                        </button>
+                                                                        <button onClick={() => {
+                                                                            const NOTES_ARR = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+                                                                            let s_key = item.song_key;
+                                                                            if (item.capo > 0) {
+                                                                                let baseMatch = s_key.match(/([A-G][b#]?)/i);
+                                                                                let base = baseMatch ? baseMatch[1] : null;
+                                                                                if (base) {
+                                                                                    let idx = NOTES_ARR.indexOf(base);
+                                                                                    if (idx !== -1) {
+                                                                                        let final_idx = (idx + item.capo) % 12;
+                                                                                        s_key = s_key.replace(base, NOTES_ARR[final_idx]);
+                                                                                    }
+                                                                                }
+                                                                            }
+                                                                            setSongs([...songs, { ...item, requested_key: item.song_key, sounding_key: s_key, capo: item.capo || 0, show_chords: true, include_tabs: item.include_tabs ?? true }]);
+                                                                        }} className="w-10 h-10 bg-white/5 hover:bg-[#B87333] text-slate-500 hover:text-white rounded-xl flex items-center justify-center transition-all border border-white/5 active:scale-90" title="Adicionar à Forja">
+                                                                            <Plus className="w-4 h-4" />
+                                                                        </button>
+                                                                    </div>
+                                                                    <div className="flex items-center gap-2">
+                                                                        <button onClick={() => handleEditOpen(item.id)} className="w-10 h-10 bg-white/5 hover:bg-blue-600 text-slate-600 hover:text-white rounded-xl flex items-center justify-center transition-all border border-white/5 active:scale-90" title="Editar">
+                                                                            <Edit3 className="w-4 h-4" />
+                                                                        </button>
+                                                                        <button onClick={() => handleDeleteAcervo(item.id, item.song_name)} className="w-10 h-10 bg-white/5 hover:bg-red-600 text-slate-600 hover:text-white rounded-xl flex items-center justify-center transition-all border border-white/5 active:scale-90" title="Excluir">
+                                                                            <Trash2 className="w-4 h-4" />
+                                                                        </button>
+                                                                    </div>
                                                                 </div>
                                                             </div>
                                                         ))}
@@ -3203,24 +3303,84 @@ export default function App() {
                                     <input type="text" value={editFormData.artist_name} onChange={e => setEditFormData({ ...editFormData, artist_name: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-4 text-white font-bold outline-none focus:border-[#B87333]/50 transition-all" />
                                 </div>
                             </div>
-                            <div className="grid grid-cols-2 gap-6">
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                                 <div>
                                     <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Tom Original</label>
-                                    <select value={editFormData.song_key} onChange={e => setEditFormData({ ...editFormData, song_key: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-4 text-white font-bold outline-none focus:border-[#B87333]/50 transition-all">
-                                        {["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"].map(k => <option key={k} value={k} className="bg-[#1A1A1A]">{k}</option>)}
-                                    </select>
+                                    <div className="flex items-center space-x-2">
+                                        <select
+                                            value={editFormData.song_key}
+                                            onChange={e => {
+                                                const oldKey = editFormData.song_key;
+                                                const newKey = e.target.value;
+                                                const NOTES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+                                                const oldIdx = NOTES.indexOf(oldKey);
+                                                const newIdx = NOTES.indexOf(newKey);
+                                                if (oldIdx !== -1 && newIdx !== -1) {
+                                                    const diff = newIdx - oldIdx;
+                                                    handleEditTranspose(diff);
+                                                } else {
+                                                    setEditFormData({ ...editFormData, song_key: newKey });
+                                                }
+                                            }}
+                                            className="flex-1 bg-black/40 border border-white/10 rounded-xl px-4 py-4 text-white font-bold outline-none focus:border-[#B87333]/50 transition-all"
+                                        >
+                                            {["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"].map(k => <option key={k} value={k} className="bg-[#1A1A1A]">{k}</option>)}
+                                        </select>
+                                        <div className="flex flex-col space-y-1">
+                                            <button onClick={() => handleEditTranspose(1)} className="p-2 bg-white/5 hover:bg-white/10 rounded-lg border border-white/5 text-slate-400 hover:text-white transition-all" title="Subir Semitom"><ChevronUp className="w-4 h-4" /></button>
+                                            <button onClick={() => handleEditTranspose(-1)} className="p-2 bg-white/5 hover:bg-white/10 rounded-lg border border-white/5 text-slate-400 hover:text-white transition-all" title="Baixar Semitom"><ChevronDown className="w-4 h-4" /></button>
+                                        </div>
+                                    </div>
                                 </div>
                                 <div>
                                     <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Capo</label>
-                                    <select value={editFormData.capo} onChange={e => setEditFormData({ ...editFormData, capo: parseInt(e.target.value) })} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-4 text-white font-bold outline-none focus:border-[#B87333]/50 transition-all">
-                                        <option value={0} className="bg-[#1A1A1A]">Sem Capo</option>
-                                        {[...Array(12)].map((_, i) => <option key={i + 1} value={i + 1} className="bg-[#1A1A1A]">Casa {i + 1}</option>)}
-                                    </select>
+                                    <div className="flex items-center space-x-3">
+                                        <select value={editFormData.capo} onChange={e => setEditFormData({ ...editFormData, capo: parseInt(e.target.value) })} className="flex-1 bg-black/40 border border-white/10 rounded-xl px-4 py-4 text-white font-bold outline-none focus:border-[#B87333]/50 transition-all">
+                                            <option value={0} className="bg-[#1A1A1A]">Sem Capo</option>
+                                            {[...Array(12)].map((_, i) => <option key={i + 1} value={i + 1} className="bg-[#1A1A1A]">Casa {i + 1}</option>)}
+                                        </select>
+                                        {editFormData.capo > 0 && (
+                                            <div className="px-4 py-2 bg-[#B87333]/10 border border-[#B87333]/30 rounded-xl">
+                                                <span className="text-[8px] font-black text-[#B87333] uppercase block leading-none mb-1">Tom Resultante</span>
+                                                <span className="text-sm font-black text-white italic">{getSoundingKey({ song_key: editFormData.song_key, capo: editFormData.capo })}</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Tablaturas</label>
+                                    <button
+                                        onClick={() => setEditFormData(prev => ({ ...prev, include_tabs: !prev.include_tabs }))}
+                                        className={`w-full py-4 rounded-xl transition-all border flex items-center justify-center space-x-3 font-bold uppercase tracking-widest text-[10px] ${editFormData.include_tabs ? 'bg-[#B87333]/20 border-[#B87333] text-[#B87333]' : 'bg-black/40 border-white/5 text-slate-600 hover:text-slate-400'}`}
+                                    >
+                                        {editFormData.include_tabs ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                        <span>{editFormData.include_tabs ? "Ocultar Tabs" : "Mostrar Tabs"}</span>
+                                    </button>
                                 </div>
                             </div>
                             <div>
                                 <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Cifra</label>
-                                <textarea value={editFormData.content} onChange={e => setEditFormData({ ...editFormData, content: e.target.value })} className="w-full bg-black/60 border border-white/10 rounded-2xl px-6 py-6 text-white outline-none font-mono text-xs leading-relaxed min-h-[400px] hover:border-white/20 focus:border-[#B87333]/50 transition-all scrollbar-thin shadow-inner" spellCheck="false" />
+                                <div className="relative group/editor">
+                                    <textarea
+                                        value={editFormData.include_tabs ? editFormData.content : getFilteredContent(editFormData.content)}
+                                        onChange={e => {
+                                            if (editFormData.include_tabs) {
+                                                setEditFormData({ ...editFormData, content: e.target.value });
+                                            }
+                                        }}
+                                        readOnly={!editFormData.include_tabs}
+                                        className={`w-full bg-black/60 border rounded-2xl px-6 py-6 text-white outline-none font-mono text-xs leading-relaxed min-h-[400px] transition-all scrollbar-thin shadow-inner ${!editFormData.include_tabs ? 'border-white/5 cursor-not-allowed opacity-80' : 'border-white/10 hover:border-white/20 focus:border-[#B87333]/50'}`}
+                                        spellCheck="false"
+                                    />
+                                    {!editFormData.include_tabs && (
+                                        <div className="absolute inset-0 flex items-center justify-center bg-black/20 backdrop-blur-[1px] opacity-0 group-hover/editor:opacity-100 transition-opacity pointer-events-none">
+                                            <div className="bg-black/80 border border-[#B87333]/50 px-4 py-2 rounded-xl flex items-center space-x-2">
+                                                <Eye className="w-4 h-4 text-[#B87333]" />
+                                                <span className="text-[10px] font-bold text-white uppercase italic">Ative as Tabs para Editar</span>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         </div>
                         <div className="mt-8 shrink-0">
@@ -3264,9 +3424,17 @@ export default function App() {
                                 {/* Metadata */}
                                 <div className="mb-8 print:mb-8 font-sans">
                                     <p className="text-3xl print:text-2xl font-bold uppercase text-[#ea580c] mb-6">{songToPrint.artist_name}</p>
-                                    <div className="flex items-center space-x-2">
-                                        <span className="text-lg print:text-base font-bold text-gray-800">Tom:</span>
-                                        <span className="text-lg print:text-base font-bold text-[#ea580c]">{songToPrint.sounding_key || songToPrint.song_key}</span>
+                                    <div className="flex items-center space-x-6">
+                                        <div className="flex items-center space-x-2">
+                                            <span className="text-lg print:text-base font-bold text-gray-800">Tom:</span>
+                                            <span className="text-lg print:text-base font-bold text-[#ea580c]">{getSoundingKey(songToPrint)}</span>
+                                        </div>
+                                        {songToPrint.capo > 0 && (
+                                            <div className="flex items-center space-x-2">
+                                                <span className="text-lg print:text-base font-bold text-gray-800">Capotraste:</span>
+                                                <span className="text-lg print:text-base font-bold text-[#ea580c]">{songToPrint.capo}ª Casa</span>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
 
@@ -3280,14 +3448,13 @@ export default function App() {
                                         const line = rawLines[i].replace(/\r/g, '');
                                         const trimmed = line.trim();
 
-                                        // 1. Remove setas de ritmo e batida (famosos lixos visuais)
-                                        if (line.includes('↓') || line.includes('↑')) continue;
-
-                                        // 2. Remove tabs e instruções de bateria/guitarra/frases desnecessárias
+                                        // 1. Remove lixos visuais contextuais baseados na preferência de tabs
                                         const isTabLine = line.includes('|-') || line.includes('-|') || /^[eBGDAE]\|/.test(trimmed);
                                         const isGuitarNote = /guitarra|dedilhado|batida|solo|riff|ritmo|frase|passagem/i.test(line) && (line.includes('(') || line.includes('['));
+                                        const isRhythmArrow = line.includes('↓') || line.includes('↑');
 
-                                        if (!includeTabs && (isTabLine || isGuitarNote)) continue;
+                                        const effectivelyIncludeTabs = songToPrint.include_tabs ?? includeTabs;
+                                        if (!effectivelyIncludeTabs && (isTabLine || isGuitarNote || isRhythmArrow)) continue;
 
                                         const isChordLine = !!(line && trimmed.length > 0 && (line.match(CHORD_TOKEN_RE) || []).length > 0 && line.replace(CHORD_TOKEN_RE, '').replace(/[\s|()\-xX0-9:]/g, '').length < Math.max(2, trimmed.length * 0.25));
 
