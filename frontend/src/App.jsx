@@ -851,7 +851,8 @@ export default function App() {
     // AutoScroll Effect with Mic interaction
     useEffect(() => {
         let interval;
-        if ((activeTab === 'presentation' || activeTab === 'player' || selectedManualIndex !== null) && isAutoScrolling && scrollContainerRef.current) {
+        const isPlayerViewActive = activeTab === 'presentation' || activeTab === 'player' || isFullScreenPlayer;
+        if (isPlayerViewActive && isAutoScrolling && scrollContainerRef.current) {
             interval = setInterval(() => {
                 const threshold = 15;
                 const shouldScroll = !micEnabled || micLevel > threshold;
@@ -861,7 +862,7 @@ export default function App() {
             }, 50);
         }
         return () => clearInterval(interval);
-    }, [activeTab, isAutoScrolling, scrollSpeed, micEnabled, micLevel, selectedManualIndex]);
+    }, [activeTab, isFullScreenPlayer, isAutoScrolling, scrollSpeed, micEnabled, micLevel]);
 
     // Manual Preview AutoScroll Effect
     useEffect(() => {
@@ -959,10 +960,13 @@ export default function App() {
                     (state) => setFsmState(state),
                     (status) => setConnectionStatus(status)
                 );
-                // Initial gain
-                audioTrackerRef.current.setGain(micGain);
             }
-            audioTrackerRef.current.start();
+            audioTrackerRef.current.start().then(() => {
+                if (audioTrackerRef.current) audioTrackerRef.current.setGain(micGain);
+            }).catch((err) => {
+                console.error("Microphone access denied or error:", err);
+                setMicEnabled(false);
+            });
         } else {
             if (audioTrackerRef.current) {
                 audioTrackerRef.current.stop();
@@ -1925,10 +1929,54 @@ export default function App() {
                                     </button>
                                 </div>
                                 <div className="flex flex-col items-end">
+                                    <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Capotraste</span>
+                                    <div className="flex items-center space-x-2 bg-black/40 p-1 rounded-xl border border-white/5">
+                                        <button
+                                            onClick={() => {
+                                                if (selectedManualIndex !== null && songs[selectedManualIndex]) {
+                                                    const next = [...songs];
+                                                    next[selectedManualIndex].capo = Math.max(0, (next[selectedManualIndex].capo || 0) - 1);
+                                                    setSongs(next);
+                                                }
+                                            }}
+                                            className="p-1.5 text-slate-500 hover:text-white transition-all">
+                                            <Minus className="w-3.5 h-3.5" />
+                                        </button>
+                                        <span className="text-xs font-black text-[#B87333] w-6 text-center">{currentSong?.capo || 0}</span>
+                                        <button
+                                            onClick={() => {
+                                                if (selectedManualIndex !== null && songs[selectedManualIndex]) {
+                                                    const next = [...songs];
+                                                    next[selectedManualIndex].capo = Math.min(11, (next[selectedManualIndex].capo || 0) + 1);
+                                                    setSongs(next);
+                                                }
+                                            }}
+                                            className="p-1.5 text-slate-500 hover:text-white transition-all">
+                                            <Plus className="w-3.5 h-3.5" />
+                                        </button>
+                                    </div>
+                                </div>
+                                <div className="flex flex-col items-end">
                                     <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Tom Atual</span>
-                                    <div className="flex items-center space-x-3 bg-black/40 px-5 py-2 rounded-xl border border-[#B87333]/20 shadow-[0_0_15px_rgba(184,115,51,0.1)]">
-                                        <Music className="w-4 h-4 text-[#B87333]" />
-                                        <span className="text-sm font-black text-white uppercase italic">{getSoundingKey(currentSong)}</span>
+                                    <div className="flex items-center space-x-2 bg-black/40 p-1 rounded-xl border border-[#B87333]/20 shadow-[0_0_15px_rgba(184,115,51,0.1)]">
+                                        <button
+                                            onClick={() => transposeSong(selectedManualIndex, -1)}
+                                            disabled={isTransposing}
+                                            className="p-1.5 text-slate-500 hover:text-white transition-all disabled:opacity-50">
+                                            <Minus className="w-3.5 h-3.5" />
+                                        </button>
+                                        <div className="flex items-center space-x-1 px-2 pointer-events-none">
+                                            <Music className="w-3.5 h-3.5 text-[#B87333]" />
+                                            <span className="text-sm font-black text-white uppercase italic min-w-[1.5rem] text-center">
+                                                {isTransposing ? '...' : getSoundingKey(currentSong)}
+                                            </span>
+                                        </div>
+                                        <button
+                                            onClick={() => transposeSong(selectedManualIndex, 1)}
+                                            disabled={isTransposing}
+                                            className="p-1.5 text-slate-500 hover:text-white transition-all disabled:opacity-50">
+                                            <Plus className="w-3.5 h-3.5" />
+                                        </button>
                                     </div>
                                 </div>
                                 <div className="flex flex-col items-end opacity-40">
