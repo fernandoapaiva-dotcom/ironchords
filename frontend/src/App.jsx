@@ -3099,9 +3099,11 @@ export default function App() {
                                                             const KEYS = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B', 'Db', 'Eb', 'Gb', 'Ab', 'Bb'];
                                                             const KEY_SEMITONES = { 'C': 0, 'C#': 1, 'Db': 1, 'D': 2, 'D#': 3, 'Eb': 3, 'E': 4, 'F': 5, 'F#': 6, 'Gb': 6, 'G': 7, 'G#': 8, 'Ab': 8, 'A': 9, 'A#': 10, 'Bb': 10, 'B': 11 };
                                                             const updateSong = (patch) => {
-                                                                const s2 = [...editingList.songs];
-                                                                s2[si] = { ...s2[si], ...patch };
-                                                                setEditingList({ ...editingList, songs: s2 });
+                                                                setEditingList(prev => {
+                                                                    const s2 = [...prev.songs];
+                                                                    s2[si] = { ...s2[si], ...patch };
+                                                                    return { ...prev, songs: s2 };
+                                                                });
                                                             };
                                                             const transpose = async (semitones, targetKey = null) => {
                                                                 try {
@@ -3120,9 +3122,11 @@ export default function App() {
                                                                         const res = await fetch('http://127.0.0.1:8000/api/transpose', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: song.content, current_key: currentKey, semitones }) });
                                                                         const d = await res.json();
                                                                         if (d.transposed_content) {
-                                                                            const s2 = [...editingList.songs];
-                                                                            s2[si] = { ...s2[si], content: d.transposed_content, sounding_key: d.new_key, song_key: d.new_key, _orig_key: d.new_key, _orig_content: d.transposed_content };
-                                                                            setEditingList({ ...editingList, songs: s2 });
+                                                                            setEditingList(prev => {
+                                                                                const s2 = [...prev.songs];
+                                                                                s2[si] = { ...s2[si], content: d.transposed_content, sounding_key: d.new_key, song_key: d.new_key, _orig_key: d.new_key, _orig_content: d.transposed_content };
+                                                                                return { ...prev, songs: s2 };
+                                                                            });
                                                                         }
                                                                     }
                                                                 } catch (e) { console.error(e); }
