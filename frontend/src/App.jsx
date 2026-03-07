@@ -545,6 +545,8 @@ export default function App() {
     // Save List State
     const [saveListModalOpen, setSaveListModalOpen] = useState(false);
     const [saveListName, setSaveListName] = useState('');
+    const [saveListMode, setSaveListMode] = useState('new'); // 'new' | 'existing'
+    const [selectedListsToAddTo, setSelectedListsToAddTo] = useState([]);
     const [showSaveSuccess, setShowSaveSuccess] = useState(false);
     const [showSaveConflict, setShowSaveConflict] = useState(false);
 
@@ -651,6 +653,40 @@ export default function App() {
             setConflictQueue(conflictsFound);
             processConflictQueue(conflictsFound);
         }
+    };
+
+    const handleAddToExistingLists = () => {
+        const songsToSave = activeTab === 'batch' && showBatchReview
+            ? batchResults.filter(r => r.status === 'success')
+            : songs;
+        if (selectedListsToAddTo.length === 0 || songsToSave.length === 0) return;
+
+        const allPlaylists = JSON.parse(localStorage.getItem('iron_chords_playlists') || '[]');
+        const newSongsData = songsToSave.map(s => ({
+            id: s.id || null,
+            song_name: s.song_name,
+            artist_name: s.artist_name,
+            song_key: s.sounding_key || s.requested_key || s.song_key,
+            sounding_key: s.sounding_key || s.requested_key || s.song_key,
+            original_key: s.original_key || s.song_key,
+            capo: s.capo || 0,
+            content: s.content || ''
+        }));
+
+        const updated = allPlaylists.map(pl => {
+            if (selectedListsToAddTo.includes(pl.id)) {
+                const existingNames = new Set(pl.songs.map(s => s.song_name.toLowerCase()));
+                const toAdd = newSongsData.filter(s => !existingNames.has(s.song_name.toLowerCase()));
+                return { ...pl, songs: [...pl.songs, ...toAdd] };
+            }
+            return pl;
+        });
+        localStorage.setItem('iron_chords_playlists', JSON.stringify(updated));
+        setSavedPlaylists(updated);
+        setSaveListModalOpen(false);
+        setSelectedListsToAddTo([]);
+        setShowSaveSuccess(true);
+        setTimeout(() => setShowSaveSuccess(false), 2000);
     };
 
     const handlePrint = () => {
@@ -3264,29 +3300,66 @@ export default function App() {
             )}
 
             {/* Save List Modal */}
-            {saveListModalOpen && (
-                <div className="fixed inset-0 z-[200] flex items-center justify-center bg-[#070709]/90 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-300">
-                    <div className="bg-[#16161D] border border-white/10 p-8 rounded-[32px] shadow-2xl w-full max-w-md flex flex-col">
-                        <div className="flex items-center justify-between mb-8">
-                            <div className="flex items-center space-x-4">
-                                <div className="w-1.5 h-6 bg-[#B87333] rounded-full shadow-[0_0_15px_rgba(184,115,51,0.4)]"></div>
-                                <h3 className="text-xl font-black text-white uppercase italic tracking-tighter">Salvar Lista</h3>
+            {saveListModalOpen && (() => {
+                const allPlaylists = JSON.parse(localStorage.getItem('iron_chords_playlists') || '[]');
+                const hasExisting = allPlaylists.length > 0;
+                return (
+                    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-[#070709]/90 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-300">
+                        <div className="bg-[#16161D] border border-white/10 p-8 rounded-[32px] shadow-2xl w-full max-w-md flex flex-col">
+                            <div className="flex items-center justify-between mb-6">
+                                <div className="flex items-center space-x-3">
+                                    <div className="w-1.5 h-6 bg-[#B87333] rounded-full shadow-[0_0_15px_rgba(184,115,51,0.4)]"></div>
+                                    <h3 className="text-xl font-black text-white uppercase italic tracking-tighter">Salvar Forja</h3>
+                                </div>
+                                <button onClick={() => { setSaveListModalOpen(false); setSaveListName(''); setSelectedListsToAddTo([]); }} className="p-2 bg-white/5 hover:bg-white/10 rounded-xl transition-all border border-white/5"><X className="w-5 h-5 text-slate-400" /></button>
                             </div>
-                            <button onClick={() => { setSaveListModalOpen(false); setSaveListName(''); }} className="p-2 bg-white/5 hover:bg-white/10 rounded-xl transition-all border border-white/5"><X className="w-5 h-5 text-slate-400" /></button>
-                        </div>
-                        <div className="space-y-6">
-                            <div>
-                                <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Nome da Lista</label>
-                                <input type="text" autoFocus placeholder="Ex: Missa de Domingo..." value={saveListName} onChange={e => setSaveListName(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-4 text-white font-bold outline-none focus:border-[#B87333]/50 transition-all placeholder:text-slate-700" onKeyDown={e => e.key === 'Enter' && handleSaveList()} />
+
+                            <div className="flex bg-black/40 p-1.5 rounded-2xl border border-white/5 mb-6">
+                                <button onClick={() => setSaveListMode('new')} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${saveListMode === 'new' ? 'bg-[#B87333] text-white shadow-lg' : 'text-slate-500 hover:text-white'}`}>+ Nova Lista</button>
+                                <button onClick={() => setSaveListMode('existing')} disabled={!hasExisting} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-30 disabled:cursor-not-allowed ${saveListMode === 'existing' ? 'bg-[#B87333] text-white shadow-lg' : 'text-slate-500 hover:text-white'}`}>Adicionar à Existente</button>
                             </div>
-                            <button onClick={handleSaveList} disabled={!saveListName.trim()} className="w-full py-4 bg-[#B87333] hover:bg-[#8B4513] text-white font-black uppercase tracking-widest rounded-xl transition-all shadow-xl shadow-[#B87333]/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2">
-                                <Save className="w-4 h-4" />
-                                <span>Confirmar Salvamento</span>
-                            </button>
+
+                            {saveListMode === 'new' && (
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Nome da Nova Lista</label>
+                                        <input type="text" autoFocus placeholder="Ex: Missa de Domingo..." value={saveListName} onChange={e => setSaveListName(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-4 text-white font-bold outline-none focus:border-[#B87333]/50 transition-all placeholder:text-slate-700" onKeyDown={e => e.key === 'Enter' && handleSaveList()} />
+                                    </div>
+                                    <button onClick={handleSaveList} disabled={!saveListName.trim()} className="w-full py-4 bg-[#B87333] hover:bg-[#8B4513] text-white font-black uppercase tracking-widest rounded-xl transition-all shadow-xl shadow-[#B87333]/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2">
+                                        <Save className="w-4 h-4" /><span>Criar e Salvar Lista</span>
+                                    </button>
+                                </div>
+                            )}
+
+                            {saveListMode === 'existing' && (
+                                <div className="space-y-4">
+                                    <label className="block text-[10px] font-black uppercase text-slate-500 mb-1 tracking-widest ml-1">Selecione uma ou mais listas</label>
+                                    <div className="max-h-64 overflow-y-auto space-y-2 pr-1 scrollbar-thin scrollbar-thumb-white/10">
+                                        {allPlaylists.map(pl => (
+                                            <label key={pl.id} className={`flex items-center space-x-4 p-4 rounded-2xl border cursor-pointer transition-all ${selectedListsToAddTo.includes(pl.id) ? 'bg-[#B87333]/15 border-[#B87333]/40' : 'bg-black/30 border-white/5 hover:border-white/15'}`}>
+                                                <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 transition-all ${selectedListsToAddTo.includes(pl.id) ? 'bg-[#B87333] border-[#B87333]' : 'border-white/20'}`}>
+                                                    {selectedListsToAddTo.includes(pl.id) && <Check className="w-3 h-3 text-white" />}
+                                                </div>
+                                                <input type="checkbox" className="hidden" checked={selectedListsToAddTo.includes(pl.id)} onChange={e => {
+                                                    if (e.target.checked) setSelectedListsToAddTo(prev => [...prev, pl.id]);
+                                                    else setSelectedListsToAddTo(prev => prev.filter(id => id !== pl.id));
+                                                }} />
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="font-black text-white text-sm uppercase italic tracking-tight truncate">{pl.name}</p>
+                                                    <p className="text-[10px] text-slate-500 font-bold mt-0.5">{pl.songs?.length || 0} músicas</p>
+                                                </div>
+                                            </label>
+                                        ))}
+                                    </div>
+                                    <button onClick={handleAddToExistingLists} disabled={selectedListsToAddTo.length === 0} className="w-full py-4 bg-[#B87333] hover:bg-[#8B4513] text-white font-black uppercase tracking-widest rounded-xl transition-all shadow-xl shadow-[#B87333]/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2">
+                                        <FolderHeart className="w-4 h-4" /><span>{selectedListsToAddTo.length > 0 ? `Adicionar às ${selectedListsToAddTo.length} Lista(s)` : 'Selecione as Listas'}</span>
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     </div>
-                </div>
-            )}
+                );
+            })()}
 
             {/* Save Success Animation */}
             {showSaveSuccess && (
