@@ -111,7 +111,8 @@ const VideokePlayer = ({ song, includeTabs = false, onClose }) => {
     const [micLevel, setMicLevel] = useState(0);
     const [bpm, setBpm] = useState(80);
     const [isAnchored, setIsAnchored] = useState(false);
-    const [isPaused, setIsPaused] = useState(false); // paused due to silence
+    const [isPaused, setIsPaused] = useState(false); // manual pause
+    const [isPausedBySilence, setIsPausedBySilence] = useState(false); // auto pause
     const [isWaiting, setIsWaiting] = useState(true);  // before first voice match
     const [listenStatus, setListenStatus] = useState('');
     const [lastConfidence, setLastConfidence] = useState(0);
@@ -129,12 +130,17 @@ const VideokePlayer = ({ song, includeTabs = false, onClose }) => {
     const advTimerRef = useRef(null);
     const silenceTimerRef = useRef(null); // tracks how long silence has been
     const lastJumpRef = useRef(0);
-    const lastVoiceTimeRef = useRef(0); // <--- Traces when WebSpeech last fired
+    const lastVoiceTimeRef = useRef(0);
+    const driftHistoryRef = useRef([]);
+    const lastBpmAdjustTimeRef = useRef(Date.now());
+    const lastVoiceMatchedIndexRef = useRef(0);
+    const isPausedBySilenceRef = useRef(false);
+    useEffect(() => { isPausedBySilenceRef.current = isPausedBySilence; }, [isPausedBySilence]);
 
     // Silence threshold: if mic average < this for SILENCE_DELAY ms → pause
-    const SILENCE_THRESHOLD = 8;   // very low mic level = silence
-    const SILENCE_DELAY = 1800; // ms before pausing
-    const RESUME_THRESHOLD = 14;  // mic level to resume
+    const SILENCE_THRESHOLD = 5;   // more lenient
+    const SILENCE_DELAY = 1800;
+    const RESUME_THRESHOLD = 8;
 
     // Build blocks from song content
     useEffect(() => {
@@ -237,7 +243,41 @@ const VideokePlayer = ({ song, includeTabs = false, onClose }) => {
         return () => clearInterval(timer);
     }, [forceVoiceUi]);
 
-    // ── Mic Level (Simplified) ───────────────────────────────
+    // Silence Detection Logic (Matched with App.jsx)
+    useEffect(() => {
+        if (!hasPermission) return;
+
+        const checkSilence = setInterval(() => {
+            const level = micLevelRef.current;
+
+            if (level < SILENCE_THRESHOLD) {
+                if (!silenceTimerRef.current) {
+                    silenceTimerRef.current = setTimeout(() => {
+                        setIsPausedBySilence(true);
+                    }, SILENCE_DELAY);
+                }
+            } else if (level > RESUME_THRESHOLD) {
+                if (silenceTimerRef.current) {
+                    clearTimeout(silenceTimerRef.current);
+                    silenceTimerRef.current = null;
+                }
+                setIsPausedBySilence(false);
+                if (isWaiting) {
+                    setIsWaiting(false);
+                    waitingRef.current = false;
+                }
+            }
+        }, 200);
+
+        return () => {
+            clearInterval(checkSilence);
+            if (silenceTimerRef.current) {
+                clearTimeout(silenceTimerRef.current);
+                silenceTimerRef.current = null;
+            }
+        };
+    }, [hasPermission]);
+
     const handleMicLevel = useCallback((level) => {
         setMicLevel(level);
         micLevelRef.current = level;
@@ -252,6 +292,10 @@ const VideokePlayer = ({ song, includeTabs = false, onClose }) => {
 
         lastVoiceTimeRef.current = Date.now();
         setForceVoiceUi(true);
+
+        // Resume if we hear a voice match
+        if (isPausedBySilence) setIsPausedBySilence(false);
+
         if (isPaused || !text || text.trim().length === 0) return;
 
         // Normalize and get tokens
@@ -318,23 +362,44 @@ const VideokePlayer = ({ song, includeTabs = false, onClose }) => {
             }
         }
 
+        // Rhythm smoothing (Matched with App.jsx)
+        if (targetIndex !== -1 && targetIndex !== currentIdx) {
+            lastVoiceMatchedIndexRef.current = targetIndex;
+            const diff = targetIndex - currentRef.current;
+            const now = Date.now();
+            driftHistoryRef.current.push(diff);
+            if (driftHistoryRef.current.length > 5) driftHistoryRef.current.shift();
+
+            if (now - lastBpmAdjustTimeRef.current > 2500) {
+                const averageDrift = driftHistoryRef.current.reduce((a, b) => a + b, 0) / driftHistoryRef.current.length;
+                if (averageDrift < -0.3) {
+                    setBpm(prev => Math.max(40, prev - 1));
+                    lastBpmAdjustTimeRef.current = now;
+                } else if (averageDrift > 0.8) {
+                    setBpm(prev => Math.min(220, prev + 1));
+                    lastBpmAdjustTimeRef.current = now;
+                }
+            }
+
+            if (isWaiting) {
+                setIsWaiting(false);
+                waitingRef.current = false;
+                setIsAnchored(true);
+                anchoredRef.current = true;
+                startRhythmicTimer();
+            }
+        }
+
         // Apply Jump
         if (targetIndex !== -1 && targetIndex !== currentIdx) {
             const now = Date.now();
-            if (now - lastJumpRef.current > 1200) { // Cooldown against double jumping on echo
+            if (now - lastJumpRef.current > 1200) {
                 setCurrentBlockIndex(targetIndex);
                 currentRef.current = targetIndex;
                 lastJumpRef.current = now;
-
-                if (waitingRef.current) {
-                    setIsWaiting(false);
-                    waitingRef.current = false;
-                    setIsAnchored(true);
-                    anchoredRef.current = true;
-                }
             }
         }
-    }, [isPaused]);
+    }, [isPaused, isPausedBySilence]);
 
     // ── Manual line click: jump + resume ────────────────────
     const handleLineClick = useCallback((idx) => {
@@ -350,13 +415,30 @@ const VideokePlayer = ({ song, includeTabs = false, onClose }) => {
     }, []);
 
     // ── AudioTracker startup ─────────────────────────────────
+    const startRhythmicTimer = useCallback(() => {
+        if (advTimerRef.current) clearInterval(advTimerRef.current);
+        const msPerBlock = (60000 / bpmRef.current) * 4;
+        advTimerRef.current = setInterval(() => {
+            if (!pausedRef.current && !waitingRef.current && !isPausedBySilenceRef.current) {
+                const next = currentRef.current + 1;
+                // Max leash: 1 block ahead of last voice match
+                if (isAnchored && next > (lastVoiceMatchedIndexRef.current + 1)) return;
+
+                if (next < blocksRef.current.length) {
+                    setCurrentBlockIndex(next);
+                    currentRef.current = next;
+                }
+            }
+        }, msPerBlock);
+    }, [isAnchored, isPausedBySilence]);
+
     const startMic = useCallback(() => {
         if (trackerRef.current) return;
         trackerRef.current = new AudioTracker(
             null,
             handleMicLevel,
             null,
-            handleVoice, // <--- Now using phonetic matching
+            handleVoice,
             handleAlignmentState,
             handleConnectionStatus // connection callback
         );
@@ -368,7 +450,10 @@ const VideokePlayer = ({ song, includeTabs = false, onClose }) => {
 
         // It will pick up the current micGain via the other useEffect that calls setGain()
         trackerRef.current.start().catch(() => setPermissionDenied(true));
-    }, [handleMicLevel, handleVoice, handleAlignmentState, handleConnectionStatus]);
+
+        // Always start timer when mic starts if we are already anchored
+        if (anchoredRef.current) startRhythmicTimer();
+    }, [handleMicLevel, handleVoice, handleAlignmentState, handleConnectionStatus, startRhythmicTimer]);
 
     useEffect(() => {
         if (hasPermission) startMic();
@@ -402,6 +487,7 @@ const VideokePlayer = ({ song, includeTabs = false, onClose }) => {
         if (connectionStatus === 'error' || connectionStatus === 'disconnected') return { label: 'OFFLINE', color: '#ef4444', desc: 'Erro de conexão com servidor' };
 
         if (isPaused) return { label: 'PAUSADO', color: '#ef4444', desc: 'Clique para retomar' };
+        if (isPausedBySilence) return { label: 'SILÊNCIO', color: '#F87171', desc: 'Rolamento pausado (Silêncio)' };
 
         // PRIORITIZE VOICE UI (To give immediate feedback that we are listening)
         if (forceVoiceUi) {

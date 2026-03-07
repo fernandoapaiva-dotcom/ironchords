@@ -818,8 +818,15 @@ export default function App() {
     const [isRhythmicMode, setIsRhythmicMode] = useState(true);
     const [isAnchored, setIsAnchored] = useState(false);
     const [isWaitingForVoice, setIsWaitingForVoice] = useState(false);
-    const [isBpmSyncing, setIsBpmSyncing] = useState(false);
+    const [isPausedBySilence, setIsPausedBySilence] = useState(false);
+    const [micGain, setMicGain] = useState(2.0);
+    const [fsmState, setFsmState] = useState({ state: 'AGUARDANDO', action: 'freeze' });
+    const [connectionStatus, setConnectionStatus] = useState('offline');
+    const [lastVoiceMatchedIndex, setLastVoiceMatchedIndex] = useState(0);
+
     const [isVideokeOpen, setIsVideokeOpen] = useState(false);
+    const isBpmSyncing = micEnabled && isRhythmicMode && fsmState.state === 'SINCRONIZANDO';
+    const [currentStep, setCurrentStep] = useState(1);
 
     // Playlists Persistence
     const [savedPlaylists, setSavedPlaylists] = useState(() => {
@@ -835,6 +842,11 @@ export default function App() {
     const driftHistoryRef = useRef([]);
     const lastBpmAdjustTimeRef = useRef(Date.now());
     const lastVoiceMatchedIndexRef = useRef(0);
+    const silenceTimerRef = useRef(null);
+    const lastVoiceTimeRef = useRef(Date.now());
+    const micLevelRef = useRef(0);
+    const isPausedBySilenceRef = useRef(false);
+    useEffect(() => { isPausedBySilenceRef.current = isPausedBySilence; }, [isPausedBySilence]);
 
     // AutoScroll Effect with Mic interaction
     useEffect(() => {
@@ -918,24 +930,37 @@ export default function App() {
     const audioTrackerRef = useRef(null);
 
     useEffect(() => {
+        if (audioTrackerRef.current) {
+            audioTrackerRef.current.setGain(micGain);
+        }
+    }, [micGain]);
+
+    useEffect(() => {
         if (micEnabled) {
             if (!audioTrackerRef.current) {
                 audioTrackerRef.current = new AudioTracker(
                     (detectedBpm) => {
-                        // Smoothly adjust to detected BPM
                         setBpm(prev => {
                             const diff = detectedBpm - prev;
                             if (Math.abs(diff) > 10) return prev + Math.sign(diff) * 2;
                             return detectedBpm;
                         });
                     },
-                    (level) => setMicLevel(level),
+                    (level) => {
+                        setMicLevel(level);
+                        micLevelRef.current = level;
+                    },
                     (note) => setDetectedNote(note),
                     (text, isFinal) => {
                         setTranscriptRaw(text);
+                        lastVoiceTimeRef.current = Date.now();
                         syncLineByText(text, isFinal);
-                    }
+                    },
+                    (state) => setFsmState(state),
+                    (status) => setConnectionStatus(status)
                 );
+                // Initial gain
+                audioTrackerRef.current.setGain(micGain);
             }
             audioTrackerRef.current.start();
         } else {
@@ -945,6 +970,85 @@ export default function App() {
             }
         }
     }, [micEnabled]);
+
+    // Silence Detection Logic (Videoke-style)
+    useEffect(() => {
+        if (!micEnabled || !isRhythmicMode) {
+            setIsPausedBySilence(false);
+            return;
+        }
+
+        const SILENCE_THRESHOLD = 5;
+        const SILENCE_DELAY = 1800;
+        const RESUME_THRESHOLD = 8;
+
+        const checkSilence = setInterval(() => {
+            const level = micLevelRef.current;
+
+            if (level < SILENCE_THRESHOLD) {
+                if (!silenceTimerRef.current) {
+                    silenceTimerRef.current = setTimeout(() => {
+                        setIsPausedBySilence(true);
+                    }, SILENCE_DELAY);
+                }
+            } else if (level > RESUME_THRESHOLD) {
+                if (silenceTimerRef.current) {
+                    clearTimeout(silenceTimerRef.current);
+                    silenceTimerRef.current = null;
+                }
+                setIsPausedBySilence(false);
+            }
+        }, 200);
+
+        return () => {
+            clearInterval(checkSilence);
+            if (silenceTimerRef.current) {
+                clearTimeout(silenceTimerRef.current);
+                silenceTimerRef.current = null;
+            }
+        };
+    }, [micEnabled, isRhythmicMode]);
+
+    // Vocabulary Extraction for Manual Player
+    useEffect(() => {
+        const songIdx = (activeTab === 'player' || isManualFullscreen) ? selectedManualIndex : null;
+        if (songIdx !== null && songs[songIdx]) {
+            const song = songs[songIdx];
+            const lines = (song.content || "").split('\n');
+            const STOP_WORDS = new Set(['o', 'a', 'e', 'de', 'do', 'da', 'no', 'na', 'que', 'se', 'te', 'me', 'um', 'uma', 'os', 'as', 'pra', 'pro', 'ao', 'aos', 'eu', 'voce', 'tu', 'ele', 'ela', 'nos', 'vos', 'eles', 'elas']);
+            const vocab = new Set();
+
+            lines.forEach(line => {
+                if (line && line.trim() && !line.includes('---') && !line.trim().startsWith('[')) {
+                    const norm = PhoneticMatcher.normalize(line);
+                    norm.split(' ').forEach(w => {
+                        if (w.length >= 2 && !STOP_WORDS.has(w)) vocab.add(w);
+                    });
+                }
+            });
+
+            const vocabArray = Array.from(vocab);
+            if (audioTrackerRef.current) {
+                audioTrackerRef.current.setVocabulary(vocabArray);
+            }
+        }
+    }, [selectedManualIndex, songs, activeTab, isManualFullscreen]);
+
+    const getManualStatusInfo = () => {
+        if (!micEnabled) return { label: 'MIC OFF', color: '#64748b' };
+        if (connectionStatus === 'connecting') return { label: 'CONECTANDO', color: '#60A5FA' };
+        if (connectionStatus === 'error' || connectionStatus === 'disconnected') return { label: 'OFFLINE', color: '#ef4444' };
+        if (isPausedBySilence) return { label: 'SILÊNCIO', color: '#f87171' };
+
+        if (isWaitingForVoice) return { label: 'AGUARDANDO', color: '#B87333' };
+
+        switch (fsmState.state) {
+            case 'SEGUINDO_NORMAL': return { label: 'VOZ+VIOLA', color: '#22c55e' };
+            case 'CONGELAR_LETRA_SEGUIR_VIOLA': return { label: 'VIOLA', color: '#FCD34D' };
+            case 'ACAPELLA': return { label: 'A CAPELA', color: '#60A5FA' };
+            default: return { label: 'CANTANDO', color: '#22c55e' };
+        }
+    };
 
     const syncLineByText = (text, isFinal) => {
         const songIdx = activeTab === 'player' ? selectedManualIndex : selectedManualIndex;
@@ -960,34 +1064,45 @@ export default function App() {
         // 2. If anchored, search forward within range (8 lines)
         // 3. If anchored and end of song, search for Chorus/Start (Redirection)
 
-        const searchRange = 8;
-        const actualStartSearch = isAnchored ? start : 0;
+        const searchRange = 10;
+        const actualStartSearch = isAnchored ? Math.max(0, start - 2) : 0;
         const actualEndSearch = isAnchored ? Math.min(lines.length, start + searchRange) : Math.min(lines.length, 30);
 
-        // Redirection Logic (Looking for Chorus if near end)
-        let checkRedirection = false;
-        let chorusStart = 0;
-        if (isAnchored && start >= lines.length - 6) {
-            const sections = CifraParser.parseSections(currentContent);
-            chorusStart = CifraParser.getChorusStartLine(sections) || CifraParser.getStartLine(currentContent);
-            checkRedirection = true;
-        }
+        // Advanced Phonetic Matching using scoreWords logic
+        let bestScore = 0;
+        let bestIdx = -1;
 
         for (let i = actualStartSearch; i < actualEndSearch; i++) {
-            if (PhoneticMatcher.isMatch(text, lines[i])) {
-                foundIndex = i;
-                break;
+            const score = PhoneticMatcher.score(text, lines[i]);
+            if (score > bestScore) {
+                bestScore = score;
+                bestIdx = i;
             }
         }
 
-        // Try redirection if nothing found forward
-        if (foundIndex === -1 && checkRedirection) {
-            for (let i = chorusStart; i < Math.min(lines.length, chorusStart + 8); i++) {
-                if (PhoneticMatcher.isMatch(text, lines[i])) {
-                    foundIndex = i;
-                    driftHistoryRef.current = []; // Reset drift when jumping
-                    break;
+        // Threshold and anchor update
+        if (bestIdx !== -1 && bestScore >= 0.38) {
+            foundIndex = bestIdx;
+        }
+
+        // Try redirection (Chorus/Start) if nothing strong found in window
+        if (foundIndex === -1 && isAnchored) {
+            const sections = CifraParser.parseSections(currentContent);
+            const chorusStart = CifraParser.getChorusStartLine(sections);
+            const introStart = CifraParser.getStartLine(currentContent);
+
+            const checkJumps = [chorusStart, introStart].filter(v => v !== null && v !== undefined);
+
+            for (const jumpPos of checkJumps) {
+                for (let i = jumpPos; i < Math.min(lines.length, jumpPos + 8); i++) {
+                    const score = PhoneticMatcher.score(text, lines[i]);
+                    if (score > 0.5) { // Be stricter on global jumps
+                        foundIndex = i;
+                        driftHistoryRef.current = [];
+                        break;
+                    }
                 }
+                if (foundIndex !== -1) break;
             }
         }
 
@@ -1039,9 +1154,7 @@ export default function App() {
         const msPerLine = (60000 / bpm) * 4;
         advanceTimerRef.current = setInterval(() => {
             const songIdx = (isFullScreenPlayer || activeTab === 'player') ? selectedManualIndex : null;
-            if (isRhythmicMode && songIdx !== null && !isWaitingForVoice) {
-                const soundThreshold = 15;
-                if (micEnabled && micLevel < soundThreshold) return;
+            if (isRhythmicMode && songIdx !== null && !isWaitingForVoice && !isPausedBySilenceRef.current) {
                 const next = currentLineIndexRef.current + 1;
                 const maxLeashLines = 1;
                 if (micEnabled && isAnchored && next > (lastVoiceMatchedIndexRef.current + maxLeashLines)) return;
@@ -1771,7 +1884,7 @@ export default function App() {
                         {/* PLAYER HEADER */}
                         <div className="h-20 bg-black/40 border-b border-white/5 flex items-center justify-between px-8 backdrop-blur-xl shrink-0 no-print">
                             <div className="flex items-center space-x-6">
-                                <button onClick={() => { setIsFullScreenPlayer(false); setActiveTab('manual'); setCurrentStep(3); setMainNav('escolha'); }} className="p-3 bg-white/5 hover:bg-white/10 rounded-xl transition-all border border-white/5 text-slate-400 hover:text-white"><ArrowLeft className="w-5 h-5" /></button>
+                                <button onClick={() => { setIsFullScreenPlayer(false); setActiveTab('manual'); setMainNav('escolha'); }} className="p-3 bg-white/5 hover:bg-white/10 rounded-xl transition-all border border-white/5 text-slate-400 hover:text-white"><ArrowLeft className="w-5 h-5" /></button>
                                 <div>
                                     <h2 className="text-xl font-black text-white uppercase italic tracking-tighter leading-none">{currentSong?.song_name}</h2>
                                     <p className="text-[10px] font-bold text-[#B87333] uppercase tracking-widest mt-1 opacity-60 italic">{currentSong?.artist_name}</p>
@@ -2007,15 +2120,33 @@ export default function App() {
                                             <div className="flex items-center space-x-10 pr-10 border-r border-white/10">
                                                 <div className="flex flex-col items-center">
                                                     <span className="text-[9px] font-black text-slate-600 uppercase tracking-widest mb-3 leading-none">Microfone</span>
-                                                    <button onClick={() => setMicEnabled(!micEnabled)} className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all border ${micEnabled ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-900/40 animate-pulse' : 'bg-white/5 border-white/10 text-slate-600 hover:text-slate-400'}`}>
-                                                        <Mic className="w-5 h-5" />
-                                                    </button>
+                                                    <div className="flex flex-col items-center space-y-2">
+                                                        <button onClick={() => setMicEnabled(!micEnabled)} className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all border ${micEnabled ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-900/40 animate-pulse' : 'bg-white/5 border-white/10 text-slate-600 hover:text-slate-400'}`}>
+                                                            <Mic className="w-5 h-5" />
+                                                        </button>
+                                                        {micEnabled && (
+                                                            <div className="flex items-center space-x-2">
+                                                                <input
+                                                                    type="range" min="1" max="5" step="0.5"
+                                                                    value={micGain}
+                                                                    onChange={(e) => setMicGain(parseFloat(e.target.value))}
+                                                                    className="w-12 h-1 bg-white/10 rounded-full appearance-none accent-blue-500"
+                                                                />
+                                                                <span className="text-[8px] font-black text-blue-400">{micGain}x</span>
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 </div>
                                                 <div className="flex flex-col items-center">
                                                     <span className="text-[9px] font-black text-slate-600 uppercase tracking-widest mb-3 leading-none">Ritmagem</span>
                                                     <button onClick={() => setIsRhythmicMode(!isRhythmicMode)} className={`px-6 py-2.5 rounded-full border text-[10px] font-black uppercase transition-all italic tracking-widest ${isRhythmicMode ? 'bg-green-600/80 border-green-600 text-white shadow-lg' : 'bg-white/5 border-white/10 text-slate-700'}`}>
                                                         {isRhythmicMode ? 'Autosync' : 'Manual'}
                                                     </button>
+                                                    {micEnabled && isRhythmicMode && (
+                                                        <span className="text-[9px] font-black uppercase mt-3 italic tracking-tighter" style={{ color: getManualStatusInfo().color }}>
+                                                            {getManualStatusInfo().label}
+                                                        </span>
+                                                    )}
                                                 </div>
                                             </div>
 
@@ -3480,14 +3611,31 @@ export default function App() {
                                                             <div className="h-8 w-px bg-white/10"></div>
                                                             <div className="flex items-center space-x-4">
                                                                 <div className="flex flex-col items-center">
-                                                                    <button onClick={() => setMicEnabled(!micEnabled)} className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all border ${micEnabled ? 'bg-blue-600 border-blue-600 text-white animate-pulse' : 'bg-white/5 border-white/10 text-slate-600'}`}>
-                                                                        <Mic className="w-4 h-4" />
-                                                                    </button>
+                                                                    <div className="flex flex-col items-center space-y-1">
+                                                                        <button onClick={() => setMicEnabled(!micEnabled)} className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all border ${micEnabled ? 'bg-blue-600 border-blue-600 text-white animate-pulse' : 'bg-white/5 border-white/10 text-slate-600'}`}>
+                                                                            <Mic className="w-4 h-4" />
+                                                                        </button>
+                                                                        {micEnabled && (
+                                                                            <div className="flex items-center space-x-1 px-1">
+                                                                                <input
+                                                                                    type="range" min="1" max="5" step="1"
+                                                                                    value={micGain}
+                                                                                    onChange={(e) => setMicGain(parseFloat(e.target.value))}
+                                                                                    className="w-8 h-0.5 bg-white/10 rounded-full appearance-none accent-blue-500"
+                                                                                />
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
                                                                 </div>
                                                                 <div className="flex flex-col items-center">
-                                                                    <button onClick={() => setIsRhythmicMode(!isRhythmicMode)} className={`px-4 py-2 rounded-full border text-[8px] font-black uppercase transition-all italic tracking-widest ${isRhythmicMode ? 'bg-green-600/80 border-green-600 text-white' : 'bg-white/5 border-white/10 text-slate-700'}`}>
+                                                                    <button onClick={() => setIsRhythmicMode(!isRhythmicMode)} className={`px-4 py-2 rounded-full border text-[8px] font-black uppercase transition-all italic tracking-widest ${isRhythmicMode ? 'bg-green-600/80 border-green-600 text-white shadow-lg' : 'bg-white/5 border-white/10 text-slate-700'}`}>
                                                                         {isRhythmicMode ? 'Autosync' : 'Manual'}
                                                                     </button>
+                                                                    {micEnabled && isRhythmicMode && (
+                                                                        <span className="text-[7px] font-black uppercase mt-1" style={{ color: getManualStatusInfo().color }}>
+                                                                            {getManualStatusInfo().label}
+                                                                        </span>
+                                                                    )}
                                                                 </div>
                                                             </div>
                                                             <div className="h-8 w-px bg-white/10"></div>
