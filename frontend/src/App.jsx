@@ -930,7 +930,7 @@ export default function App() {
     // Playlists Persistence
     const [savedPlaylists, setSavedPlaylists] = useState(() => {
         const saved = localStorage.getItem('iron_chords_playlists');
-        return saved ? JSON.parse(saved) : {};
+        return saved ? JSON.parse(saved) : [];
     });
     const [playlistNameInput, setPlaylistNameInput] = useState('');
     const [showPlaylistManager, setShowPlaylistManager] = useState(false);
@@ -1962,10 +1962,13 @@ export default function App() {
         }
     }, [manualPreviewSong, manualCapo, includeTabs, activeTab, selectedManualIndex]);
 
-    // Update global includeTabs when a new song is selected
+    // Update global player states when a new song is selected
     useEffect(() => {
-        if (songs[selectedManualIndex]) {
-            setIncludeTabs(songs[selectedManualIndex].include_tabs !== false);
+        const selected = songs[selectedManualIndex];
+        if (selected) {
+            setIncludeTabs(selected.include_tabs !== false);
+            setManualCapo(selected.capo || 0);
+            setManualPreviewSong(selected);
         }
     }, [selectedManualIndex]);
 
@@ -2631,14 +2634,36 @@ export default function App() {
                                         <p className="text-[9px] font-black text-[#B87333] uppercase mb-3">Salvar Setlist</p>
                                         <div className="flex space-x-2">
                                             <input type="text" placeholder="Nome..." value={playlistNameInput} onChange={e => setPlaylistNameInput(e.target.value)} className="flex-1 bg-black/40 border border-[#B87333]/20 rounded-lg px-3 py-2 text-[10px] font-bold text-white focus:outline-none" />
-                                            <button onClick={() => { if (!playlistNameInput.trim()) return; setSavedPlaylists({ ...savedPlaylists, [playlistNameInput]: songs }); localStorage.setItem('iron_chords_playlists', JSON.stringify({ ...savedPlaylists, [playlistNameInput]: songs })); setActivePlaylistName(playlistNameInput); setPlaylistNameInput(''); setShowPlaylistManager(false); }} className="bg-[#B87333] text-white p-2 rounded-lg hover:bg-[#8B4513] transition-all"><Plus className="w-4 h-4" /></button>
+                                            <button onClick={() => {
+                                                if (!playlistNameInput.trim()) return;
+                                                const newList = {
+                                                    id: Date.now().toString(),
+                                                    name: playlistNameInput,
+                                                    songs: songs.map(s => ({ ...s }))
+                                                };
+                                                const next = [...savedPlaylists, newList];
+                                                setSavedPlaylists(next);
+                                                localStorage.setItem('iron_chords_playlists', JSON.stringify(next));
+                                                setActivePlaylistName(playlistNameInput);
+                                                setPlaylistNameInput('');
+                                                setShowPlaylistManager(false);
+                                            }} className="bg-[#B87333] text-white p-2 rounded-lg hover:bg-[#8B4513] transition-all"><Plus className="w-4 h-4" /></button>
                                         </div>
-                                        {Object.keys(savedPlaylists).length > 0 && (
+                                        {savedPlaylists.length > 0 && (
                                             <div className="mt-4 space-y-2 border-t border-[#B87333]/20 pt-3">
-                                                {Object.keys(savedPlaylists).map(name => (
-                                                    <div key={name} className="flex items-center justify-between group">
-                                                        <button onClick={() => { setSongs(savedPlaylists[name]); setSelectedManualIndex(0); setActivePlaylistName(name); setShowPlaylistManager(false); }} className="text-[10px] font-bold text-slate-400 hover:text-white truncate flex-1 text-left uppercase italic">{name}</button>
-                                                        <button onClick={() => { const next = { ...savedPlaylists }; delete next[name]; setSavedPlaylists(next); localStorage.setItem('iron_chords_playlists', JSON.stringify(next)); }} className="text-red-900 opacity-0 group-hover:opacity-100 transition-all ml-2"><Trash2 className="w-3 h-3" /></button>
+                                                {savedPlaylists.map(pl => (
+                                                    <div key={pl.id} className="flex items-center justify-between group">
+                                                        <button onClick={() => {
+                                                            setSongs(pl.songs);
+                                                            setSelectedManualIndex(0);
+                                                            setActivePlaylistName(pl.name);
+                                                            setShowPlaylistManager(false);
+                                                        }} className="text-[10px] font-bold text-slate-400 hover:text-white truncate flex-1 text-left uppercase italic">{pl.name}</button>
+                                                        <button onClick={() => {
+                                                            const next = savedPlaylists.filter(p => p.id !== pl.id);
+                                                            setSavedPlaylists(next);
+                                                            localStorage.setItem('iron_chords_playlists', JSON.stringify(next));
+                                                        }} className="text-red-900 opacity-0 group-hover:opacity-100 transition-all ml-2"><Trash2 className="w-3 h-3" /></button>
                                                     </div>
                                                 ))}
                                             </div>
@@ -3820,7 +3845,7 @@ export default function App() {
                                                                 ))}
                                                             </div>
                                                             <div className="flex items-center justify-between mt-auto space-x-2 pt-4 border-t border-white/5">
-                                                                <button onClick={() => { setSongs(pl.songs || []); setMainNav('player'); setSelectedManualIndex(0); }} className="flex-1 bg-white/5 hover:bg-white/10 text-white border border-white/10 py-3 rounded-xl transition-all text-[10px] font-black uppercase tracking-widest flex justify-center items-center space-x-2">
+                                                                <button onClick={() => { setSongs(pl.songs || []); setMainNav('player'); setSelectedManualIndex(0); setActivePlaylistName(pl.name); }} className="flex-1 bg-white/5 hover:bg-white/10 text-white border border-white/10 py-3 rounded-xl transition-all text-[10px] font-black uppercase tracking-widest flex justify-center items-center space-x-2">
                                                                     <Play className="w-4 h-4" /><span>Tocar</span>
                                                                 </button>
                                                                 <button onClick={() => { setSongs(pl.songs || []); setCurrentExportList(pl); setExportStep(1); setDownloadUrl(null); setExportFormat('docx'); setCoverImage(null); setShowExportModal(true); }} className="flex-1 bg-[#B87333]/10 hover:bg-[#B87333] text-[#B87333] hover:text-white border border-[#B87333]/20 py-3 rounded-xl transition-all text-[10px] font-black uppercase tracking-widest flex justify-center items-center space-x-2">
