@@ -316,6 +316,56 @@ function isTablatureLine(line) {
     return false;
 }
 
+function removeTablatureBlocks(content) {
+    if (!content) return '';
+    const lines = content.split('\n');
+    const result = [];
+    let inTabBlock = false;
+
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        const trimmed = line.trim();
+
+        // Check if entering a tab block
+        if (/^\[.*(tab|solo|riff|dedilhado|batida).*\]$/i.test(trimmed)) {
+            inTabBlock = true;
+            continue;
+        }
+
+        if (inTabBlock) {
+            // Exit tab block if a non-tab header is found
+            if (/^\[.*\]$/i.test(trimmed) && !/^\[.*(tab|solo|riff|dedilhado|batida).*\]$/i.test(trimmed)) {
+                inTabBlock = false;
+                result.push(line);
+                continue;
+            }
+
+            // Exit tab block if we hit actual lyrics (not empty, not chord, not tab, not header, not guitar note)
+            if (trimmed.length > 0 && !isChordOnlyLine(line) && !isTablatureLine(line) && !/^\[.*\]$/.test(trimmed)) {
+                const isGuitarNote = /guitarra|dedilhado|batida|solo|riff|ritmo|frase|passagem/i.test(line) && (line.includes('(') || line.includes('['));
+                if (!isGuitarNote) {
+                    inTabBlock = false;
+                    result.push(line);
+                    continue;
+                }
+            }
+            continue; // Drop line inside tab block
+        }
+
+        // Even outside a block, drop standalone tab-related lines
+        const isTabLine = line.includes('|-') || line.includes('-|') || /^[eBGDAE]\|/.test(trimmed);
+        const isRhythmArrow = line.includes('↓') || line.includes('↑');
+        const isGuitarNote = /guitarra|dedilhado|batida|solo|riff|ritmo|frase|passagem/i.test(line) && (line.includes('(') || line.includes('['));
+
+        if (isTabLine || isRhythmArrow || isGuitarNote) continue;
+
+        result.push(line);
+    }
+
+    // Clean up excessive blank lines left over
+    return result.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
 function transposeChord(chord, semitones) {
     if (!semitones || semitones === 0) return chord;
     const transposeNote = (note) => {
@@ -852,6 +902,7 @@ export default function App() {
                 sounding_key: s.sounding_key || s.requested_key || s.song_key,
                 original_key: s.original_key || s.song_key,
                 capo: s.capo || 0,
+                include_tabs: s.include_tabs !== undefined ? s.include_tabs : true,
                 content: s.content || ''
             }))
         };
@@ -894,6 +945,7 @@ export default function App() {
             sounding_key: s.sounding_key || s.requested_key || s.song_key,
             original_key: s.original_key || s.song_key,
             capo: s.capo || 0,
+            include_tabs: s.include_tabs !== undefined ? s.include_tabs : true,
             content: s.content || ''
         }));
 
@@ -2190,6 +2242,39 @@ export default function App() {
         } catch (e) { console.error('[PlayerSearch] Error adding song:', e); }
     };
 
+    // Reset song to original key and zero capo
+    const handleResetSongToOriginal = async () => {
+        if (selectedManualIndex === null || !songs[selectedManualIndex]) return;
+        const s = songs[selectedManualIndex];
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/music/manual`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    song_name: s.song_name,
+                    artist_name: s.artist_name || '',
+                    key: s.original_key || '',
+                    include_tabs: s.include_tabs !== undefined ? s.include_tabs : true,
+                    capo: 0
+                })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                const updatedSong = {
+                    ...s,
+                    content: data.content || s.content,
+                    sounding_key: data.sounding_key || data.original_key || s.original_key || '',
+                    original_key: data.original_key || s.original_key,
+                    requested_key: data.original_key || s.original_key,
+                    capo: 0
+                };
+                const next = [...songs];
+                next[selectedManualIndex] = updatedSong;
+                setSongs(next);
+            }
+        } catch (e) { console.error('[ResetOriginal] Error:', e); }
+    };
+
     // Delete song from queue (Feature 2)
     const handleDeleteSongFromQueue = (idx) => {
         const next = songs.filter((_, i) => i !== idx);
@@ -2664,6 +2749,11 @@ export default function App() {
                                     <button onClick={() => transposeSong(selectedManualIndex, 1)} disabled={isTransposing} className="p-0.5 text-slate-500 hover:text-white disabled:opacity-50 transition-all"><Plus className="w-3 h-3" /></button>
                                 </div>
 
+                                {/* Reset to Original */}
+                                <button onClick={handleResetSongToOriginal} className="p-2 rounded-lg bg-white/5 border border-white/10 text-[#B87333] hover:bg-[#B87333] hover:text-white transition-all shrink-0" title="Voltar ao Tom Original (Zerar Capo)">
+                                    <RotateCcw className="w-3.5 h-3.5" />
+                                </button>
+
                                 {/* Size */}
                                 <div className="flex items-center gap-1 bg-black/40 px-1.5 py-1 rounded-lg border border-white/5 shrink-0">
                                     <span className="text-[6px] font-black text-slate-500 uppercase tracking-widest">Size</span>
@@ -2930,56 +3020,52 @@ export default function App() {
                                                 <p className="text-2xl font-black uppercase italic tracking-widest">Tom: {getSoundingKey(currentSong)}</p>
                                             </div>
                                         </div>
-                                        {(currentSong?.content || "").split('\n').map((line, lIdx) => {
-                                            const trimmed = line.trim();
-                                            const isChordLine = !!(line && trimmed.length > 0 && (line.match(CHORD_TOKEN_RE) || []).length > 0 && line.replace(CHORD_TOKEN_RE, '').replace(/[\s|()\-xX0-9:]/g, '').length < Math.max(2, trimmed.length * 0.25));
-                                            const isTabLine = line.includes('|-') || line.includes('-|') || /^[eBGDAE]\|/.test(trimmed);
-                                            const isGuitarNote = /guitarra|dedilhado|batida|solo|riff|ritmo|frase|passagem/i.test(line) && (line.includes('(') || line.includes('['));
-                                            const isRhythmArrow = line.includes('↓') || line.includes('↑');
+                                        {((currentSong?.include_tabs ?? includeTabs) === false
+                                            ? removeTablatureBlocks(currentSong?.content || "")
+                                            : currentSong?.content || "").split('\n').map((line, lIdx, allLines) => {
+                                                const trimmed = line.trim();
+                                                const isChordLine = !!(line && trimmed.length > 0 && (line.match(CHORD_TOKEN_RE) || []).length > 0 && line.replace(CHORD_TOKEN_RE, '').replace(/[\s|()\-xX0-9:]/g, '').length < Math.max(2, trimmed.length * 0.25));
 
-                                            const effectivelyIncludeTabs = currentSong?.include_tabs ?? includeTabs;
-                                            if (!effectivelyIncludeTabs && (isTabLine || isGuitarNote || isRhythmArrow)) return null;
+                                                // Smart highlight:
+                                                // - A lyric line is active when currentLineIndex points to it
+                                                // - The chord line directly above an active lyric is also active (paired)
+                                                // - Purely instrumental chord-only sections are NEVER active
+                                                const allLines = (currentSong?.content || '').split('\n');
+                                                const isLyricActive = !isChordLine && currentLineIndex === lIdx;
+                                                const isPairedChordActive = isChordLine && (() => {
+                                                    // Check if there's a lyric right below this chord that is the active line
+                                                    let j = lIdx + 1;
+                                                    while (j < allLines.length && (!allLines[j].trim() || isTablatureLine(allLines[j]))) j++;
+                                                    const nextIsLyric = j < allLines.length && !isChordOnlyLine(allLines[j]);
+                                                    return nextIsLyric && currentLineIndex === j;
+                                                })();
+                                                const isActive = isLyricActive || isPairedChordActive;
 
-                                            // Smart highlight:
-                                            // - A lyric line is active when currentLineIndex points to it
-                                            // - The chord line directly above an active lyric is also active (paired)
-                                            // - Purely instrumental chord-only sections are NEVER active
-                                            const allLines = (currentSong?.content || '').split('\n');
-                                            const isLyricActive = !isChordLine && currentLineIndex === lIdx;
-                                            const isPairedChordActive = isChordLine && (() => {
-                                                // Check if there's a lyric right below this chord that is the active line
-                                                let j = lIdx + 1;
-                                                while (j < allLines.length && (!allLines[j].trim() || isTablatureLine(allLines[j]))) j++;
-                                                const nextIsLyric = j < allLines.length && !isChordOnlyLine(allLines[j]);
-                                                return nextIsLyric && currentLineIndex === j;
-                                            })();
-                                            const isActive = isLyricActive || isPairedChordActive;
+                                                // Past: only lyric lines count for the "past" fade
+                                                const isPast = !isChordLine && lIdx < currentLineIndex;
 
-                                            // Past: only lyric lines count for the "past" fade
-                                            const isPast = !isChordLine && lIdx < currentLineIndex;
-
-                                            return (
-                                                <div
-                                                    key={lIdx}
-                                                    data-line-index={lIdx}
-                                                    onClick={() => handleLineClick(lIdx)}
-                                                    className={`py-1 px-4 rounded-xl cursor-pointer transition-all duration-500 flex items-center group relative
+                                                return (
+                                                    <div
+                                                        key={lIdx}
+                                                        data-line-index={lIdx}
+                                                        onClick={() => handleLineClick(lIdx)}
+                                                        className={`py-1 px-4 rounded-xl cursor-pointer transition-all duration-500 flex items-center group relative
                                                         ${isActive ? 'bg-[#B87333]/30 scale-[1.08] z-10 shadow-[0_10px_30px_rgba(0,0,0,0.5)] ring-1 ring-white/10' : 'hover:bg-white/5'}
                                                         ${isPast ? 'opacity-40 grayscale-[0.5]' : 'opacity-100'}
                                                     `}
-                                                    style={{ fontSize: `${playerFontSize}px` }}
-                                                >
-                                                    {isActive && <div className="absolute left-0 w-2 h-full bg-[#B87333] rounded-full shadow-[0_0_20px_rgba(184,115,51,0.8)] animate-pulse"></div>}
-                                                    <pre className={`font-mono leading-relaxed whitespace-pre-wrap transition-colors duration-500
+                                                        style={{ fontSize: `${playerFontSize}px` }}
+                                                    >
+                                                        {isActive && <div className="absolute left-0 w-2 h-full bg-[#B87333] rounded-full shadow-[0_0_20px_rgba(184,115,51,0.8)] animate-pulse"></div>}
+                                                        <pre className={`font-mono leading-relaxed whitespace-pre-wrap transition-colors duration-500
                                                         ${isActive ? 'text-white font-black' : isChordLine ? 'text-[#B87333] font-bold italic opacity-80' : 'text-slate-400 font-medium'}
                                                     `}>
-                                                        {isChordLine
-                                                            ? renderChordLine(line, (chord, anchor, isPersistent) => setChordTooltip({ chord, anchor, isPersistent }), songs[selectedManualIndex]?.capo || 0)
-                                                            : (line || ' ')}
-                                                    </pre>
-                                                </div>
-                                            );
-                                        })}
+                                                            {isChordLine
+                                                                ? renderChordLine(line, (chord, anchor, isPersistent) => setChordTooltip({ chord, anchor, isPersistent }), songs[selectedManualIndex]?.capo || 0)
+                                                                : (line || ' ')}
+                                                        </pre>
+                                                    </div>
+                                                );
+                                            })}
                                     </div>
                                 </div>
 
@@ -3409,21 +3495,19 @@ export default function App() {
                                                                     <div className={`
                                                                         ${isManualFullscreen && isManualColumns ? 'max-w-7xl mx-auto stage-columns-2 gap-20' : 'max-w-3xl mx-auto'}
                                                                     `}>
-                                                                        {(manualPreviewSong?.content || "").split('\n').map((line, lIdx) => {
-                                                                            const isChordLine = !!(line && line.trim().length > 0 && (line.match(CHORD_TOKEN_RE) || []).length > 0 && line.replace(CHORD_TOKEN_RE, '').replace(/[\s|()\-xX0-9:]/g, '').length < Math.max(2, line.trim().length * 0.5));
-                                                                            const isTabLine = line.includes('|-') || line.includes('-|');
+                                                                        {((manualPreviewSong?.include_tabs ?? includeTabs) === false
+                                                                            ? removeTablatureBlocks(manualPreviewSong?.content || "")
+                                                                            : manualPreviewSong?.content || "").split('\n').map((line, lIdx, allLines) => {
+                                                                                const isChordLine = !!(line && line.trim().length > 0 && (line.match(CHORD_TOKEN_RE) || []).length > 0 && line.replace(CHORD_TOKEN_RE, '').replace(/[\s|()\-xX0-9:]/g, '').length < Math.max(2, line.trim().length * 0.5));
 
-                                                                            // Skip tab lines if includeTabs is false
-                                                                            if (!includeTabs && isTabLine) return null;
-
-                                                                            return (
-                                                                                <pre key={lIdx} className={`font-mono leading-relaxed whitespace-pre-wrap break-inside-avoid ${isChordLine ? 'text-[#B87333] font-black italic tracking-tight mb-0' : 'text-slate-300 font-medium mb-1'}`} style={{ fontSize: `${manualFontSize}px` }}>
-                                                                                    {isChordLine
-                                                                                        ? renderChordLine(line, (chord, anchor, isPersistent) => setChordTooltip({ chord, anchor, isPersistent }), manualPreviewSong.capo || 0)
-                                                                                        : (line || ' ')}
-                                                                                </pre>
-                                                                            );
-                                                                        })}
+                                                                                return (
+                                                                                    <pre key={lIdx} className={`font-mono leading-relaxed whitespace-pre-wrap break-inside-avoid ${isChordLine ? 'text-[#B87333] font-black italic tracking-tight mb-0' : 'text-slate-300 font-medium mb-1'}`} style={{ fontSize: `${manualFontSize}px` }}>
+                                                                                        {isChordLine
+                                                                                            ? renderChordLine(line, (chord, anchor, isPersistent) => setChordTooltip({ chord, anchor, isPersistent }), manualPreviewSong.capo || 0)
+                                                                                            : (line || ' ')}
+                                                                                    </pre>
+                                                                                );
+                                                                            })}
                                                                     </div>
                                                                 </div>
                                                             </div>
@@ -4099,14 +4183,38 @@ export default function App() {
                                                             </div>
                                                             <div className="flex-1 overflow-y-auto mb-4 pr-2 scrollbar-thin scrollbar-thumb-white/10 space-y-2 bg-[#1A1A1A] p-4 rounded-2xl border border-white/5">
                                                                 {(pl.songs || []).map((s, i) => (
-                                                                    <div key={i} className="flex flex-col border-b border-white/5 last:border-0 pb-2 last:pb-0">
-                                                                        <span className="text-xs text-slate-300 uppercase font-bold truncate tracking-tight">{i + 1}. {s.song_name}</span>
-                                                                        <span className="text-[9px] text-slate-500 uppercase tracking-widest">{s.artist_name}</span>
+                                                                    <div key={i} className="flex items-center justify-between border-b border-white/5 last:border-0 pb-2 last:pb-0 gap-2">
+                                                                        <div className="flex flex-col min-w-0">
+                                                                            <span className="text-xs text-slate-300 uppercase font-bold truncate tracking-tight">{i + 1}. {s.song_name}</span>
+                                                                            <span className="text-[9px] text-slate-500 uppercase tracking-widest">{s.artist_name}</span>
+                                                                        </div>
+                                                                        <div className="flex items-center gap-1 shrink-0">
+                                                                            {(s.sounding_key || s.song_key) && (
+                                                                                <span className="text-[8px] font-black text-[#B87333] bg-[#B87333]/10 border border-[#B87333]/20 px-1.5 py-0.5 rounded-md uppercase">{s.sounding_key || s.song_key}</span>
+                                                                            )}
+                                                                            {s.capo > 0 && (
+                                                                                <span className="text-[8px] font-black text-slate-400 bg-white/5 border border-white/10 px-1.5 py-0.5 rounded-md">C{s.capo}</span>
+                                                                            )}
+                                                                            {s.include_tabs === false && (
+                                                                                <span className="text-[8px] font-black text-slate-500 bg-white/5 border border-white/10 px-1.5 py-0.5 rounded-md">S/Tab</span>
+                                                                            )}
+                                                                        </div>
                                                                     </div>
                                                                 ))}
                                                             </div>
                                                             <div className="flex items-center justify-between mt-auto space-x-2 pt-4 border-t border-white/5">
-                                                                <button onClick={() => { setSongs(pl.songs || []); setMainNav('player'); setSelectedManualIndex(0); setActivePlaylistName(pl.name); }} className="flex-1 bg-white/5 hover:bg-white/10 text-white border border-white/10 py-3 rounded-xl transition-all text-[10px] font-black uppercase tracking-widest flex justify-center items-center space-x-2">
+                                                                <button onClick={() => {
+                                                                    const songsToLoad = (pl.songs || []).map(s => ({
+                                                                        ...s,
+                                                                        include_tabs: s.include_tabs !== undefined ? s.include_tabs : true,
+                                                                        capo: s.capo || 0,
+                                                                    }));
+                                                                    setSongs(songsToLoad);
+                                                                    setIncludeTabs(true); // each song carries its own setting
+                                                                    setMainNav('player');
+                                                                    setSelectedManualIndex(0);
+                                                                    setActivePlaylistName(pl.name);
+                                                                }} className="flex-1 bg-white/5 hover:bg-white/10 text-white border border-white/10 py-3 rounded-xl transition-all text-[10px] font-black uppercase tracking-widest flex justify-center items-center space-x-2">
                                                                     <Play className="w-4 h-4" /><span>Tocar</span>
                                                                 </button>
                                                                 <button onClick={() => { setSongs(pl.songs || []); setCurrentExportList(pl); setExportStep(1); setDownloadUrl(null); setExportFormat('docx'); setCoverImage(null); setShowExportModal(true); }} className="flex-1 bg-[#B87333]/10 hover:bg-[#B87333] text-[#B87333] hover:text-white border border-[#B87333]/20 py-3 rounded-xl transition-all text-[10px] font-black uppercase tracking-widest flex justify-center items-center space-x-2">
@@ -4866,7 +4974,10 @@ export default function App() {
 
                                     {/* Chords Content */}
                                     {(() => {
-                                        const rawLines = (songToPrint.content || "").split('\n');
+                                        const cleanContent = (songToPrint.include_tabs ?? includeTabs) === false
+                                            ? removeTablatureBlocks(songToPrint.content || "")
+                                            : songToPrint.content || "";
+                                        const rawLines = cleanContent.split('\n');
                                         const blocks = [];
                                         let currentBlock = [];
 
@@ -4874,7 +4985,7 @@ export default function App() {
                                             const line = rawLines[i].replace(/\r/g, '');
                                             const trimmed = line.trim();
 
-                                            // 1. Remove lixos visuais contextuais baseados na preferência de tabs
+                                            // 1. Remove lixos visuais contextuais (standalone lines that might have survived)
                                             const isTabLine = line.includes('|-') || line.includes('-|') || /^[eBGDAE]\|/.test(trimmed);
                                             const isGuitarNote = /guitarra|dedilhado|batida|solo|riff|ritmo|frase|passagem/i.test(line) && (line.includes('(') || line.includes('['));
                                             const isRhythmArrow = line.includes('↓') || line.includes('↑');
