@@ -659,6 +659,17 @@ export default function App() {
     const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
     const [isTransposing, setIsTransposing] = useState(false);
     const [isGenerating, setIsGenerating] = useState(false);
+    // Player Song Search (sidebar)
+    const [playerSongSearch, setPlayerSongSearch] = useState('');
+    const [playerSongSuggestions, setPlayerSongSuggestions] = useState([]);
+    const [playerSongSearchLoading, setPlayerSongSearchLoading] = useState(false);
+    const playerSearchDebounceRef = useRef(null);
+    // Immersive Fullscreen (Feature 6)
+    const [isImmersiveMode, setIsImmersiveMode] = useState(false);
+    const [showImmersiveControls, setShowImmersiveControls] = useState(false);
+    const immersiveHideTimerRef = useRef(null);
+    // Enhanced Save Modal (Feature 3)
+    const [saveMode, setSaveMode] = useState('new'); // 'new' | 'append'
     const dragItem = useRef(null);
     const dragOverItem = useRef(null);
     const [dragOverIdx, setDragOverIdx] = useState(null);
@@ -2142,6 +2153,49 @@ export default function App() {
         } catch (err) { alert(err); }
     };
 
+    // Player Sidebar Song Search (Feature 1)
+    const handlePlayerSongSearch = (query) => {
+        setPlayerSongSearch(query);
+        setPlayerSongSuggestions([]);
+        if (playerSearchDebounceRef.current) clearTimeout(playerSearchDebounceRef.current);
+        if (!query.trim()) return;
+        playerSearchDebounceRef.current = setTimeout(async () => {
+            setPlayerSongSearchLoading(true);
+            try {
+                const res = await fetch(`${API_BASE_URL}/api/music/suggestions?q=${encodeURIComponent(query)}`);
+                const data = await res.json();
+                setPlayerSongSuggestions(Array.isArray(data) ? data : (data.suggestions || []));
+            } catch (e) { console.error(e); }
+            finally { setPlayerSongSearchLoading(false); }
+        }, 400);
+    };
+
+    const handleAddSongFromSearch = async (item) => {
+        setPlayerSongSearch('');
+        setPlayerSongSuggestions([]);
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/music/manual`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ song_name: item.song, artist_name: item.artist || '', key: '', include_tabs: true, capo: 0 })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                const newSong = { ...data, status: 'success', show_chords: true, sounding_key: data.sounding_key || data.original_key || '', capo: data.capo || 0, include_tabs: true };
+                setSongs(prev => [...prev, newSong]);
+                setSelectedManualIndex(songs.length); // jump to the new song
+            }
+        } catch (e) { console.error('[PlayerSearch] Error adding song:', e); }
+    };
+
+    // Delete song from queue (Feature 2)
+    const handleDeleteSongFromQueue = (idx) => {
+        const next = songs.filter((_, i) => i !== idx);
+        setSongs(next);
+        if (selectedManualIndex >= next.length) setSelectedManualIndex(Math.max(0, next.length - 1));
+        else if (selectedManualIndex > idx) setSelectedManualIndex(selectedManualIndex - 1);
+    };
+
     const handleSort = () => {
         if (dragItem.current === null || dragOverItem.current === null) return;
         if (dragItem.current === dragOverItem.current) {
@@ -2556,212 +2610,134 @@ export default function App() {
 
                 {(isFullScreenPlayer || activeTab === 'player' || mainNav === 'player') ? (
                     <div className="fixed inset-0 bg-[#070709] z-[100] flex flex-col animate-in fade-in zoom-in-95 duration-500">
-                        {/* PLAYER HEADER UNIFICADO (REDESENHADO) */}
-                        <div className="bg-black/60 border-b border-white/5 flex items-center px-8 py-4 backdrop-blur-2xl shrink-0 no-print gap-8 w-full z-50 justify-between">
-
-                            {/* GROUP 1: Title & List Context */}
-                            <div className="flex items-center space-x-6 min-w-[250px]">
-                                <button onClick={() => { setIsFullScreenPlayer(false); setActiveTab('manual'); setMainNav('escolha'); }} className="p-3 bg-white/5 hover:bg-white/10 rounded-2xl transition-all border border-white/5 text-slate-400 hover:text-white" title="Voltar para Início">
-                                    <ArrowLeft className="w-5 h-5" />
+                        {/* PLAYER HEADER — responsive two-row layout (Feature 4) */}
+                        <div className={`bg-black/60 border-b border-white/5 backdrop-blur-2xl shrink-0 no-print w-full z-50 transition-all duration-300 ${isImmersiveMode && !showImmersiveControls ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+                            {/* Row 1: Back, Song Info, Navigation, Share, Fullscreen */}
+                            <div className="flex items-center px-4 py-3 gap-3 flex-wrap">
+                                <button onClick={() => { setIsFullScreenPlayer(false); setActiveTab('manual'); setMainNav('escolha'); setIsImmersiveMode(false); }} className="p-2.5 bg-white/5 hover:bg-white/10 rounded-xl transition-all border border-white/5 text-slate-400 hover:text-white shrink-0" title="Voltar para Início">
+                                    <ArrowLeft className="w-4 h-4" />
                                 </button>
-                                <div className="flex flex-col">
-                                    <div className="flex items-center space-x-2 mb-1.5 overflow-hidden">
-                                        <div className="p-1 bg-[#B87333]/20 rounded-md border border-[#B87333]/30">
-                                            <LayoutList className="w-2.5 h-2.5 text-[#B87333]" />
+                                <div className="flex flex-col min-w-0 flex-1">
+                                    <div className="flex items-center space-x-1.5 mb-0.5">
+                                        <LayoutList className="w-2.5 h-2.5 text-[#B87333] shrink-0" />
+                                        <span className="text-[8px] font-black text-slate-500 uppercase tracking-[0.2em] truncate max-w-[140px]">{activePlaylistName}</span>
+                                    </div>
+                                    <h2 className="text-sm font-black text-white uppercase italic tracking-tighter leading-none truncate">{currentSong?.song_name}</h2>
+                                    <p className="text-[9px] font-bold text-[#B87333] uppercase truncate opacity-60">{currentSong?.artist_name}</p>
+                                </div>
+                                {/* Navigation */}
+                                <div className="flex items-center space-x-1.5 bg-white/5 p-1 rounded-2xl border border-white/5 shrink-0">
+                                    <button onClick={() => { if (selectedManualIndex > 0) { setSelectedManualIndex(selectedManualIndex - 1); setCurrentLineIndex(0); currentLineIndexRef.current = 0; if (scrollContainerRef.current) scrollContainerRef.current.scrollTop = 0; } }} disabled={selectedManualIndex === 0} className="p-2 hover:bg-white/10 rounded-xl transition-all text-slate-500 hover:text-white disabled:opacity-20" title="Anterior"><SkipBack className="w-4 h-4" /></button>
+                                    <button onClick={() => { const newState = !isAutoScrolling; setIsAutoScrolling(newState); if (newState) setIsDynamicSpeedActive(false); }} className={`w-11 h-11 rounded-xl flex items-center justify-center transition-all ${isAutoScrolling ? 'bg-[#B87333] text-white shadow-lg shadow-[#B87333]/40 scale-105' : 'bg-white/10 text-slate-300 hover:text-white hover:bg-white/20'}`}>
+                                        {isAutoScrolling ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 ml-0.5" />}
+                                    </button>
+                                    <button onClick={() => { if (selectedManualIndex < songs.length - 1) { setSelectedManualIndex(selectedManualIndex + 1); setCurrentLineIndex(0); currentLineIndexRef.current = 0; if (scrollContainerRef.current) scrollContainerRef.current.scrollTop = 0; } }} disabled={selectedManualIndex === songs.length - 1} className="p-2 hover:bg-white/10 rounded-xl transition-all text-slate-500 hover:text-white disabled:opacity-20" title="Próxima"><SkipForward className="w-4 h-4" /></button>
+                                </div>
+                                {/* Share */}
+                                <button onClick={handleShareList} className="flex items-center space-x-1.5 px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition-all font-black text-[9px] uppercase shrink-0" title="Compartilhar">
+                                    <Share2 className="w-3.5 h-3.5" /><span className="hidden sm:inline">Compartilhar</span>
+                                </button>
+                                {/* Print current song */}
+                                <button onClick={() => window.print()} className="p-2 bg-white/5 border border-white/10 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition-all shrink-0" title="Imprimir cifra atual">
+                                    <Printer className="w-4 h-4" />
+                                </button>
+                                {/* Fullscreen / Immersive toggle (Feature 6) */}
+                                <button
+                                    onClick={() => { setIsImmersiveMode(!isImmersiveMode); setShowImmersiveControls(false); }}
+                                    className={`p-2 rounded-xl border transition-all shrink-0 ${isImmersiveMode ? 'bg-[#B87333]/20 border-[#B87333] text-[#B87333]' : 'bg-white/5 border-white/10 text-slate-500 hover:text-white'}`}
+                                    title={isImmersiveMode ? "Sair da Tela Cheia" : "Tela Cheia (Imersivo)"}
+                                >
+                                    {isImmersiveMode ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+                                </button>
+                            </div>
+
+                            {/* Row 2: Controls — flex-wrap so they never overflow */}
+                            <div className="flex items-center px-4 py-2 gap-4 flex-wrap border-t border-white/5 bg-black/20">
+                                {/* Reset + Speed */}
+                                <div className="flex items-center space-x-3 shrink-0">
+                                    <button onClick={() => { setCurrentLineIndex(0); currentLineIndexRef.current = 0; if (scrollContainerRef.current) scrollContainerRef.current.scrollTop = 0; }} className="p-2 rounded-lg bg-white/5 text-slate-500 hover:text-white hover:bg-white/10 transition-all" title="Reiniciar">
+                                        <RotateCcw className="w-3.5 h-3.5" />
+                                    </button>
+                                    <div className="flex flex-col">
+                                        <div className="flex items-center justify-between mb-1">
+                                            <span className="text-[7px] font-black text-slate-600 uppercase tracking-widest">Speed</span>
+                                            <span className="text-[9px] font-black text-[#B87333] italic ml-2">{scrollSpeed}x</span>
                                         </div>
-                                        <span className="text-[9px] font-black text-slate-500 uppercase tracking-[0.2em] truncate max-w-[150px]">{activePlaylistName}</span>
+                                        <input type="range" min="0.5" max="5" step="0.5" value={scrollSpeed} onChange={e => setScrollSpeed(parseFloat(e.target.value))} className="w-20 h-1 bg-white/5 rounded-full appearance-none cursor-pointer accent-[#B87333]" />
                                     </div>
-                                    <h2 className="text-xl font-black text-white uppercase italic tracking-tighter leading-none truncate max-w-[200px]">{currentSong?.song_name}</h2>
-                                    <p className="text-[10px] font-bold text-[#B87333] uppercase tracking-widest mt-1 opacity-60 italic truncate max-w-[200px]">{currentSong?.artist_name}</p>
-                                </div>
-                            </div>
-
-                            {/* GROUP 2: Navigation & Basic Controls */}
-                            <div className="flex items-center space-x-3 bg-white/5 p-1.5 rounded-[24px] border border-white/5">
-                                <button
-                                    onClick={() => {
-                                        if (selectedManualIndex > 0) {
-                                            setSelectedManualIndex(selectedManualIndex - 1);
-                                            setCurrentLineIndex(0);
-                                            currentLineIndexRef.current = 0;
-                                            if (scrollContainerRef.current) scrollContainerRef.current.scrollTop = 0;
-                                        }
-                                    }}
-                                    disabled={selectedManualIndex === 0}
-                                    className="p-3 hover:bg-white/10 rounded-2xl transition-all text-slate-500 hover:text-white disabled:opacity-20"
-                                    title="Música Anterior"
-                                >
-                                    <SkipBack className="w-5 h-5" />
-                                </button>
-                                <button onClick={() => {
-                                    const newState = !isAutoScrolling;
-                                    setIsAutoScrolling(newState);
-                                    if (newState) setIsDynamicSpeedActive(false);
-                                }} className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all ${isAutoScrolling ? 'bg-[#B87333] text-white shadow-xl shadow-[#B87333]/40 scale-105' : 'bg-white/10 text-slate-300 hover:text-white hover:bg-white/20'}`}>
-                                    {isAutoScrolling ? <Pause className="w-6 h-6" /> : <Play className="w-6 h-6 ml-1" />}
-                                </button>
-                                <button
-                                    onClick={() => {
-                                        if (selectedManualIndex < songs.length - 1) {
-                                            setSelectedManualIndex(selectedManualIndex + 1);
-                                            setCurrentLineIndex(0);
-                                            currentLineIndexRef.current = 0;
-                                            if (scrollContainerRef.current) scrollContainerRef.current.scrollTop = 0;
-                                        }
-                                    }}
-                                    disabled={selectedManualIndex === songs.length - 1}
-                                    className="p-3 hover:bg-white/10 rounded-2xl transition-all text-slate-500 hover:text-white disabled:opacity-20"
-                                    title="Próxima Música"
-                                >
-                                    <SkipForward className="w-5 h-5" />
-                                </button>
-                            </div>
-
-                            {/* Menu de Compartilhamento */}
-                            <div className="flex items-center space-x-2">
-                                <button
-                                    onClick={handleShareList}
-                                    className="flex items-center space-x-2 px-4 py-2.5 bg-white/5 border border-white/10 rounded-2xl text-slate-400 hover:text-white hover:bg-white/10 transition-all font-black text-[10px] uppercase italic"
-                                    title="Compartilhar esta lista"
-                                >
-                                    <Share2 className="w-3.5 h-3.5" />
-                                    <span>Compartilhar</span>
-                                </button>
-                            </div>
-
-                            {/* GROUP 3: Performance Helper (Reset & Speed) */}
-                            <div className="flex items-center space-x-6 bg-black/40 px-5 py-2.5 rounded-2xl border border-white/5">
-                                <button
-                                    onClick={() => {
-                                        setCurrentLineIndex(0);
-                                        currentLineIndexRef.current = 0;
-                                        if (scrollContainerRef.current) scrollContainerRef.current.scrollTop = 0;
-                                    }}
-                                    className="p-2.5 rounded-xl flex items-center justify-center transition-all bg-white/5 text-slate-500 hover:text-white hover:bg-white/10"
-                                    title="Reiniciar Do Início"
-                                >
-                                    <RotateCcw className="w-4 h-4" />
-                                </button>
-                                <div className="w-28 min-w-[110px]">
-                                    <div className="flex items-center justify-between mb-1.5">
-                                        <span className="text-[8px] font-black text-slate-600 uppercase tracking-widest leading-none">Speed</span>
-                                        <span className="text-[10px] font-black text-[#B87333] italic">{scrollSpeed}x</span>
-                                    </div>
-                                    <input type="range" min="0.5" max="5" step="0.5" value={scrollSpeed} onChange={(e) => setScrollSpeed(parseFloat(e.target.value))} className="w-full h-1 bg-white/5 rounded-full appearance-none cursor-pointer accent-[#B87333]" />
                                 </div>
 
-                                <div className="h-8 w-px bg-white/10 mx-1"></div>
+                                <div className="w-px h-8 bg-white/10 shrink-0" />
 
-                                <div className="flex flex-col items-center">
-                                    <span className="text-[7px] font-black text-slate-600 uppercase tracking-widest mb-1.5">Tabs</span>
-                                    <button
-                                        onClick={() => setIncludeTabs(!includeTabs)}
-                                        className={`w-11 h-9 rounded-lg flex items-center justify-center transition-all border ${includeTabs ? 'bg-[#B87333]/20 border-[#B87333] text-[#B87333]' : 'bg-black/40 border-white/5 text-slate-600 hover:text-slate-400'}`}
-                                        title={includeTabs ? "Ocultar Tablaturas" : "Mostrar Tablaturas"}
-                                    >
-                                        <FileText className="w-4 h-4" />
+                                {/* Capo */}
+                                <div className="flex flex-col items-center shrink-0">
+                                    <span className="text-[7px] font-black text-slate-500 uppercase tracking-widest mb-1">Capo</span>
+                                    <div className="flex items-center space-x-1 bg-black/40 p-1 rounded-lg border border-white/5">
+                                        <button onClick={() => { if (selectedManualIndex !== null && songs[selectedManualIndex]) { const next = [...songs]; next[selectedManualIndex].capo = Math.max(0, (next[selectedManualIndex].capo || 0) - 1); setSongs(next); } }} className="p-0.5 text-slate-500 hover:text-white transition-all"><Minus className="w-3.5 h-3.5" /></button>
+                                        <span className="text-xs font-black text-[#B87333] w-5 text-center">{currentSong?.capo || 0}</span>
+                                        <button onClick={() => { if (selectedManualIndex !== null && songs[selectedManualIndex]) { const next = [...songs]; next[selectedManualIndex].capo = Math.min(11, (next[selectedManualIndex].capo || 0) + 1); setSongs(next); } }} className="p-0.5 text-slate-500 hover:text-white transition-all"><Plus className="w-3.5 h-3.5" /></button>
+                                    </div>
+                                </div>
+
+                                {/* Key */}
+                                <div className="flex flex-col items-center shrink-0">
+                                    <span className="text-[7px] font-black text-slate-500 uppercase tracking-widest mb-1">Tom</span>
+                                    <div className="flex items-center space-x-1 bg-black/40 p-1 rounded-lg border border-[#B87333]/20">
+                                        <button onClick={() => transposeSong(selectedManualIndex, -1)} disabled={isTransposing} className="p-0.5 text-slate-500 hover:text-white transition-all disabled:opacity-50"><Minus className="w-3.5 h-3.5" /></button>
+                                        <span className="text-xs font-black text-white uppercase italic min-w-[1.5rem] text-center">{isTransposing ? '...' : getSoundingKey(currentSong)}</span>
+                                        <button onClick={() => transposeSong(selectedManualIndex, 1)} disabled={isTransposing} className="p-0.5 text-slate-500 hover:text-white transition-all disabled:opacity-50"><Plus className="w-3.5 h-3.5" /></button>
+                                    </div>
+                                </div>
+
+                                {/* Size */}
+                                <div className="flex flex-col items-center shrink-0">
+                                    <span className="text-[7px] font-black text-slate-500 uppercase tracking-widest mb-1">Size</span>
+                                    <div className="flex items-center space-x-1 bg-black/40 p-1 rounded-lg border border-white/5">
+                                        <button onClick={() => setPlayerFontSize(prev => Math.max(12, prev - 1))} className="p-0.5 text-slate-500 hover:text-white transition-all"><Minus className="w-3.5 h-3.5" /></button>
+                                        <span className="text-xs font-black text-white w-5 text-center">{playerFontSize}</span>
+                                        <button onClick={() => setPlayerFontSize(prev => Math.min(45, prev + 1))} className="p-0.5 text-slate-500 hover:text-white transition-all"><Plus className="w-3.5 h-3.5" /></button>
+                                    </div>
+                                </div>
+
+                                {/* Tabs toggle */}
+                                <div className="flex flex-col items-center shrink-0">
+                                    <span className="text-[7px] font-black text-slate-500 uppercase tracking-widest mb-1">Tabs</span>
+                                    <button onClick={() => setIncludeTabs(!includeTabs)} className={`p-2 rounded-lg border transition-all ${includeTabs ? 'bg-[#B87333]/20 border-[#B87333] text-[#B87333]' : 'bg-black/40 border-white/5 text-slate-600 hover:text-slate-400'}`} title={includeTabs ? "Ocultar Tablaturas" : "Mostrar Tablaturas"}>
+                                        <FileText className="w-3.5 h-3.5" />
                                     </button>
                                 </div>
 
-                                <div className="h-8 w-px bg-white/10 mx-1"></div>
+                                <div className="w-px h-8 bg-white/10 shrink-0" />
 
+                                {/* IA Sync */}
                                 <div className="flex flex-col items-center shrink-0 relative">
-                                    {/* Live Transcript Bubble */}
                                     {micEnabled && isDynamicSpeedActive && transcriptRaw && (
-                                        <div className="absolute bottom-[calc(100%+12px)] left-1/2 -translate-x-1/2 z-50 pointer-events-none">
-                                            <div className="bg-blue-600/90 backdrop-blur-md text-white px-3 py-1.5 rounded-2xl shadow-xl shadow-blue-500/20 border border-blue-400/30 whitespace-nowrap flex items-center space-x-2 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                                                <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></div>
-                                                <span className="text-[10px] font-bold uppercase tracking-tight antialiased">
-                                                    {transcriptRaw.length > 30 ? '...' + transcriptRaw.slice(-30) : transcriptRaw}
-                                                </span>
+                                        <div className="absolute bottom-[calc(100%+8px)] left-1/2 -translate-x-1/2 z-50 pointer-events-none">
+                                            <div className="bg-blue-600/90 text-white px-2.5 py-1 rounded-xl border border-blue-400/30 whitespace-nowrap flex items-center space-x-1.5 text-[9px] font-bold">
+                                                <div className="w-1 h-1 bg-white rounded-full animate-pulse" />
+                                                <span>{transcriptRaw.length > 25 ? '...' + transcriptRaw.slice(-25) : transcriptRaw}</span>
                                             </div>
-                                            <div className="w-2 h-2 bg-blue-600/90 rotate-45 absolute -bottom-1 left-1/2 -translate-x-1/2 border-r border-b border-blue-400/30"></div>
                                         </div>
                                     )}
-
-                                    <span className="text-[7px] font-black text-slate-600 uppercase mb-1.5 tracking-tighter">IA Sync</span>
-                                    <div className="flex items-center space-x-2">
-                                        <button
-                                            onClick={() => {
-                                                const newState = !isDynamicSpeedActive;
-                                                setIsDynamicSpeedActive(newState);
-                                                if (newState) setIsAutoScrolling(false);
-                                                if (newState && !micEnabled) setMicEnabled(true);
-                                            }}
-                                            className={`p-2 rounded-lg transition-all border ${isDynamicSpeedActive ? 'bg-blue-600 border-blue-600 text-white shadow-[0_0_15px_rgba(37,99,235,0.3)] animate-pulse' : 'bg-white/5 border-white/10 text-slate-600 hover:text-slate-400'}`}
-                                            title="IA Sync: Sincroniza com sua voz"
-                                        >
-                                            <Zap className="w-3.5 h-3.5" />
-                                        </button>
-                                        {micEnabled && isDynamicSpeedActive && (
-                                            <div className="flex items-end space-x-0.5 h-3 w-4">
-                                                <div className="w-1 bg-blue-500/40 rounded-full transition-all duration-75" style={{ height: `${Math.min(100, micLevel * 2)}%` }}></div>
-                                                <div className="w-1 bg-blue-500/60 rounded-full transition-all duration-75" style={{ height: `${Math.min(100, micLevel * 3)}%` }}></div>
-                                                <div className="w-1 bg-blue-500 rounded-full transition-all duration-75" style={{ height: `${Math.min(100, micLevel * 4)}%` }}></div>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* MIC TOGGLE for Pitch Gauge */}
-                            <div className="flex flex-col items-center shrink-0">
-                                <span className="text-[7px] font-black text-slate-600 uppercase mb-1.5 tracking-tighter">MIC</span>
-                                <button
-                                    onClick={() => setMicEnabled(!micEnabled)}
-                                    className={`p-2 rounded-lg transition-all border ${micEnabled ? 'bg-green-500/20 border-green-500 text-green-400 shadow-[0_0_10px_rgba(34,197,94,0.2)]' : 'bg-white/5 border-white/10 text-slate-600 hover:text-slate-400'}`}
-                                    title={micEnabled ? "Desligar Microfone" : "Ligar Microfone para Afinação"}
-                                >
-                                    <Mic className="w-3.5 h-3.5" />
-                                </button>
-                            </div>
-
-                            {/* GROUP 4: Song Adjustments (Capo, Key, Size, Tabs) */}
-                            <div className="flex items-center space-x-5">
-                                <div className="flex flex-col items-center">
-                                    <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Capo</span>
-                                    <div className="flex items-center space-x-1.5 bg-black/40 p-1 rounded-xl border border-white/5">
-                                        <button onClick={() => { if (selectedManualIndex !== null && songs[selectedManualIndex]) { const next = [...songs]; next[selectedManualIndex].capo = Math.max(0, (next[selectedManualIndex].capo || 0) - 1); setSongs(next); } }} className="p-1 text-slate-500 hover:text-white transition-all"><Minus className="w-4 h-4" /></button>
-                                        <span className="text-xs font-black text-[#B87333] w-5 text-center leading-none">{currentSong?.capo || 0}</span>
-                                        <button onClick={() => { if (selectedManualIndex !== null && songs[selectedManualIndex]) { const next = [...songs]; next[selectedManualIndex].capo = Math.min(11, (next[selectedManualIndex].capo || 0) + 1); setSongs(next); } }} className="p-1 text-slate-500 hover:text-white transition-all"><Plus className="w-4 h-4" /></button>
-                                    </div>
+                                    <span className="text-[7px] font-black text-slate-600 uppercase mb-1 tracking-tighter">IA Sync</span>
+                                    <button onClick={() => { const s = !isDynamicSpeedActive; setIsDynamicSpeedActive(s); if (s) setIsAutoScrolling(false); if (s && !micEnabled) setMicEnabled(true); }} className={`p-2 rounded-lg border transition-all ${isDynamicSpeedActive ? 'bg-blue-600 border-blue-600 text-white shadow-[0_0_15px_rgba(37,99,235,0.3)] animate-pulse' : 'bg-white/5 border-white/10 text-slate-600 hover:text-slate-400'}`}>
+                                        <Zap className="w-3.5 h-3.5" />
+                                    </button>
                                 </div>
 
-                                <div className="flex flex-col items-center">
-                                    <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Key</span>
-                                    <div className="flex items-center space-x-1.5 bg-black/40 p-1 rounded-xl border border-[#B87333]/20 shadow-[0_0_15px_rgba(184,115,51,0.1)]">
-                                        <button onClick={() => transposeSong(selectedManualIndex, -1)} disabled={isTransposing} className="p-1 text-slate-500 hover:text-white transition-all disabled:opacity-50"><Minus className="w-4 h-4" /></button>
-                                        <div className="flex items-center space-x-1 px-1.5 pointer-events-none">
-                                            <span className="text-xs font-black text-white uppercase italic min-w-[1.2rem] text-center">{isTransposing ? '...' : getSoundingKey(currentSong)}</span>
-                                        </div>
-                                        <button onClick={() => transposeSong(selectedManualIndex, 1)} disabled={isTransposing} className="p-1 text-slate-500 hover:text-white transition-all disabled:opacity-50"><Plus className="w-4 h-4" /></button>
-                                    </div>
-                                </div>
-
-                                <div className="h-10 w-px bg-white/5 mx-1"></div>
-
-                                <div className="flex items-center space-x-3">
-                                    <div className="flex flex-col items-center">
-                                        <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Size</span>
-                                        <div className="flex items-center space-x-1.5 bg-black/40 p-1 rounded-xl border border-white/5">
-                                            <button onClick={() => setPlayerFontSize(prev => Math.max(12, prev - 1))} className="p-1 text-slate-500 hover:text-white transition-all"><Minus className="w-4 h-4" /></button>
-                                            <span className="text-xs font-black text-white w-5 text-center leading-none">{playerFontSize}</span>
-                                            <button onClick={() => setPlayerFontSize(prev => Math.min(45, prev + 1))} className="p-1 text-slate-500 hover:text-white transition-all"><Plus className="w-4 h-4" /></button>
-                                        </div>
-                                    </div>
-                                    <div className="flex flex-col items-center">
-                                        <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Tabs</span>
-                                        <button onClick={() => setIncludeTabs(!includeTabs)} className={`p-2.5 rounded-xl transition-all border ${includeTabs ? 'bg-[#B87333]/20 border-[#B87333] text-[#B87333]' : 'bg-black/40 border-white/5 text-slate-600 hover:text-slate-400'}`} title={includeTabs ? "Esconder Tablaturas" : "Mostrar Tablaturas"}>
-                                            <FileText className="w-4 h-4" />
-                                        </button>
-                                    </div>
+                                {/* MIC */}
+                                <div className="flex flex-col items-center shrink-0">
+                                    <span className="text-[7px] font-black text-slate-600 uppercase mb-1 tracking-tighter">MIC</span>
+                                    <button onClick={() => setMicEnabled(!micEnabled)} className={`p-2 rounded-lg border transition-all ${micEnabled ? 'bg-green-500/20 border-green-500 text-green-400 shadow-[0_0_10px_rgba(34,197,94,0.2)]' : 'bg-white/5 border-white/10 text-slate-600 hover:text-slate-400'}`} title={micEnabled ? "Desligar Microfone" : "Ligar Microfone"}>
+                                        <Mic className="w-3.5 h-3.5" />
+                                    </button>
                                 </div>
                             </div>
                         </div>
 
-                        <div className="flex-1 flex overflow-hidden">
-                            {/* PLAYER PLAYLIST SIDEBAR */}
-                            <div className={`${isSidebarCollapsed ? 'w-20 px-3' : 'w-80 px-6'} bg-black/40 border-r border-white/5 flex flex-col py-6 space-y-6 shrink-0 relative no-print transition-all duration-300 ease-in-out`}>
+                        <div className="flex-1 flex overflow-hidden relative">
+                            {/* PLAYER PLAYLIST SIDEBAR — hidden in immersive mode */}
+                            <div className={`${isSidebarCollapsed ? 'w-20 px-3' : 'w-80 px-6'} ${isImmersiveMode ? 'hidden' : ''} bg-black/40 border-r border-white/5 flex flex-col py-6 space-y-6 shrink-0 relative no-print transition-all duration-300 ease-in-out`}>
                                 {/* Toggle Button */}
                                 <button
                                     onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
@@ -2771,126 +2747,194 @@ export default function App() {
                                     {isSidebarCollapsed ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronLeft className="w-3.5 h-3.5" />}
                                 </button>
 
+                                {/* ——— SEARCH BAR (Feature 1) ——— */}
+                                {!isSidebarCollapsed && (
+                                    <div className="relative">
+                                        <div className="relative">
+                                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/60 pointer-events-none" />
+                                            <input
+                                                type="text"
+                                                placeholder="Buscar e adicionar música..."
+                                                value={playerSongSearch}
+                                                onChange={e => handlePlayerSongSearch(e.target.value)}
+                                                className="w-full bg-[#B87333] border border-[#B87333]/50 rounded-xl pl-9 pr-4 py-3 text-[11px] font-bold text-white placeholder:text-white/60 focus:outline-none focus:ring-2 focus:ring-white/30 shadow-lg shadow-[#B87333]/20 transition-all"
+                                            />
+                                            {playerSongSearchLoading && <RefreshCw className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/60 animate-spin" />}
+                                        </div>
+                                        {playerSongSuggestions.length > 0 && (
+                                            <div className="absolute z-[200] w-full mt-1 bg-[#16161D] border border-white/10 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.7)] overflow-hidden backdrop-blur-3xl animate-in fade-in zoom-in-95 duration-200">
+                                                <div className="max-h-[280px] overflow-y-auto">
+                                                    {playerSongSuggestions.map((item, i) => (
+                                                        <button key={i} type="button"
+                                                            onClick={() => handleAddSongFromSearch(item)}
+                                                            className="w-full text-left px-4 py-3 hover:bg-[#B87333]/15 transition-all border-b border-white/5 last:border-none flex items-center justify-between group"
+                                                        >
+                                                            <div className="flex flex-col min-w-0">
+                                                                <span className="text-[11px] font-black text-white uppercase italic truncate group-hover:text-[#B87333]">{item.song}</span>
+                                                                <span className="text-[9px] text-slate-500 truncate">{item.artist}</span>
+                                                            </div>
+                                                            <Plus className="w-3.5 h-3.5 text-[#B87333] opacity-0 group-hover:opacity-100 shrink-0 ml-2" />
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* ——— HEADER: title + save button ——— */}
                                 <div className={`flex items-center ${isSidebarCollapsed ? 'justify-center' : 'justify-between'}`}>
                                     <div className="flex items-center space-x-3" title="Fila de Execução">
                                         <LayoutList className="w-5 h-5 text-[#B87333] shrink-0" />
-                                        {!isSidebarCollapsed && <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] whitespace-nowrap overflow-hidden transition-all duration-300">Fila de Execução</h3>}
+                                        {!isSidebarCollapsed && <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] whitespace-nowrap">Fila de Execução</h3>}
                                     </div>
                                     {!isSidebarCollapsed && (
-                                        <div className="flex bg-black/40 rounded-lg p-1 border border-white/5 shrink-0 transition-all duration-300">
-                                            <button onClick={() => setShowPlaylistManager(!showPlaylistManager)} className={`p-1.5 rounded-md transition-all ${showPlaylistManager ? 'bg-[#B87333] text-white' : 'text-slate-600 hover:text-slate-400'}`}><Save className="w-3.5 h-3.5" /></button>
-                                        </div>
+                                        <button onClick={() => { setShowPlaylistManager(!showPlaylistManager); setSaveMode('new'); }} className={`p-1.5 rounded-md transition-all ${showPlaylistManager ? 'bg-[#B87333] text-white' : 'text-slate-600 hover:text-slate-400'}`} title="Salvar Setlist">
+                                            <Save className="w-3.5 h-3.5" />
+                                        </button>
                                     )}
                                 </div>
 
+                                {/* ——— SAVE MODAL (Feature 3) ——— */}
                                 {!isSidebarCollapsed && showPlaylistManager && (
-                                    <div className="bg-[#B87333]/10 border border-[#B87333]/30 p-4 rounded-2xl animate-in slide-in-from-top-4 duration-300">
-                                        <p className="text-[9px] font-black text-[#B87333] uppercase mb-3">Salvar Setlist</p>
-                                        <div className="flex space-x-2">
-                                            <input type="text" placeholder="Nome..." value={playlistNameInput} onChange={e => setPlaylistNameInput(e.target.value)} className="flex-1 bg-black/40 border border-[#B87333]/20 rounded-lg px-3 py-2 text-[10px] font-bold text-white focus:outline-none" />
-                                            <button onClick={() => {
-                                                if (!playlistNameInput.trim()) return;
-                                                const newList = {
-                                                    id: Date.now().toString(),
-                                                    name: playlistNameInput,
-                                                    songs: songs.map(s => ({ ...s }))
-                                                };
-                                                const next = [...savedPlaylists, newList];
-                                                setSavedPlaylists(next);
-                                                localStorage.setItem('iron_chords_playlists', JSON.stringify(next));
-                                                setActivePlaylistName(playlistNameInput);
-                                                setPlaylistNameInput('');
-                                                setShowPlaylistManager(false);
-                                            }} className="bg-[#B87333] text-white p-2 rounded-lg hover:bg-[#8B4513] transition-all"><Plus className="w-4 h-4" /></button>
+                                    <div className="bg-[#B87333]/10 border border-[#B87333]/30 p-4 rounded-2xl animate-in slide-in-from-top-4 duration-300 space-y-3">
+                                        {/* Mode Tabs */}
+                                        <div className="flex space-x-1 bg-black/40 p-1 rounded-xl">
+                                            <button onClick={() => setSaveMode('new')} className={`flex-1 py-1.5 text-[9px] font-black uppercase rounded-lg transition-all ${saveMode === 'new' ? 'bg-[#B87333] text-white' : 'text-slate-500 hover:text-white'}`}>✨ Nova</button>
+                                            <button onClick={() => setSaveMode('append')} className={`flex-1 py-1.5 text-[9px] font-black uppercase rounded-lg transition-all ${saveMode === 'append' ? 'bg-[#B87333] text-white' : 'text-slate-500 hover:text-white'}`}>➕ Adicionar em...</button>
                                         </div>
-                                        {savedPlaylists.length > 0 && (
-                                            <div className="mt-4 space-y-2 border-t border-[#B87333]/20 pt-3">
-                                                {savedPlaylists.map(pl => (
-                                                    <div key={pl.id} className="flex items-center justify-between group">
-                                                        <button onClick={() => {
-                                                            setSongs(pl.songs);
-                                                            setSelectedManualIndex(0);
-                                                            setActivePlaylistName(pl.name);
-                                                            setShowPlaylistManager(false);
-                                                        }} className="text-[10px] font-bold text-slate-400 hover:text-white truncate flex-1 text-left uppercase italic">{pl.name}</button>
-                                                        <button onClick={() => {
-                                                            const next = savedPlaylists.filter(p => p.id !== pl.id);
-                                                            setSavedPlaylists(next);
-                                                            localStorage.setItem('iron_chords_playlists', JSON.stringify(next));
-                                                        }} className="text-red-900 opacity-0 group-hover:opacity-100 transition-all ml-2"><Trash2 className="w-3 h-3" /></button>
-                                                    </div>
+
+                                        {saveMode === 'new' ? (
+                                            <div className="flex space-x-2">
+                                                <input type="text" placeholder="Nome da Setlist..." value={playlistNameInput} onChange={e => setPlaylistNameInput(e.target.value)}
+                                                    onKeyDown={e => { if (e.key === 'Enter' && playlistNameInput.trim()) { const newList = { id: Date.now().toString(), name: playlistNameInput, songs: songs.map(s => ({ ...s })) }; const next = [...savedPlaylists, newList]; setSavedPlaylists(next); localStorage.setItem('iron_chords_playlists', JSON.stringify(next)); setActivePlaylistName(playlistNameInput); setPlaylistNameInput(''); setShowPlaylistManager(false); } }}
+                                                    className="flex-1 bg-black/40 border border-[#B87333]/20 rounded-lg px-3 py-2 text-[10px] font-bold text-white focus:outline-none focus:ring-1 focus:ring-[#B87333]/40" />
+                                                <button onClick={() => {
+                                                    if (!playlistNameInput.trim()) return;
+                                                    const newList = { id: Date.now().toString(), name: playlistNameInput, songs: songs.map(s => ({ ...s })) };
+                                                    const next = [...savedPlaylists, newList];
+                                                    setSavedPlaylists(next);
+                                                    localStorage.setItem('iron_chords_playlists', JSON.stringify(next));
+                                                    setActivePlaylistName(playlistNameInput);
+                                                    setPlaylistNameInput('');
+                                                    setShowPlaylistManager(false);
+                                                }} className="bg-[#B87333] text-white p-2 rounded-lg hover:bg-[#8B4513] transition-all shrink-0">
+                                                    <Plus className="w-4 h-4" />
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <div className="space-y-1.5 max-h-[150px] overflow-y-auto">
+                                                {savedPlaylists.length === 0 ? (
+                                                    <p className="text-[9px] text-slate-600 italic text-center py-2">Nenhuma setlist salva</p>
+                                                ) : savedPlaylists.map(pl => (
+                                                    <button key={pl.id} onClick={() => {
+                                                        const merged = [...pl.songs, ...songs.filter(s => !pl.songs.some(ps => ps.song_name === s.song_name))];
+                                                        const updated = savedPlaylists.map(p => p.id === pl.id ? { ...p, songs: merged } : p);
+                                                        setSavedPlaylists(updated);
+                                                        localStorage.setItem('iron_chords_playlists', JSON.stringify(updated));
+                                                        setShowPlaylistManager(false);
+                                                    }} className="w-full text-left px-3 py-2 rounded-lg bg-white/5 hover:bg-[#B87333]/20 border border-white/5 hover:border-[#B87333]/30 text-[10px] font-bold text-slate-400 hover:text-white uppercase italic transition-all flex items-center justify-between group">
+                                                        <span className="truncate">{pl.name}</span>
+                                                        <Plus className="w-3 h-3 opacity-0 group-hover:opacity-100 shrink-0 ml-1" />
+                                                    </button>
                                                 ))}
                                             </div>
                                         )}
                                     </div>
                                 )}
 
-                                <div className={`flex-1 overflow-y-auto space-y-3 scrollbar-thin scrollbar-thumb-[#B87333]/20 ${isSidebarCollapsed ? 'pr-0' : 'pr-2'}`}>
+                                {/* ——— SONG LIST (with trash + print) ——— */}
+                                <div className={`flex-1 overflow-y-auto space-y-2 scrollbar-thin scrollbar-thumb-[#B87333]/20 ${isSidebarCollapsed ? 'pr-0' : 'pr-1'}`}>
                                     {songs.map((s, idx) => (
-                                        <button
-                                            key={idx}
-                                            draggable={!isSidebarCollapsed}
-                                            onDragStart={() => (dragItem.current = idx)}
-                                            onDragEnter={() => { dragOverItem.current = idx; setDragOverIdx(idx); }}
-                                            onDragEnd={handleSort}
-                                            onDragOver={(e) => e.preventDefault()}
-                                            // Mobile Touch Support
-                                            onTouchStart={(e) => {
-                                                if (isSidebarCollapsed) return;
-                                                dragItem.current = idx;
-                                                // Prevent default smooth scroll when initiating dragging
-                                                e.target.style.opacity = '0.5';
-                                            }}
-                                            onTouchMove={(e) => {
-                                                if (isSidebarCollapsed || dragItem.current === null) return;
-                                                // Prevent scrolling on the page while dragging the element
-                                                e.preventDefault();
-                                                const touchIndex = e.touches[0];
-                                                const hoverElement = document.elementFromPoint(touchIndex.clientX, touchIndex.clientY);
-
-                                                if (hoverElement) {
-                                                    const targetButton = hoverElement.closest('button[data-drag-index]');
-                                                    if (targetButton) {
-                                                        const targetIdx = parseInt(targetButton.getAttribute('data-drag-index'), 10);
-                                                        if (!isNaN(targetIdx) && targetIdx !== dragOverItem.current) {
-                                                            dragOverItem.current = targetIdx;
-                                                            setDragOverIdx(targetIdx);
+                                        <div key={idx} className="relative group/song">
+                                            <button
+                                                draggable={!isSidebarCollapsed}
+                                                onDragStart={() => (dragItem.current = idx)}
+                                                onDragEnter={() => { dragOverItem.current = idx; setDragOverIdx(idx); }}
+                                                onDragEnd={handleSort}
+                                                onDragOver={(e) => e.preventDefault()}
+                                                onTouchStart={(e) => { if (isSidebarCollapsed) return; dragItem.current = idx; e.target.style.opacity = '0.5'; }}
+                                                onTouchMove={(e) => {
+                                                    if (isSidebarCollapsed || dragItem.current === null) return;
+                                                    e.preventDefault();
+                                                    const touchIndex = e.touches[0];
+                                                    const hoverElement = document.elementFromPoint(touchIndex.clientX, touchIndex.clientY);
+                                                    if (hoverElement) {
+                                                        const targetButton = hoverElement.closest('[data-drag-index]');
+                                                        if (targetButton) {
+                                                            const targetIdx = parseInt(targetButton.getAttribute('data-drag-index'), 10);
+                                                            if (!isNaN(targetIdx) && targetIdx !== dragOverItem.current) { dragOverItem.current = targetIdx; setDragOverIdx(targetIdx); }
                                                         }
                                                     }
-                                                }
-                                            }}
-                                            onTouchEnd={(e) => {
-                                                if (isSidebarCollapsed) return;
-                                                e.target.style.opacity = '1';
-                                                if (dragItem.current !== null && dragOverItem.current !== null) {
-                                                    handleSort();
-                                                } else {
-                                                    // if dropped outside or failed
-                                                    dragItem.current = null;
-                                                    dragOverItem.current = null;
-                                                    setDragOverIdx(null);
-                                                }
-                                            }}
-                                            onClick={() => { setSelectedManualIndex(idx); setCurrentLineIndex(0); currentLineIndexRef.current = 0; }}
-                                            className={`w-full ${isSidebarCollapsed ? 'p-2 justify-center' : 'p-4'} rounded-2xl border transition-all text-left flex items-center ${isSidebarCollapsed ? 'space-x-0' : 'space-x-4'} group relative overflow-hidden ${selectedManualIndex === idx ? 'bg-[#B87333] border-[#B87333] shadow-lg shadow-[#B87333]/20' : 'bg-white/5 border-white/5 hover:border-[#B87333]/30'} ${dragOverIdx === idx ? (dragItem.current !== null && dragOverItem.current !== null && dragItem.current < dragOverItem.current ? 'border-b-4 border-b-orange-500' : 'border-t-4 border-t-orange-500') : ''} ${!isSidebarCollapsed ? 'cursor-grab active:cursor-grabbing touch-none' : ''}`}
-                                            title={isSidebarCollapsed ? `${idx + 1}. ${s.song_name}` : "Arraste para reordenar"}
-                                            data-drag-index={idx}
-                                        >
-                                            <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-black text-xs shrink-0 transition-all ${selectedManualIndex === idx ? 'bg-white text-[#B87333]' : 'bg-black/60 text-slate-700 group-hover:text-white'}`}>{idx + 1}</div>
+                                                }}
+                                                onTouchEnd={(e) => {
+                                                    if (isSidebarCollapsed) return;
+                                                    e.target.style.opacity = '1';
+                                                    if (dragItem.current !== null && dragOverItem.current !== null) handleSort();
+                                                    else { dragItem.current = null; dragOverItem.current = null; setDragOverIdx(null); }
+                                                }}
+                                                onClick={() => { setSelectedManualIndex(idx); setCurrentLineIndex(0); currentLineIndexRef.current = 0; }}
+                                                className={`w-full ${isSidebarCollapsed ? 'p-2 justify-center' : 'p-3'} rounded-2xl border transition-all text-left flex items-center ${isSidebarCollapsed ? 'space-x-0' : 'space-x-3'} relative overflow-hidden ${selectedManualIndex === idx ? 'bg-[#B87333] border-[#B87333] shadow-lg shadow-[#B87333]/20' : 'bg-white/5 border-white/5 hover:border-[#B87333]/30'} ${dragOverIdx === idx ? (dragItem.current !== null && dragOverItem.current !== null && dragItem.current < dragOverItem.current ? 'border-b-4 border-b-orange-500' : 'border-t-4 border-t-orange-500') : ''} ${!isSidebarCollapsed ? 'cursor-grab active:cursor-grabbing touch-none' : ''}`}
+                                                title={isSidebarCollapsed ? `${idx + 1}. ${s.song_name}` : "Clique para tocar • Arraste para reordenar"}
+                                                data-drag-index={idx}
+                                            >
+                                                <div className={`w-7 h-7 rounded-xl flex items-center justify-center font-black text-xs shrink-0 transition-all ${selectedManualIndex === idx ? 'bg-white text-[#B87333]' : 'bg-black/60 text-slate-700 group-hover/song:text-white'}`}>{idx + 1}</div>
+                                                {!isSidebarCollapsed && (
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className={`text-[11px] font-black uppercase italic truncate tracking-tight ${selectedManualIndex === idx ? 'text-white' : 'text-slate-400 group-hover/song:text-slate-200'}`}>{s.song_name}</p>
+                                                        <p className={`text-[9px] font-bold uppercase truncate ${selectedManualIndex === idx ? 'text-white/60' : 'text-slate-600'}`}>{s.artist_name}</p>
+                                                    </div>
+                                                )}
+                                            </button>
+                                            {/* Trash + Print action buttons */}
                                             {!isSidebarCollapsed && (
-                                                <div className="flex-1 min-w-0 transition-all duration-300">
-                                                    <p className={`text-[11px] font-black uppercase italic truncate tracking-tight transition-colors ${selectedManualIndex === idx ? 'text-white' : 'text-slate-400 group-hover:text-slate-200'}`}>{s.song_name}</p>
-                                                    <p className={`text-[9px] font-bold uppercase truncate transition-colors ${selectedManualIndex === idx ? 'text-white/60' : 'text-slate-600'}`}>{s.artist_name}</p>
+                                                <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center space-x-0.5 opacity-0 group-hover/song:opacity-100 transition-all">
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); setSelectedManualIndex(idx); setTimeout(() => window.print(), 50); }}
+                                                        className="p-1.5 rounded-lg bg-black/60 text-slate-500 hover:text-white hover:bg-white/10 transition-all"
+                                                        title="Imprimir cifra"
+                                                    >
+                                                        <Printer className="w-3 h-3" />
+                                                    </button>
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); handleDeleteSongFromQueue(idx); }}
+                                                        className="p-1.5 rounded-lg bg-black/60 text-red-900 hover:text-red-400 hover:bg-red-500/10 transition-all"
+                                                        title="Remover da fila"
+                                                    >
+                                                        <Trash2 className="w-3 h-3" />
+                                                    </button>
                                                 </div>
                                             )}
-                                            {selectedManualIndex === idx && !isSidebarCollapsed && <div className="absolute top-0 right-0 w-16 h-16 bg-white/5 rounded-bl-full -mr-6 -mt-6"></div>}
-                                        </button>
+                                        </div>
                                     ))}
                                 </div>
                             </div>
 
                             {/* PLAYER LYRICS/CHORDS AREA */}
-                            <div className="flex-1 relative flex flex-col bg-[url('https://www.transparenttextures.com/patterns/black-paper.png')]">
+                            <div className="flex-1 relative flex flex-col bg-[url('https://www.transparenttextures.com/patterns/black-paper.png')]"
+                                onMouseMove={() => {
+                                    if (!isImmersiveMode) return;
+                                    setShowImmersiveControls(true);
+                                    if (immersiveHideTimerRef.current) clearTimeout(immersiveHideTimerRef.current);
+                                    immersiveHideTimerRef.current = setTimeout(() => setShowImmersiveControls(false), 3000);
+                                }}
+                                onTouchStart={() => {
+                                    if (!isImmersiveMode) return;
+                                    setShowImmersiveControls(true);
+                                    if (immersiveHideTimerRef.current) clearTimeout(immersiveHideTimerRef.current);
+                                    immersiveHideTimerRef.current = setTimeout(() => setShowImmersiveControls(false), 3000);
+                                }}
+                            >
+                                {/* Immersive mode exit button — always visible in immersive mode */}
+                                {isImmersiveMode && (
+                                    <button
+                                        onClick={() => setIsImmersiveMode(false)}
+                                        className="absolute top-4 right-4 z-[200] p-2.5 bg-black/70 backdrop-blur-xl border border-white/10 rounded-2xl text-white hover:bg-white/10 transition-all shadow-2xl"
+                                        title="Sair da Tela Cheia"
+                                    >
+                                        <X className="w-5 h-5" />
+                                    </button>
+                                )}
                                 <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-16 scroll-smooth scrollbar-none pb-64">
 
                                     <div className="max-w-4xl mx-auto space-y-1 printable-area">
@@ -4499,475 +4543,490 @@ export default function App() {
                             )}
                         </div>
                     </div>
-                )}
-            </main>
+                )
+                }
+            </main >
 
             {/* Conflict Resolution Modal */}
-            {conflictData && (
-                <div className="fixed inset-0 z-[400] flex items-center justify-center bg-[#070709]/95 backdrop-blur-2xl animate-in fade-in zoom-in-95 duration-300 p-4">
-                    <div className="bg-[#16161D] border border-blue-500/30 p-10 rounded-[40px] shadow-[0_0_80px_rgba(59,130,246,0.15)] w-full max-w-2xl flex flex-col relative overflow-hidden">
-                        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-blue-500 to-transparent opacity-50"></div>
-                        <div className="flex items-center justify-between mb-10">
-                            <div className="flex items-center space-x-5">
-                                <div className="w-12 h-12 bg-blue-500/10 rounded-2xl flex items-center justify-center border border-blue-500/20">
-                                    <AlertCircle className="w-6 h-6 text-blue-500" />
-                                </div>
-                                <div>
-                                    <h3 className="text-2xl font-black text-white uppercase italic tracking-tighter">Conflito de Forja</h3>
-                                    <p className="text-[10px] font-bold text-blue-400 uppercase tracking-[0.2em] mt-1">Uma peça com este nome já existe no acervo</p>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-8 mb-10">
-                            <div className="bg-white/5 border border-white/10 p-6 rounded-3xl relative">
-                                <span className="absolute -top-3 left-6 px-3 py-1 bg-[#16161D] border border-white/10 rounded-full text-[8px] font-black text-slate-500 uppercase tracking-widest">No Acervo</span>
-                                <h4 className="text-lg font-black text-white uppercase italic truncate">{conflictData.existingSong?.song_name}</h4>
-                                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1 truncate">{conflictData.existingSong?.artist_name}</p>
-                                <div className="mt-4 pt-4 border-t border-white/5 flex items-center justify-between">
-                                    <span className="text-[10px] font-black text-blue-400 italic bg-blue-500/10 px-3 py-1 rounded-lg border border-blue-500/20">{conflictData.existingSong?.song_key}</span>
-                                    <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest">{conflictData.existingSong?.content?.split('\n').length} linhas</span>
+            {
+                conflictData && (
+                    <div className="fixed inset-0 z-[400] flex items-center justify-center bg-[#070709]/95 backdrop-blur-2xl animate-in fade-in zoom-in-95 duration-300 p-4">
+                        <div className="bg-[#16161D] border border-blue-500/30 p-10 rounded-[40px] shadow-[0_0_80px_rgba(59,130,246,0.15)] w-full max-w-2xl flex flex-col relative overflow-hidden">
+                            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-blue-500 to-transparent opacity-50"></div>
+                            <div className="flex items-center justify-between mb-10">
+                                <div className="flex items-center space-x-5">
+                                    <div className="w-12 h-12 bg-blue-500/10 rounded-2xl flex items-center justify-center border border-blue-500/20">
+                                        <AlertCircle className="w-6 h-6 text-blue-500" />
+                                    </div>
+                                    <div>
+                                        <h3 className="text-2xl font-black text-white uppercase italic tracking-tighter">Conflito de Forja</h3>
+                                        <p className="text-[10px] font-bold text-blue-400 uppercase tracking-[0.2em] mt-1">Uma peça com este nome já existe no acervo</p>
+                                    </div>
                                 </div>
                             </div>
 
-                            <div className="bg-blue-600/5 border border-blue-500/30 p-6 rounded-3xl relative">
-                                <span className="absolute -top-3 left-6 px-3 py-1 bg-blue-600 border border-blue-500 text-[8px] font-black text-white uppercase tracking-widest">Nova Versão</span>
-                                <h4 className="text-lg font-black text-white uppercase italic truncate">{conflictData.newSong?.song_name}</h4>
-                                <p className="text-[10px] font-bold text-blue-400/60 uppercase tracking-widest mt-1 truncate">{conflictData.newSong?.artist_name}</p>
-                                <div className="mt-4 pt-4 border-t border-blue-500/10 flex items-center justify-between">
-                                    <span className="text-[10px] font-black text-blue-400 italic bg-blue-500/10 px-3 py-1 rounded-lg border border-blue-500/20">{conflictData.newSong?.song_key}</span>
-                                    <span className="text-[10px] font-black text-blue-400/60 uppercase tracking-widest">{conflictData.newSong?.content?.split('\n').length} linhas</span>
+                            <div className="grid grid-cols-2 gap-8 mb-10">
+                                <div className="bg-white/5 border border-white/10 p-6 rounded-3xl relative">
+                                    <span className="absolute -top-3 left-6 px-3 py-1 bg-[#16161D] border border-white/10 rounded-full text-[8px] font-black text-slate-500 uppercase tracking-widest">No Acervo</span>
+                                    <h4 className="text-lg font-black text-white uppercase italic truncate">{conflictData.existingSong?.song_name}</h4>
+                                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1 truncate">{conflictData.existingSong?.artist_name}</p>
+                                    <div className="mt-4 pt-4 border-t border-white/5 flex items-center justify-between">
+                                        <span className="text-[10px] font-black text-blue-400 italic bg-blue-500/10 px-3 py-1 rounded-lg border border-blue-500/20">{conflictData.existingSong?.song_key}</span>
+                                        <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest">{conflictData.existingSong?.content?.split('\n').length} linhas</span>
+                                    </div>
+                                </div>
+
+                                <div className="bg-blue-600/5 border border-blue-500/30 p-6 rounded-3xl relative">
+                                    <span className="absolute -top-3 left-6 px-3 py-1 bg-blue-600 border border-blue-500 text-[8px] font-black text-white uppercase tracking-widest">Nova Versão</span>
+                                    <h4 className="text-lg font-black text-white uppercase italic truncate">{conflictData.newSong?.song_name}</h4>
+                                    <p className="text-[10px] font-bold text-blue-400/60 uppercase tracking-widest mt-1 truncate">{conflictData.newSong?.artist_name}</p>
+                                    <div className="mt-4 pt-4 border-t border-blue-500/10 flex items-center justify-between">
+                                        <span className="text-[10px] font-black text-blue-400 italic bg-blue-500/10 px-3 py-1 rounded-lg border border-blue-500/20">{conflictData.newSong?.song_key}</span>
+                                        <span className="text-[10px] font-black text-blue-400/60 uppercase tracking-widest">{conflictData.newSong?.content?.split('\n').length} linhas</span>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
 
-                        <div className="flex flex-col space-y-4">
-                            <button
-                                onClick={() => conflictData.onConfirm('replace')}
-                                className="w-full py-5 bg-blue-600 hover:bg-blue-500 text-white font-black uppercase tracking-[0.2em] rounded-2xl transition-all shadow-xl shadow-blue-900/20 flex items-center justify-center space-x-3 group"
-                            >
-                                <RefreshCw className="w-5 h-5 group-hover:rotate-180 transition-transform duration-700" />
-                                <span>Substituir Versão Existente</span>
-                            </button>
-                            <button
-                                onClick={() => conflictData.onConfirm('skip')}
-                                className="py-4 bg-white/5 hover:bg-white/10 text-slate-400 font-bold uppercase tracking-widest text-[10px] rounded-xl border border-white/5 transition-all w-full"
-                            >
-                                Manter Peça do Acervo / Pular
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Delete Confirmation Modal */}
-            {deleteModalOpen && (
-                <div className="fixed inset-0 z-[200] flex items-center justify-center bg-[#070709]/90 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-300">
-                    <div className="bg-[#16161D] border border-white/10 p-8 rounded-[32px] shadow-2xl w-full max-w-md flex flex-col">
-                        <div className="flex items-center justify-between mb-8">
-                            <div className="flex items-center space-x-4">
-                                <div className="w-1.5 h-6 bg-red-600 rounded-full shadow-[0_0_15px_rgba(220,38,38,0.4)]"></div>
-                                <h3 className="text-xl font-black text-white uppercase italic tracking-tighter">Confirmar Exclusão</h3>
-                            </div>
-                            <button onClick={() => setDeleteModalOpen(false)} className="p-2 bg-white/5 hover:bg-white/10 rounded-xl transition-all border border-white/5"><X className="w-5 h-5 text-slate-400" /></button>
-                        </div>
-                        <div className="space-y-6">
-                            <p className="text-sm font-bold text-slate-400 uppercase tracking-widest leading-relaxed">
-                                Você tem certeza que deseja excluir permanentemente {deleteTarget.type === 'acervo' ? 'a música' : 'a lista'} <span className="text-white">"{deleteTarget.name}"</span>?
-                            </p>
-                            <p className="text-[10px] text-red-500/80 italic uppercase">Esta ação não poderá ser desfeita.</p>
-
-                            <div className="flex items-center space-x-4 mt-6">
-                                <button onClick={() => setDeleteModalOpen(false)} className="flex-1 py-4 bg-white/5 hover:bg-white/10 text-white font-black uppercase tracking-widest rounded-xl transition-all border border-white/5">Cancelar</button>
-                                <button onClick={confirmDelete} className="flex-1 py-4 bg-red-600 hover:bg-red-700 text-white font-black uppercase tracking-widest rounded-xl transition-all shadow-xl shadow-red-900/20 flex items-center justify-center space-x-2">
-                                    <Trash2 className="w-4 h-4" />
-                                    <span>Excluir</span>
+                            <div className="flex flex-col space-y-4">
+                                <button
+                                    onClick={() => conflictData.onConfirm('replace')}
+                                    className="w-full py-5 bg-blue-600 hover:bg-blue-500 text-white font-black uppercase tracking-[0.2em] rounded-2xl transition-all shadow-xl shadow-blue-900/20 flex items-center justify-center space-x-3 group"
+                                >
+                                    <RefreshCw className="w-5 h-5 group-hover:rotate-180 transition-transform duration-700" />
+                                    <span>Substituir Versão Existente</span>
+                                </button>
+                                <button
+                                    onClick={() => conflictData.onConfirm('skip')}
+                                    className="py-4 bg-white/5 hover:bg-white/10 text-slate-400 font-bold uppercase tracking-widest text-[10px] rounded-xl border border-white/5 transition-all w-full"
+                                >
+                                    Manter Peça do Acervo / Pular
                                 </button>
                             </div>
                         </div>
                     </div>
-                </div>
-            )}
+                )
+            }
 
-            {/* Save List Modal */}
-            {saveListModalOpen && (() => {
-                const allPlaylists = JSON.parse(localStorage.getItem('iron_chords_playlists') || '[]');
-                const hasExisting = allPlaylists.length > 0;
-                return (
+            {/* Delete Confirmation Modal */}
+            {
+                deleteModalOpen && (
                     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-[#070709]/90 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-300">
                         <div className="bg-[#16161D] border border-white/10 p-8 rounded-[32px] shadow-2xl w-full max-w-md flex flex-col">
-                            <div className="flex items-center justify-between mb-6">
-                                <div className="flex items-center space-x-3">
-                                    <div className="w-1.5 h-6 bg-[#B87333] rounded-full shadow-[0_0_15px_rgba(184,115,51,0.4)]"></div>
-                                    <h3 className="text-xl font-black text-white uppercase italic tracking-tighter">Salvar Forja</h3>
+                            <div className="flex items-center justify-between mb-8">
+                                <div className="flex items-center space-x-4">
+                                    <div className="w-1.5 h-6 bg-red-600 rounded-full shadow-[0_0_15px_rgba(220,38,38,0.4)]"></div>
+                                    <h3 className="text-xl font-black text-white uppercase italic tracking-tighter">Confirmar Exclusão</h3>
                                 </div>
-                                <button onClick={() => { setSaveListModalOpen(false); setSaveListName(''); setSelectedListsToAddTo([]); }} className="p-2 bg-white/5 hover:bg-white/10 rounded-xl transition-all border border-white/5"><X className="w-5 h-5 text-slate-400" /></button>
+                                <button onClick={() => setDeleteModalOpen(false)} className="p-2 bg-white/5 hover:bg-white/10 rounded-xl transition-all border border-white/5"><X className="w-5 h-5 text-slate-400" /></button>
                             </div>
+                            <div className="space-y-6">
+                                <p className="text-sm font-bold text-slate-400 uppercase tracking-widest leading-relaxed">
+                                    Você tem certeza que deseja excluir permanentemente {deleteTarget.type === 'acervo' ? 'a música' : 'a lista'} <span className="text-white">"{deleteTarget.name}"</span>?
+                                </p>
+                                <p className="text-[10px] text-red-500/80 italic uppercase">Esta ação não poderá ser desfeita.</p>
 
-                            <div className="flex bg-black/40 p-1.5 rounded-2xl border border-white/5 mb-6">
-                                <button onClick={() => setSaveListMode('new')} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${saveListMode === 'new' ? 'bg-[#B87333] text-white shadow-lg' : 'text-slate-500 hover:text-white'}`}>+ Nova Lista</button>
-                                <button onClick={() => setSaveListMode('existing')} disabled={!hasExisting} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-30 disabled:cursor-not-allowed ${saveListMode === 'existing' ? 'bg-[#B87333] text-white shadow-lg' : 'text-slate-500 hover:text-white'}`}>Adicionar à Existente</button>
-                            </div>
-
-                            {saveListMode === 'new' && (
-                                <div className="space-y-4">
-                                    <div>
-                                        <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Nome da Nova Lista</label>
-                                        <input type="text" autoFocus placeholder="Ex: Missa de Domingo..." value={saveListName} onChange={e => setSaveListName(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-4 text-white font-bold outline-none focus:border-[#B87333]/50 transition-all placeholder:text-slate-700" onKeyDown={e => e.key === 'Enter' && handleSaveList()} />
-                                    </div>
-                                    <button onClick={handleSaveList} disabled={!saveListName.trim()} className="w-full py-4 bg-[#B87333] hover:bg-[#8B4513] text-white font-black uppercase tracking-widest rounded-xl transition-all shadow-xl shadow-[#B87333]/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2">
-                                        <Save className="w-4 h-4" /><span>Criar e Salvar Lista</span>
+                                <div className="flex items-center space-x-4 mt-6">
+                                    <button onClick={() => setDeleteModalOpen(false)} className="flex-1 py-4 bg-white/5 hover:bg-white/10 text-white font-black uppercase tracking-widest rounded-xl transition-all border border-white/5">Cancelar</button>
+                                    <button onClick={confirmDelete} className="flex-1 py-4 bg-red-600 hover:bg-red-700 text-white font-black uppercase tracking-widest rounded-xl transition-all shadow-xl shadow-red-900/20 flex items-center justify-center space-x-2">
+                                        <Trash2 className="w-4 h-4" />
+                                        <span>Excluir</span>
                                     </button>
                                 </div>
-                            )}
-
-                            {saveListMode === 'existing' && (
-                                <div className="space-y-4">
-                                    <label className="block text-[10px] font-black uppercase text-slate-500 mb-1 tracking-widest ml-1">Selecione uma ou mais listas</label>
-                                    <div className="max-h-64 overflow-y-auto space-y-2 pr-1 scrollbar-thin scrollbar-thumb-white/10">
-                                        {allPlaylists.map(pl => (
-                                            <label key={pl.id} className={`flex items-center space-x-4 p-4 rounded-2xl border cursor-pointer transition-all ${selectedListsToAddTo.includes(pl.id) ? 'bg-[#B87333]/15 border-[#B87333]/40' : 'bg-black/30 border-white/5 hover:border-white/15'}`}>
-                                                <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 transition-all ${selectedListsToAddTo.includes(pl.id) ? 'bg-[#B87333] border-[#B87333]' : 'border-white/20'}`}>
-                                                    {selectedListsToAddTo.includes(pl.id) && <Check className="w-3 h-3 text-white" />}
-                                                </div>
-                                                <input type="checkbox" className="hidden" checked={selectedListsToAddTo.includes(pl.id)} onChange={e => {
-                                                    if (e.target.checked) setSelectedListsToAddTo(prev => [...prev, pl.id]);
-                                                    else setSelectedListsToAddTo(prev => prev.filter(id => id !== pl.id));
-                                                }} />
-                                                <div className="flex-1 min-w-0">
-                                                    <p className="font-black text-white text-sm uppercase italic tracking-tight truncate">{pl.name}</p>
-                                                    <p className="text-[10px] text-slate-500 font-bold mt-0.5">{pl.songs?.length || 0} músicas</p>
-                                                </div>
-                                            </label>
-                                        ))}
-                                    </div>
-                                    <button onClick={handleAddToExistingLists} disabled={selectedListsToAddTo.length === 0} className="w-full py-4 bg-[#B87333] hover:bg-[#8B4513] text-white font-black uppercase tracking-widest rounded-xl transition-all shadow-xl shadow-[#B87333]/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2">
-                                        <FolderHeart className="w-4 h-4" /><span>{selectedListsToAddTo.length > 0 ? `Adicionar às ${selectedListsToAddTo.length} Lista(s)` : 'Selecione as Listas'}</span>
-                                    </button>
-                                </div>
-                            )}
+                            </div>
                         </div>
                     </div>
-                );
-            })()}
+                )
+            }
+
+            {/* Save List Modal */}
+            {
+                saveListModalOpen && (() => {
+                    const allPlaylists = JSON.parse(localStorage.getItem('iron_chords_playlists') || '[]');
+                    const hasExisting = allPlaylists.length > 0;
+                    return (
+                        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-[#070709]/90 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-300">
+                            <div className="bg-[#16161D] border border-white/10 p-8 rounded-[32px] shadow-2xl w-full max-w-md flex flex-col">
+                                <div className="flex items-center justify-between mb-6">
+                                    <div className="flex items-center space-x-3">
+                                        <div className="w-1.5 h-6 bg-[#B87333] rounded-full shadow-[0_0_15px_rgba(184,115,51,0.4)]"></div>
+                                        <h3 className="text-xl font-black text-white uppercase italic tracking-tighter">Salvar Forja</h3>
+                                    </div>
+                                    <button onClick={() => { setSaveListModalOpen(false); setSaveListName(''); setSelectedListsToAddTo([]); }} className="p-2 bg-white/5 hover:bg-white/10 rounded-xl transition-all border border-white/5"><X className="w-5 h-5 text-slate-400" /></button>
+                                </div>
+
+                                <div className="flex bg-black/40 p-1.5 rounded-2xl border border-white/5 mb-6">
+                                    <button onClick={() => setSaveListMode('new')} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${saveListMode === 'new' ? 'bg-[#B87333] text-white shadow-lg' : 'text-slate-500 hover:text-white'}`}>+ Nova Lista</button>
+                                    <button onClick={() => setSaveListMode('existing')} disabled={!hasExisting} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-30 disabled:cursor-not-allowed ${saveListMode === 'existing' ? 'bg-[#B87333] text-white shadow-lg' : 'text-slate-500 hover:text-white'}`}>Adicionar à Existente</button>
+                                </div>
+
+                                {saveListMode === 'new' && (
+                                    <div className="space-y-4">
+                                        <div>
+                                            <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Nome da Nova Lista</label>
+                                            <input type="text" autoFocus placeholder="Ex: Missa de Domingo..." value={saveListName} onChange={e => setSaveListName(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-4 text-white font-bold outline-none focus:border-[#B87333]/50 transition-all placeholder:text-slate-700" onKeyDown={e => e.key === 'Enter' && handleSaveList()} />
+                                        </div>
+                                        <button onClick={handleSaveList} disabled={!saveListName.trim()} className="w-full py-4 bg-[#B87333] hover:bg-[#8B4513] text-white font-black uppercase tracking-widest rounded-xl transition-all shadow-xl shadow-[#B87333]/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2">
+                                            <Save className="w-4 h-4" /><span>Criar e Salvar Lista</span>
+                                        </button>
+                                    </div>
+                                )}
+
+                                {saveListMode === 'existing' && (
+                                    <div className="space-y-4">
+                                        <label className="block text-[10px] font-black uppercase text-slate-500 mb-1 tracking-widest ml-1">Selecione uma ou mais listas</label>
+                                        <div className="max-h-64 overflow-y-auto space-y-2 pr-1 scrollbar-thin scrollbar-thumb-white/10">
+                                            {allPlaylists.map(pl => (
+                                                <label key={pl.id} className={`flex items-center space-x-4 p-4 rounded-2xl border cursor-pointer transition-all ${selectedListsToAddTo.includes(pl.id) ? 'bg-[#B87333]/15 border-[#B87333]/40' : 'bg-black/30 border-white/5 hover:border-white/15'}`}>
+                                                    <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 transition-all ${selectedListsToAddTo.includes(pl.id) ? 'bg-[#B87333] border-[#B87333]' : 'border-white/20'}`}>
+                                                        {selectedListsToAddTo.includes(pl.id) && <Check className="w-3 h-3 text-white" />}
+                                                    </div>
+                                                    <input type="checkbox" className="hidden" checked={selectedListsToAddTo.includes(pl.id)} onChange={e => {
+                                                        if (e.target.checked) setSelectedListsToAddTo(prev => [...prev, pl.id]);
+                                                        else setSelectedListsToAddTo(prev => prev.filter(id => id !== pl.id));
+                                                    }} />
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="font-black text-white text-sm uppercase italic tracking-tight truncate">{pl.name}</p>
+                                                        <p className="text-[10px] text-slate-500 font-bold mt-0.5">{pl.songs?.length || 0} músicas</p>
+                                                    </div>
+                                                </label>
+                                            ))}
+                                        </div>
+                                        <button onClick={handleAddToExistingLists} disabled={selectedListsToAddTo.length === 0} className="w-full py-4 bg-[#B87333] hover:bg-[#8B4513] text-white font-black uppercase tracking-widest rounded-xl transition-all shadow-xl shadow-[#B87333]/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2">
+                                            <FolderHeart className="w-4 h-4" /><span>{selectedListsToAddTo.length > 0 ? `Adicionar às ${selectedListsToAddTo.length} Lista(s)` : 'Selecione as Listas'}</span>
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    );
+                })()
+            }
 
             {/* Save Success Animation */}
-            {showSaveSuccess && (
-                <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/40 backdrop-blur-sm animate-in fade-in duration-300 pointer-events-none">
-                    <div className="bg-green-500/10 border border-green-500/20 p-10 rounded-[40px] shadow-[0_0_50px_rgba(34,197,94,0.3)] flex flex-col items-center animate-in zoom-in-50 duration-500 spring-gentle">
-                        <div className="w-24 h-24 bg-green-500/20 rounded-full flex items-center justify-center relative mb-6">
-                            <div className="absolute inset-0 bg-green-500/20 rounded-full animate-ping"></div>
-                            <CheckCircle className="w-12 h-12 text-green-400 drop-shadow-[0_0_15px_rgba(34,197,94,0.8)]" />
+            {
+                showSaveSuccess && (
+                    <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/40 backdrop-blur-sm animate-in fade-in duration-300 pointer-events-none">
+                        <div className="bg-green-500/10 border border-green-500/20 p-10 rounded-[40px] shadow-[0_0_50px_rgba(34,197,94,0.3)] flex flex-col items-center animate-in zoom-in-50 duration-500 spring-gentle">
+                            <div className="w-24 h-24 bg-green-500/20 rounded-full flex items-center justify-center relative mb-6">
+                                <div className="absolute inset-0 bg-green-500/20 rounded-full animate-ping"></div>
+                                <CheckCircle className="w-12 h-12 text-green-400 drop-shadow-[0_0_15px_rgba(34,197,94,0.8)]" />
+                            </div>
+                            <h2 className="text-3xl font-black text-white uppercase italic tracking-tighter drop-shadow-md">Lista Forjada</h2>
+                            <p className="text-green-400/80 font-bold uppercase tracking-[0.2em] text-xs mt-2">Salva com Sucesso no Acervo Local</p>
                         </div>
-                        <h2 className="text-3xl font-black text-white uppercase italic tracking-tighter drop-shadow-md">Lista Forjada</h2>
-                        <p className="text-green-400/80 font-bold uppercase tracking-[0.2em] text-xs mt-2">Salva com Sucesso no Acervo Local</p>
                     </div>
-                </div>
-            )}
+                )
+            }
 
             {/* Save Conflict Notification */}
-            {showSaveConflict && (
-                <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/40 backdrop-blur-sm animate-in fade-in duration-300 pointer-events-none">
-                    <div className="bg-yellow-500/10 border border-yellow-500/20 p-10 rounded-[40px] shadow-[0_0_50px_rgba(234,179,8,0.3)] flex flex-col items-center animate-in zoom-in-50 duration-500 spring-gentle">
-                        <div className="w-24 h-24 bg-yellow-500/20 rounded-full flex items-center justify-center relative mb-6">
-                            <div className="absolute inset-0 bg-yellow-500/20 rounded-full animate-pulse"></div>
-                            <AlertCircle className="w-12 h-12 text-yellow-400 drop-shadow-[0_0_15px_rgba(234,179,8,0.8)]" />
+            {
+                showSaveConflict && (
+                    <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/40 backdrop-blur-sm animate-in fade-in duration-300 pointer-events-none">
+                        <div className="bg-yellow-500/10 border border-yellow-500/20 p-10 rounded-[40px] shadow-[0_0_50px_rgba(234,179,8,0.3)] flex flex-col items-center animate-in zoom-in-50 duration-500 spring-gentle">
+                            <div className="w-24 h-24 bg-yellow-500/20 rounded-full flex items-center justify-center relative mb-6">
+                                <div className="absolute inset-0 bg-yellow-500/20 rounded-full animate-pulse"></div>
+                                <AlertCircle className="w-12 h-12 text-yellow-400 drop-shadow-[0_0_15px_rgba(234,179,8,0.8)]" />
+                            </div>
+                            <h2 className="text-3xl font-black text-white uppercase italic tracking-tighter drop-shadow-md">Atenção</h2>
+                            <p className="text-yellow-400/80 font-bold uppercase tracking-[0.2em] text-xs mt-2">A música já está salva no acervo</p>
                         </div>
-                        <h2 className="text-3xl font-black text-white uppercase italic tracking-tighter drop-shadow-md">Atenção</h2>
-                        <p className="text-yellow-400/80 font-bold uppercase tracking-[0.2em] text-xs mt-2">A música já está salva no acervo</p>
                     </div>
-                </div>
-            )}
+                )
+            }
 
             {/* Edit Acervo Modal */}
-            {editingChord && (
-                <div className="fixed inset-0 z-[250] flex items-center justify-center bg-[#070709]/90 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-300 p-4">
-                    <div className="bg-[#16161D] border border-[#B87333]/30 p-8 rounded-[32px] shadow-[0_0_50px_rgba(0,0,0,0.8)] w-full max-w-4xl flex flex-col max-h-[90vh]">
-                        <div className="flex items-center justify-between mb-8 shrink-0">
-                            <div className="flex items-center space-x-4">
-                                <div className="w-1.5 h-6 bg-[#B87333] rounded-full shadow-[0_0_15px_rgba(184,115,51,0.4)]"></div>
-                                <h3 className="text-2xl font-black text-white uppercase italic tracking-tighter">Editar Cifra</h3>
+            {
+                editingChord && (
+                    <div className="fixed inset-0 z-[250] flex items-center justify-center bg-[#070709]/90 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-300 p-4">
+                        <div className="bg-[#16161D] border border-[#B87333]/30 p-8 rounded-[32px] shadow-[0_0_50px_rgba(0,0,0,0.8)] w-full max-w-4xl flex flex-col max-h-[90vh]">
+                            <div className="flex items-center justify-between mb-8 shrink-0">
+                                <div className="flex items-center space-x-4">
+                                    <div className="w-1.5 h-6 bg-[#B87333] rounded-full shadow-[0_0_15px_rgba(184,115,51,0.4)]"></div>
+                                    <h3 className="text-2xl font-black text-white uppercase italic tracking-tighter">Editar Cifra</h3>
+                                </div>
+                                <button onClick={() => setEditingChord(null)} className="p-2 bg-white/5 hover:bg-white/10 rounded-xl transition-all border border-white/5"><X className="w-5 h-5 text-slate-400" /></button>
                             </div>
-                            <button onClick={() => setEditingChord(null)} className="p-2 bg-white/5 hover:bg-white/10 rounded-xl transition-all border border-white/5"><X className="w-5 h-5 text-slate-400" /></button>
-                        </div>
-                        <div className="overflow-y-auto pr-4 space-y-6 scrollbar-thin scrollbar-thumb-white/10">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div>
-                                    <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Música</label>
-                                    <input type="text" value={editFormData.song_name} onChange={e => setEditFormData({ ...editFormData, song_name: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-4 text-white font-bold outline-none focus:border-[#B87333]/50 transition-all" />
+                            <div className="overflow-y-auto pr-4 space-y-6 scrollbar-thin scrollbar-thumb-white/10">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div>
+                                        <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Música</label>
+                                        <input type="text" value={editFormData.song_name} onChange={e => setEditFormData({ ...editFormData, song_name: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-4 text-white font-bold outline-none focus:border-[#B87333]/50 transition-all" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Artista</label>
+                                        <input type="text" value={editFormData.artist_name} onChange={e => setEditFormData({ ...editFormData, artist_name: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-4 text-white font-bold outline-none focus:border-[#B87333]/50 transition-all" />
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                    <div>
+                                        <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Tom Original</label>
+                                        <div className="flex items-center space-x-2">
+                                            <select
+                                                value={editFormData.song_key}
+                                                onChange={e => {
+                                                    const oldKey = editFormData.song_key;
+                                                    const newKey = e.target.value;
+                                                    const NOTES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+                                                    const oldIdx = NOTES.indexOf(oldKey);
+                                                    const newIdx = NOTES.indexOf(newKey);
+                                                    if (oldIdx !== -1 && newIdx !== -1) {
+                                                        const diff = newIdx - oldIdx;
+                                                        handleEditTranspose(diff);
+                                                    } else {
+                                                        setEditFormData({ ...editFormData, song_key: newKey });
+                                                    }
+                                                }}
+                                                className="flex-1 bg-black/40 border border-white/10 rounded-xl px-4 py-4 text-white font-bold outline-none focus:border-[#B87333]/50 transition-all"
+                                            >
+                                                {["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"].map(k => <option key={k} value={k} className="bg-[#1A1A1A]">{k}</option>)}
+                                            </select>
+                                            <div className="flex flex-col space-y-1">
+                                                <button onClick={() => handleEditTranspose(1)} className="p-2 bg-white/5 hover:bg-white/10 rounded-lg border border-white/5 text-slate-400 hover:text-white transition-all" title="Subir Semitom"><ChevronUp className="w-4 h-4" /></button>
+                                                <button onClick={() => handleEditTranspose(-1)} className="p-2 bg-white/5 hover:bg-white/10 rounded-lg border border-white/5 text-slate-400 hover:text-white transition-all" title="Baixar Semitom"><ChevronDown className="w-4 h-4" /></button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Capo</label>
+                                        <div className="flex items-center space-x-3">
+                                            <select value={editFormData.capo} onChange={e => setEditFormData({ ...editFormData, capo: parseInt(e.target.value) })} className="flex-1 bg-black/40 border border-white/10 rounded-xl px-4 py-4 text-white font-bold outline-none focus:border-[#B87333]/50 transition-all">
+                                                <option value={0} className="bg-[#1A1A1A]">Sem Capo</option>
+                                                {[...Array(12)].map((_, i) => <option key={i + 1} value={i + 1} className="bg-[#1A1A1A]">Casa {i + 1}</option>)}
+                                            </select>
+                                            {editFormData.capo > 0 && (
+                                                <div className="px-4 py-2 bg-[#B87333]/10 border border-[#B87333]/30 rounded-xl">
+                                                    <span className="text-[8px] font-black text-[#B87333] uppercase block leading-none mb-1">Tom Resultante</span>
+                                                    <span className="text-sm font-black text-white italic">{getSoundingKey({ song_key: editFormData.song_key, capo: editFormData.capo })}</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Tablaturas</label>
+                                        <button
+                                            onClick={() => setEditFormData(prev => ({ ...prev, include_tabs: !prev.include_tabs }))}
+                                            className={`w-full py-4 rounded-xl transition-all border flex items-center justify-center space-x-3 font-bold uppercase tracking-widest text-[10px] ${editFormData.include_tabs ? 'bg-[#B87333]/20 border-[#B87333] text-[#B87333]' : 'bg-black/40 border-white/5 text-slate-600 hover:text-slate-400'}`}
+                                        >
+                                            {editFormData.include_tabs ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                            <span>{editFormData.include_tabs ? "Ocultar Tabs" : "Mostrar Tabs"}</span>
+                                        </button>
+                                    </div>
                                 </div>
                                 <div>
-                                    <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Artista</label>
-                                    <input type="text" value={editFormData.artist_name} onChange={e => setEditFormData({ ...editFormData, artist_name: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-4 text-white font-bold outline-none focus:border-[#B87333]/50 transition-all" />
-                                </div>
-                            </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                <div>
-                                    <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Tom Original</label>
-                                    <div className="flex items-center space-x-2">
-                                        <select
-                                            value={editFormData.song_key}
+                                    <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Cifra</label>
+                                    <div className="relative group/editor">
+                                        <textarea
+                                            value={editFormData.include_tabs ? editFormData.content : getFilteredContent(editFormData.content)}
                                             onChange={e => {
-                                                const oldKey = editFormData.song_key;
-                                                const newKey = e.target.value;
-                                                const NOTES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
-                                                const oldIdx = NOTES.indexOf(oldKey);
-                                                const newIdx = NOTES.indexOf(newKey);
-                                                if (oldIdx !== -1 && newIdx !== -1) {
-                                                    const diff = newIdx - oldIdx;
-                                                    handleEditTranspose(diff);
-                                                } else {
-                                                    setEditFormData({ ...editFormData, song_key: newKey });
+                                                if (editFormData.include_tabs) {
+                                                    setEditFormData({ ...editFormData, content: e.target.value });
                                                 }
                                             }}
-                                            className="flex-1 bg-black/40 border border-white/10 rounded-xl px-4 py-4 text-white font-bold outline-none focus:border-[#B87333]/50 transition-all"
-                                        >
-                                            {["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"].map(k => <option key={k} value={k} className="bg-[#1A1A1A]">{k}</option>)}
-                                        </select>
-                                        <div className="flex flex-col space-y-1">
-                                            <button onClick={() => handleEditTranspose(1)} className="p-2 bg-white/5 hover:bg-white/10 rounded-lg border border-white/5 text-slate-400 hover:text-white transition-all" title="Subir Semitom"><ChevronUp className="w-4 h-4" /></button>
-                                            <button onClick={() => handleEditTranspose(-1)} className="p-2 bg-white/5 hover:bg-white/10 rounded-lg border border-white/5 text-slate-400 hover:text-white transition-all" title="Baixar Semitom"><ChevronDown className="w-4 h-4" /></button>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div>
-                                    <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Capo</label>
-                                    <div className="flex items-center space-x-3">
-                                        <select value={editFormData.capo} onChange={e => setEditFormData({ ...editFormData, capo: parseInt(e.target.value) })} className="flex-1 bg-black/40 border border-white/10 rounded-xl px-4 py-4 text-white font-bold outline-none focus:border-[#B87333]/50 transition-all">
-                                            <option value={0} className="bg-[#1A1A1A]">Sem Capo</option>
-                                            {[...Array(12)].map((_, i) => <option key={i + 1} value={i + 1} className="bg-[#1A1A1A]">Casa {i + 1}</option>)}
-                                        </select>
-                                        {editFormData.capo > 0 && (
-                                            <div className="px-4 py-2 bg-[#B87333]/10 border border-[#B87333]/30 rounded-xl">
-                                                <span className="text-[8px] font-black text-[#B87333] uppercase block leading-none mb-1">Tom Resultante</span>
-                                                <span className="text-sm font-black text-white italic">{getSoundingKey({ song_key: editFormData.song_key, capo: editFormData.capo })}</span>
+                                            readOnly={!editFormData.include_tabs}
+                                            className={`w-full bg-black/60 border rounded-2xl px-6 py-6 text-white outline-none font-mono text-xs leading-relaxed min-h-[400px] transition-all scrollbar-thin shadow-inner ${!editFormData.include_tabs ? 'border-white/5 cursor-not-allowed opacity-80' : 'border-white/10 hover:border-white/20 focus:border-[#B87333]/50'}`}
+                                            spellCheck="false"
+                                        />
+                                        {!editFormData.include_tabs && (
+                                            <div className="absolute inset-0 flex items-center justify-center bg-black/20 backdrop-blur-[1px] opacity-0 group-hover/editor:opacity-100 transition-opacity pointer-events-none">
+                                                <div className="bg-black/80 border border-[#B87333]/50 px-4 py-2 rounded-xl flex items-center space-x-2">
+                                                    <Eye className="w-4 h-4 text-[#B87333]" />
+                                                    <span className="text-[10px] font-bold text-white uppercase italic">Ative as Tabs para Editar</span>
+                                                </div>
                                             </div>
                                         )}
                                     </div>
                                 </div>
-                                <div>
-                                    <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Tablaturas</label>
-                                    <button
-                                        onClick={() => setEditFormData(prev => ({ ...prev, include_tabs: !prev.include_tabs }))}
-                                        className={`w-full py-4 rounded-xl transition-all border flex items-center justify-center space-x-3 font-bold uppercase tracking-widest text-[10px] ${editFormData.include_tabs ? 'bg-[#B87333]/20 border-[#B87333] text-[#B87333]' : 'bg-black/40 border-white/5 text-slate-600 hover:text-slate-400'}`}
-                                    >
-                                        {editFormData.include_tabs ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                                        <span>{editFormData.include_tabs ? "Ocultar Tabs" : "Mostrar Tabs"}</span>
-                                    </button>
-                                </div>
                             </div>
-                            <div>
-                                <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Cifra</label>
-                                <div className="relative group/editor">
-                                    <textarea
-                                        value={editFormData.include_tabs ? editFormData.content : getFilteredContent(editFormData.content)}
-                                        onChange={e => {
-                                            if (editFormData.include_tabs) {
-                                                setEditFormData({ ...editFormData, content: e.target.value });
-                                            }
-                                        }}
-                                        readOnly={!editFormData.include_tabs}
-                                        className={`w-full bg-black/60 border rounded-2xl px-6 py-6 text-white outline-none font-mono text-xs leading-relaxed min-h-[400px] transition-all scrollbar-thin shadow-inner ${!editFormData.include_tabs ? 'border-white/5 cursor-not-allowed opacity-80' : 'border-white/10 hover:border-white/20 focus:border-[#B87333]/50'}`}
-                                        spellCheck="false"
-                                    />
-                                    {!editFormData.include_tabs && (
-                                        <div className="absolute inset-0 flex items-center justify-center bg-black/20 backdrop-blur-[1px] opacity-0 group-hover/editor:opacity-100 transition-opacity pointer-events-none">
-                                            <div className="bg-black/80 border border-[#B87333]/50 px-4 py-2 rounded-xl flex items-center space-x-2">
-                                                <Eye className="w-4 h-4 text-[#B87333]" />
-                                                <span className="text-[10px] font-bold text-white uppercase italic">Ative as Tabs para Editar</span>
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
+                            <div className="mt-8 shrink-0">
+                                <button onClick={handleEditSave} className="w-full py-5 bg-[#B87333] hover:bg-[#8B4513] text-white font-black uppercase tracking-[0.2em] rounded-xl transition-all shadow-xl shadow-[#B87333]/20 flex items-center justify-center space-x-3 group">
+                                    <Save className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                                    <span>Salvar Alterações no Acervo</span>
+                                </button>
                             </div>
-                        </div>
-                        <div className="mt-8 shrink-0">
-                            <button onClick={handleEditSave} className="w-full py-5 bg-[#B87333] hover:bg-[#8B4513] text-white font-black uppercase tracking-[0.2em] rounded-xl transition-all shadow-xl shadow-[#B87333]/20 flex items-center justify-center space-x-3 group">
-                                <Save className="w-5 h-5 group-hover:scale-110 transition-transform" />
-                                <span>Salvar Alterações no Acervo</span>
-                            </button>
                         </div>
                     </div>
-                </div>
-            )}
+                )
+            }
 
             {/* DEDICATED PRINT SHEET (Hidden by default, shown via CSS @media print) */}
-            {createPortal(
-                <div id="dedicated-print-sheet" className="hidden print:block fixed inset-0 bg-white text-black z-[99999] overflow-y-auto">
-                    {(() => {
-                        const songToPrint = activeTab === 'player' ? currentSong : manualPreviewSong;
-                        if (!songToPrint) return null;
+            {
+                createPortal(
+                    <div id="dedicated-print-sheet" className="hidden print:block fixed inset-0 bg-white text-black z-[99999] overflow-y-auto">
+                        {(() => {
+                            const songToPrint = activeTab === 'player' ? currentSong : manualPreviewSong;
+                            if (!songToPrint) return null;
 
-                        return (
-                            <div className="w-full max-w-5xl mx-auto px-12 py-8 print:px-4 print:py-4">
-                                {/* Logo */}
-                                <div className="flex justify-between items-start mb-10 print:mb-8 pb-4 border-b-2 border-[#ea580c] print:border-[#ea580c]">
-                                    <h1 className="text-5xl print:text-5xl font-black tracking-tighter leading-none text-black">
-                                        {songToPrint.song_name}
-                                    </h1>
-                                    <div className="flex items-center space-x-2 opacity-50">
-                                        <Flame className="w-8 h-8 print:w-6 print:h-6 text-black" />
-                                        <span className="text-2xl print:text-xl font-black italic tracking-tighter uppercase leading-none">IRON<span className="text-[#ea580c]">CHORDS</span></span>
-                                    </div>
-                                </div>
-
-                                {/* Metadata */}
-                                <div className="mb-8 print:mb-8 font-sans">
-                                    <p className="text-3xl print:text-2xl font-bold uppercase text-[#ea580c] mb-6">{songToPrint.artist_name}</p>
-                                    <div className="flex items-center space-x-6">
-                                        <div className="flex items-center space-x-2">
-                                            <span className="text-lg print:text-base font-bold text-gray-800">Tom:</span>
-                                            <span className="text-lg print:text-base font-bold text-[#ea580c]">{getSoundingKey(songToPrint)}</span>
+                            return (
+                                <div className="w-full max-w-5xl mx-auto px-12 py-8 print:px-4 print:py-4">
+                                    {/* Logo */}
+                                    <div className="flex justify-between items-start mb-10 print:mb-8 pb-4 border-b-2 border-[#ea580c] print:border-[#ea580c]">
+                                        <h1 className="text-5xl print:text-5xl font-black tracking-tighter leading-none text-black">
+                                            {songToPrint.song_name}
+                                        </h1>
+                                        <div className="flex items-center space-x-2 opacity-50">
+                                            <Flame className="w-8 h-8 print:w-6 print:h-6 text-black" />
+                                            <span className="text-2xl print:text-xl font-black italic tracking-tighter uppercase leading-none">IRON<span className="text-[#ea580c]">CHORDS</span></span>
                                         </div>
-                                        {songToPrint.capo > 0 && (
-                                            <div className="flex items-center space-x-2">
-                                                <span className="text-lg print:text-base font-bold text-gray-800">Capotraste:</span>
-                                                <span className="text-lg print:text-base font-bold text-[#ea580c]">{songToPrint.capo}ª Casa</span>
-                                            </div>
-                                        )}
                                     </div>
-                                </div>
 
-                                {/* Chords Content */}
-                                {(() => {
-                                    const rawLines = (songToPrint.content || "").split('\n');
-                                    const blocks = [];
-                                    let currentBlock = [];
+                                    {/* Metadata */}
+                                    <div className="mb-8 print:mb-8 font-sans">
+                                        <p className="text-3xl print:text-2xl font-bold uppercase text-[#ea580c] mb-6">{songToPrint.artist_name}</p>
+                                        <div className="flex items-center space-x-6">
+                                            <div className="flex items-center space-x-2">
+                                                <span className="text-lg print:text-base font-bold text-gray-800">Tom:</span>
+                                                <span className="text-lg print:text-base font-bold text-[#ea580c]">{getSoundingKey(songToPrint)}</span>
+                                            </div>
+                                            {songToPrint.capo > 0 && (
+                                                <div className="flex items-center space-x-2">
+                                                    <span className="text-lg print:text-base font-bold text-gray-800">Capotraste:</span>
+                                                    <span className="text-lg print:text-base font-bold text-[#ea580c]">{songToPrint.capo}ª Casa</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
 
-                                    for (let i = 0; i < rawLines.length; i++) {
-                                        const line = rawLines[i].replace(/\r/g, '');
-                                        const trimmed = line.trim();
+                                    {/* Chords Content */}
+                                    {(() => {
+                                        const rawLines = (songToPrint.content || "").split('\n');
+                                        const blocks = [];
+                                        let currentBlock = [];
 
-                                        // 1. Remove lixos visuais contextuais baseados na preferência de tabs
-                                        const isTabLine = line.includes('|-') || line.includes('-|') || /^[eBGDAE]\|/.test(trimmed);
-                                        const isGuitarNote = /guitarra|dedilhado|batida|solo|riff|ritmo|frase|passagem/i.test(line) && (line.includes('(') || line.includes('['));
-                                        const isRhythmArrow = line.includes('↓') || line.includes('↑');
+                                        for (let i = 0; i < rawLines.length; i++) {
+                                            const line = rawLines[i].replace(/\r/g, '');
+                                            const trimmed = line.trim();
 
-                                        const effectivelyIncludeTabs = songToPrint.include_tabs ?? includeTabs;
-                                        if (!effectivelyIncludeTabs && (isTabLine || isGuitarNote || isRhythmArrow)) continue;
+                                            // 1. Remove lixos visuais contextuais baseados na preferência de tabs
+                                            const isTabLine = line.includes('|-') || line.includes('-|') || /^[eBGDAE]\|/.test(trimmed);
+                                            const isGuitarNote = /guitarra|dedilhado|batida|solo|riff|ritmo|frase|passagem/i.test(line) && (line.includes('(') || line.includes('['));
+                                            const isRhythmArrow = line.includes('↓') || line.includes('↑');
 
-                                        const isChordLine = !!(line && trimmed.length > 0 && (line.match(CHORD_TOKEN_RE) || []).length > 0 && line.replace(CHORD_TOKEN_RE, '').replace(/[\s|()\-xX0-9:]/g, '').length < Math.max(2, trimmed.length * 0.25));
+                                            const effectivelyIncludeTabs = songToPrint.include_tabs ?? includeTabs;
+                                            if (!effectivelyIncludeTabs && (isTabLine || isGuitarNote || isRhythmArrow)) continue;
 
-                                        // 3. Agrupar linhas em blocos
-                                        if (trimmed.length === 0) {
-                                            // Se for uma linha em branco, só quebra o bloco se o bloco atual tiver letras (texto verbal) ou se já tiveros 2 linhas em branco seguidas.
-                                            // Em outras palavras: se estamos num bloco PÚRO de cifras instrumentais (Intro/Solo), ignoramos linhas em branco singulares para que as cifras grudem no mesmo bloco e ativem o "Lado a Lado" (Grid).
-                                            if (currentBlock.length > 0) {
-                                                const hasLyrics = currentBlock.some(l => !l.isChordLine && !l.text.trim().startsWith('['));
+                                            const isChordLine = !!(line && trimmed.length > 0 && (line.match(CHORD_TOKEN_RE) || []).length > 0 && line.replace(CHORD_TOKEN_RE, '').replace(/[\s|()\-xX0-9:]/g, '').length < Math.max(2, trimmed.length * 0.25));
 
-                                                // Verifica a próxima linha válida olhando para frente no rawLines
-                                                let nextValidLineIsChord = false;
-                                                for (let j = i + 1; j < rawLines.length; j++) {
-                                                    const nextL = rawLines[j].trim();
-                                                    if (nextL.length > 0) {
-                                                        const nextLIsChord = !!(nextL && (nextL.match(CHORD_TOKEN_RE) || []).length > 0 && nextL.replace(CHORD_TOKEN_RE, '').replace(/[\s|()\-xX0-9:]/g, '').length < Math.max(2, nextL.length * 0.25));
-                                                        nextValidLineIsChord = nextLIsChord;
-                                                        break;
+                                            // 3. Agrupar linhas em blocos
+                                            if (trimmed.length === 0) {
+                                                // Se for uma linha em branco, só quebra o bloco se o bloco atual tiver letras (texto verbal) ou se já tiveros 2 linhas em branco seguidas.
+                                                // Em outras palavras: se estamos num bloco PÚRO de cifras instrumentais (Intro/Solo), ignoramos linhas em branco singulares para que as cifras grudem no mesmo bloco e ativem o "Lado a Lado" (Grid).
+                                                if (currentBlock.length > 0) {
+                                                    const hasLyrics = currentBlock.some(l => !l.isChordLine && !l.text.trim().startsWith('['));
+
+                                                    // Verifica a próxima linha válida olhando para frente no rawLines
+                                                    let nextValidLineIsChord = false;
+                                                    for (let j = i + 1; j < rawLines.length; j++) {
+                                                        const nextL = rawLines[j].trim();
+                                                        if (nextL.length > 0) {
+                                                            const nextLIsChord = !!(nextL && (nextL.match(CHORD_TOKEN_RE) || []).length > 0 && nextL.replace(CHORD_TOKEN_RE, '').replace(/[\s|()\-xX0-9:]/g, '').length < Math.max(2, nextL.length * 0.25));
+                                                            nextValidLineIsChord = nextLIsChord;
+                                                            break;
+                                                        }
                                                     }
-                                                }
 
-                                                // Se não tem vocais E a próxima linha de conteúdo útil também é só Acorde, engolimos essa linha em branco e continuamos agrupando os acordes!
-                                                if (!hasLyrics && nextValidLineIsChord) {
-                                                    continue; // ignora a quebra de linha em branco
-                                                }
+                                                    // Se não tem vocais E a próxima linha de conteúdo útil também é só Acorde, engolimos essa linha em branco e continuamos agrupando os acordes!
+                                                    if (!hasLyrics && nextValidLineIsChord) {
+                                                        continue; // ignora a quebra de linha em branco
+                                                    }
 
-                                                blocks.push(currentBlock);
-                                                currentBlock = [];
-                                            }
-                                        } else {
-                                            currentBlock.push({ text: line, isChordLine });
-                                        }
-                                    }
-                                    if (currentBlock.length > 0) blocks.push(currentBlock);
-
-                                    // 4. Colapsar acordes repetidos consecutivos no mesmo bloco
-                                    const collapsedBlocks = blocks.map(block => {
-                                        const newBlock = [];
-                                        let lastNormChord = null;
-                                        let originalChordText = null;
-                                        let chordCount = 0;
-
-                                        const commitChord = () => {
-                                            if (chordCount === 1) {
-                                                newBlock.push({ text: originalChordText, isChordLine: true });
-                                            } else if (chordCount > 1) {
-                                                newBlock.push({ text: `${originalChordText.trim()} (x${chordCount})`, isChordLine: true });
-                                            }
-                                            lastNormChord = null;
-                                            originalChordText = null;
-                                            chordCount = 0;
-                                        };
-
-                                        for (const lineObj of block) {
-                                            if (lineObj.isChordLine) {
-                                                const normChord = lineObj.text.trim().replace(/\s+/g, ' ');
-                                                if (normChord === lastNormChord) {
-                                                    chordCount++;
-                                                } else {
-                                                    commitChord();
-                                                    lastNormChord = normChord;
-                                                    originalChordText = lineObj.text;
-                                                    chordCount = 1;
+                                                    blocks.push(currentBlock);
+                                                    currentBlock = [];
                                                 }
                                             } else {
-                                                commitChord();
-                                                newBlock.push(lineObj);
+                                                currentBlock.push({ text: line, isChordLine });
                                             }
                                         }
-                                        commitChord();
-                                        return newBlock;
-                                    });
+                                        if (currentBlock.length > 0) blocks.push(currentBlock);
 
-                                    // Determina se deve usar 2 colunas com base no número total de linhas a serem renderizadas
-                                    const totalLines = collapsedBlocks.reduce((acc, b) => acc + b.length, 0);
-                                    // Limite flexível para ativar as colunas, previne quebra bizarra em músicas médias
-                                    const useColumns = totalLines > 65;
+                                        // 4. Colapsar acordes repetidos consecutivos no mesmo bloco
+                                        const collapsedBlocks = blocks.map(block => {
+                                            const newBlock = [];
+                                            let lastNormChord = null;
+                                            let originalChordText = null;
+                                            let chordCount = 0;
 
-                                    return (
-                                        <div className={`mt-8 print:mt-6 font-sans ${useColumns ? 'print:columns-2 print:gap-16' : ''}`}>
-                                            {collapsedBlocks.map((block, bIdx) => {
-                                                const textCount = block.filter(l => !l.isChordLine).length;
-                                                // Verifica se é um bloco estritamente instrumental para aplicar a compressão de acordes
-                                                const isInstrumentalBlock = block.length >= 2 && (textCount === 0 || (textCount === 1 && block[0].text.includes('[') && block[0].text.length < 25));
+                                            const commitChord = () => {
+                                                if (chordCount === 1) {
+                                                    newBlock.push({ text: originalChordText, isChordLine: true });
+                                                } else if (chordCount > 1) {
+                                                    newBlock.push({ text: `${originalChordText.trim()} (x${chordCount})`, isChordLine: true });
+                                                }
+                                                lastNormChord = null;
+                                                originalChordText = null;
+                                                chordCount = 0;
+                                            };
 
-                                                return (
-                                                    <div key={bIdx} className="break-inside-avoid print:break-inside-avoid mb-8 print:mb-6 flex flex-col space-y-0">
-                                                        {block.map((lineObj, lIdx) => {
-                                                            // Identifica se a linha é um título de sessão (ex: [Refrão], [Intro])
-                                                            const isSectionTitle = lineObj.text.trim().startsWith('[') && lineObj.text.trim().endsWith(']');
+                                            for (const lineObj of block) {
+                                                if (lineObj.isChordLine) {
+                                                    const normChord = lineObj.text.trim().replace(/\s+/g, ' ');
+                                                    if (normChord === lastNormChord) {
+                                                        chordCount++;
+                                                    } else {
+                                                        commitChord();
+                                                        lastNormChord = normChord;
+                                                        originalChordText = lineObj.text;
+                                                        chordCount = 1;
+                                                    }
+                                                } else {
+                                                    commitChord();
+                                                    newBlock.push(lineObj);
+                                                }
+                                            }
+                                            commitChord();
+                                            return newBlock;
+                                        });
 
-                                                            // Na ausência de frases (letras), se for uma cifra com espaçamentos manuais longos,
-                                                            // comprimi-los e jogar para a esquerda (justificado lado a lado).
-                                                            const displayText = (isInstrumentalBlock && lineObj.isChordLine && !isSectionTitle)
-                                                                ? lineObj.text.trim().replace(/\s+/g, '   ')
-                                                                : lineObj.text;
+                                        // Determina se deve usar 2 colunas com base no número total de linhas a serem renderizadas
+                                        const totalLines = collapsedBlocks.reduce((acc, b) => acc + b.length, 0);
+                                        // Limite flexível para ativar as colunas, previne quebra bizarra em músicas médias
+                                        const useColumns = totalLines > 65;
 
-                                                            return (
-                                                                <pre
-                                                                    key={lIdx}
-                                                                    className={`whitespace-pre-wrap ${lineObj.isChordLine ? 'font-mono text-[#ea580c] print:text-[#ea580c] font-bold print:leading-snug' : isSectionTitle ? 'font-sans font-bold text-gray-900 mt-2 mb-1 print:text-[15px]' : 'font-sans text-gray-900 print:leading-normal print:text-[15px]'}`}
-                                                                    style={{
-                                                                        fontSize: lineObj.isChordLine ? '14px' : '15px',
-                                                                        marginTop: lineObj.isChordLine && lIdx > 0 && !block[lIdx - 1].isChordLine && !isSectionTitle ? '0.25rem' : '0'
-                                                                    }}
-                                                                >
-                                                                    {displayText}
-                                                                </pre>
-                                                            );
-                                                        })}
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
-                                    );
-                                })()}
+                                        return (
+                                            <div className={`mt-8 print:mt-6 font-sans ${useColumns ? 'print:columns-2 print:gap-16' : ''}`}>
+                                                {collapsedBlocks.map((block, bIdx) => {
+                                                    const textCount = block.filter(l => !l.isChordLine).length;
+                                                    // Verifica se é um bloco estritamente instrumental para aplicar a compressão de acordes
+                                                    const isInstrumentalBlock = block.length >= 2 && (textCount === 0 || (textCount === 1 && block[0].text.includes('[') && block[0].text.length < 25));
 
-                            </div>
-                        );
-                    })()}
-                </div>,
-                document.body
-            )}
+                                                    return (
+                                                        <div key={bIdx} className="break-inside-avoid print:break-inside-avoid mb-8 print:mb-6 flex flex-col space-y-0">
+                                                            {block.map((lineObj, lIdx) => {
+                                                                // Identifica se a linha é um título de sessão (ex: [Refrão], [Intro])
+                                                                const isSectionTitle = lineObj.text.trim().startsWith('[') && lineObj.text.trim().endsWith(']');
+
+                                                                // Na ausência de frases (letras), se for uma cifra com espaçamentos manuais longos,
+                                                                // comprimi-los e jogar para a esquerda (justificado lado a lado).
+                                                                const displayText = (isInstrumentalBlock && lineObj.isChordLine && !isSectionTitle)
+                                                                    ? lineObj.text.trim().replace(/\s+/g, '   ')
+                                                                    : lineObj.text;
+
+                                                                return (
+                                                                    <pre
+                                                                        key={lIdx}
+                                                                        className={`whitespace-pre-wrap ${lineObj.isChordLine ? 'font-mono text-[#ea580c] print:text-[#ea580c] font-bold print:leading-snug' : isSectionTitle ? 'font-sans font-bold text-gray-900 mt-2 mb-1 print:text-[15px]' : 'font-sans text-gray-900 print:leading-normal print:text-[15px]'}`}
+                                                                        style={{
+                                                                            fontSize: lineObj.isChordLine ? '14px' : '15px',
+                                                                            marginTop: lineObj.isChordLine && lIdx > 0 && !block[lIdx - 1].isChordLine && !isSectionTitle ? '0.25rem' : '0'
+                                                                        }}
+                                                                    >
+                                                                        {displayText}
+                                                                    </pre>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        );
+                                    })()}
+
+                                </div>
+                            );
+                        })()}
+                    </div>,
+                    document.body
+                )
+            }
 
             {/* Share and Import Modals */}
             <ShareModal
@@ -4981,6 +5040,6 @@ export default function App() {
                 onClose={() => setImportData(null)}
                 onImport={handleImportList}
             />
-        </div>
+        </div >
     );
 }
