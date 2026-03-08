@@ -1725,14 +1725,59 @@ export default function App() {
             const updated = existing.filter((_, i) => i !== deleteTarget.id);
             localStorage.setItem('iron_chords_playlists', JSON.stringify(updated));
             setSavedPlaylists(updated);
-        } else if (deleteTarget.type === 'lista_multi') {
-            const existing = JSON.parse(localStorage.getItem('iron_chords_playlists') || '[]');
-            const updated = existing.filter(pl => !deleteTarget.id.includes(pl.id));
-            localStorage.setItem('iron_chords_playlists', JSON.stringify(updated));
-            setSavedPlaylists(updated);
             setSelectedLists([]);
         }
         setDeleteModalOpen(false);
+    };
+
+    const handleSaveModifications = () => {
+        if (!activePlaylistName || songs.length === 0) return;
+
+        const allPlaylists = JSON.parse(localStorage.getItem('iron_chords_playlists') || '[]');
+        const updated = allPlaylists.map(pl => {
+            if (pl.name === activePlaylistName) {
+                return {
+                    ...pl,
+                    songs: songs.map(s => ({
+                        id: s.id || null,
+                        song_name: s.song_name,
+                        artist_name: s.artist_name,
+                        song_key: s.sounding_key || s.requested_key || s.song_key,
+                        sounding_key: s.sounding_key || s.requested_key || s.song_key,
+                        original_key: s.original_key || s.song_key,
+                        capo: s.capo || 0,
+                        content: s.content || ''
+                    }))
+                };
+            }
+            return pl;
+        });
+
+        localStorage.setItem('iron_chords_playlists', JSON.stringify(updated));
+        setSavedPlaylists(updated);
+        setShowSaveSuccess(true);
+        setTimeout(() => setShowSaveSuccess(false), 2000);
+    };
+
+    const handleShareList = () => {
+        if (songs.length === 0) return;
+        const data = JSON.stringify({
+            name: activePlaylistName || "Lista Compartilhada",
+            songs: songs.map(s => ({
+                song_name: s.song_name,
+                artist_name: s.artist_name,
+                song_key: s.sounding_key || s.requested_key || s.song_key,
+                capo: s.capo || 0,
+                content: s.content || ''
+            }))
+        });
+
+        navigator.clipboard.writeText(data).then(() => {
+            alert("Lista copiada para a área de transferência! Você pode colar este código para compartilhar.");
+        }).catch(err => {
+            console.error("Erro ao copiar lista:", err);
+            alert("Erro ao copiar lista. Tente novamente.");
+        });
     };
 
     const handleEditOpen = async (id) => {
@@ -2189,6 +2234,30 @@ export default function App() {
                                     title="Próxima Música"
                                 >
                                     <SkipForward className="w-5 h-5" />
+                                </button>
+                            </div>
+
+                            {/* NOVO: Botões de Persistência e Compartilhamento */}
+                            <div className="flex items-center space-x-2">
+                                <button
+                                    onClick={handleSaveModifications}
+                                    disabled={!activePlaylistName}
+                                    className={`
+                                        flex items-center space-x-2 px-4 py-2.5 rounded-2xl border transition-all font-black text-[10px] uppercase italic
+                                        ${activePlaylistName ? 'bg-[#B87333]/10 border-[#B87333]/30 text-[#B87333] hover:bg-[#B87333] hover:text-white shadow-lg shadow-[#B87333]/10' : 'bg-white/5 border-white/5 text-slate-600 cursor-not-allowed opacity-40'}
+                                    `}
+                                    title="Salvar alterações na lista atual"
+                                >
+                                    <Save className="w-3.5 h-3.5" />
+                                    <span>Salvar Modificações</span>
+                                </button>
+                                <button
+                                    onClick={handleShareList}
+                                    className="flex items-center space-x-2 px-4 py-2.5 bg-white/5 border border-white/10 rounded-2xl text-slate-400 hover:text-white hover:bg-white/10 transition-all font-black text-[10px] uppercase italic"
+                                    title="Compartilhar esta lista"
+                                >
+                                    <Share2 className="w-3.5 h-3.5" />
+                                    <span>Compartilhar</span>
                                 </button>
                             </div>
 
