@@ -1998,6 +1998,25 @@ export default function App() {
         return () => clearTimeout(delayDebounceFn);
     }, [songName]);
 
+    const resetSearchSession = () => {
+        setSongName('');
+        setArtistName('');
+        setSuggestions([]);
+        setSongKey('C');
+        setSongVersion('Principal');
+        setAvailableVersions([{ name: 'Principal', key: 'Principal' }]);
+        setManualCapo(0);
+        setManualPreviewSong(null);
+        setManualLoading(false);
+        setManualError('');
+        setIsAutoScrolling(false);
+        setIsDynamicSpeedActive(false);
+        setMicEnabled(false);
+        setCurrentLineIndex(0);
+        if (currentLineIndexRef) currentLineIndexRef.current = 0;
+        if (scrollContainerRef.current) scrollContainerRef.current.scrollTop = 0;
+    };
+
     const fetchSuggestions = async (name) => {
         try {
             const res = await fetch(`${API_BASE_URL}/api/search/suggestions?q=${encodeURIComponent(name)}`);
@@ -2813,7 +2832,7 @@ export default function App() {
                             <div className="flex items-center px-3 py-2 gap-2 overflow-x-auto scrollbar-none">
 
                                 {/* Back + song info */}
-                                <button onClick={() => { setIsFullScreenPlayer(false); setActiveTab('manual'); setMainNav('escolha'); setIsImmersiveMode(false); }} className="p-2 bg-white/5 hover:bg-white/10 rounded-xl transition-all border border-white/5 text-slate-400 hover:text-white shrink-0" title="Voltar">
+                                <button onClick={() => { resetSearchSession(); setIsFullScreenPlayer(false); setActiveTab('manual'); setMainNav('escolha'); setIsImmersiveMode(false); }} className="p-2 bg-white/5 hover:bg-white/10 rounded-xl transition-all border border-white/5 text-slate-400 hover:text-white shrink-0" title="Voltar (Limpar Sessão)">
                                     <ArrowLeft className="w-4 h-4" />
                                 </button>
                                 <div className="flex flex-col min-w-0 shrink-0 max-w-[130px]">
@@ -2863,6 +2882,11 @@ export default function App() {
                                 {/* Reset to Original */}
                                 <button onClick={handleResetSongToOriginal} className="p-2 rounded-lg bg-white/5 border border-white/10 text-[#B87333] hover:bg-[#B87333] hover:text-white transition-all shrink-0" title="Voltar ao Tom Original (Zerar Capo)">
                                     <RotateCcw className="w-3.5 h-3.5" />
+                                </button>
+
+                                {/* Clear Session */}
+                                <button onClick={resetSearchSession} className="p-2 rounded-lg bg-white/5 border border-white/10 text-red-400 hover:bg-red-500 hover:text-white transition-all shrink-0" title="Limpar Sessão (Nova Busca)">
+                                    <Trash2 className="w-3.5 h-3.5" />
                                 </button>
 
                                 {/* Size */}
@@ -3267,7 +3291,7 @@ export default function App() {
                                 </div>
                             </div>
                         </div>
-                        <button onClick={() => { setIsFullScreenPlayer(false); setActiveTab('manual'); }} className="absolute top-10 right-10 p-5 bg-white/5 hover:bg-white/10 rounded-2xl text-white opacity-0 hover:opacity-100 transition-all"><X className="w-8 h-8" /></button>
+                        <button onClick={() => { resetSearchSession(); setIsFullScreenPlayer(false); setActiveTab('manual'); }} className="absolute top-10 right-10 p-5 bg-white/5 hover:bg-white/10 rounded-2xl text-white opacity-0 hover:opacity-100 transition-all"><X className="w-8 h-8" /></button>
                     </div>
                 ) : (
                     <div className="selection-branch-root flex flex-col min-h-[600px] h-full">
