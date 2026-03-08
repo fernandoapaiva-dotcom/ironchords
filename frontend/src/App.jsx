@@ -2099,14 +2099,15 @@ export default function App() {
             // For manual player, we sync content and sounding_key from manualPreviewSong
             const contentToSync = activeTab === 'manual' && manualPreviewSong ? manualPreviewSong.content : current.content;
             const keyToSync = activeTab === 'manual' && manualPreviewSong ? manualPreviewSong.sounding_key : current.sounding_key;
-            // Capo and includeTabs are synced for both since they use global states in player mode
-            const capoToSync = activeTab === 'manual' ? manualCapo : current.capo;
+            // Capo and includeTabs are synced for both
+            const capoToSync = manualCapo;
+            const tabsToSync = includeTabs;
 
             const changed =
                 contentToSync !== current.content ||
                 keyToSync !== current.sounding_key ||
                 capoToSync !== current.capo ||
-                includeTabs !== current.include_tabs;
+                tabsToSync !== current.include_tabs;
 
             if (changed) {
                 const newSongs = [...songs];
@@ -2115,7 +2116,7 @@ export default function App() {
                     content: contentToSync,
                     sounding_key: keyToSync,
                     capo: capoToSync,
-                    include_tabs: includeTabs
+                    include_tabs: tabsToSync
                 };
                 setSongs(newSongs);
             }
@@ -4220,7 +4221,7 @@ export default function App() {
                                                                         capo: s.capo || 0,
                                                                     }));
                                                                     setSongs(songsToLoad);
-                                                                    setIncludeTabs(true); // each song carries its own setting
+                                                                    setIncludeTabs(songsToLoad[0]?.include_tabs !== false);
                                                                     setMainNav('player');
                                                                     setSelectedManualIndex(0);
                                                                     setActivePlaylistName(pl.name);
@@ -4308,6 +4309,12 @@ export default function App() {
                                                             const KEYS = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B', 'Db', 'Eb', 'Gb', 'Ab', 'Bb'];
                                                             const KEY_SEMITONES = { 'C': 0, 'C#': 1, 'Db': 1, 'D': 2, 'D#': 3, 'Eb': 3, 'E': 4, 'F': 5, 'F#': 6, 'Gb': 6, 'G': 7, 'G#': 8, 'Ab': 8, 'A': 9, 'A#': 10, 'Bb': 10, 'B': 11 };
                                                             const updateSong = (patch) => {
+                                                                if (patch.include_tabs !== undefined && selectedManualIndex === si) {
+                                                                    setIncludeTabs(patch.include_tabs);
+                                                                }
+                                                                if (patch.capo !== undefined && selectedManualIndex === si) {
+                                                                    setManualCapo(patch.capo);
+                                                                }
                                                                 setEditingList(prev => {
                                                                     const s2 = [...prev.songs];
                                                                     s2[si] = { ...s2[si], ...patch };
