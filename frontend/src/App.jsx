@@ -2729,9 +2729,47 @@ export default function App() {
                                             onDragEnter={() => { dragOverItem.current = idx; setDragOverIdx(idx); }}
                                             onDragEnd={handleSort}
                                             onDragOver={(e) => e.preventDefault()}
+                                            // Mobile Touch Support
+                                            onTouchStart={(e) => {
+                                                if (isSidebarCollapsed) return;
+                                                dragItem.current = idx;
+                                                // Prevent default smooth scroll when initiating dragging
+                                                e.target.style.opacity = '0.5';
+                                            }}
+                                            onTouchMove={(e) => {
+                                                if (isSidebarCollapsed || dragItem.current === null) return;
+                                                // Prevent scrolling on the page while dragging the element
+                                                e.preventDefault();
+                                                const touchIndex = e.touches[0];
+                                                const hoverElement = document.elementFromPoint(touchIndex.clientX, touchIndex.clientY);
+
+                                                if (hoverElement) {
+                                                    const targetButton = hoverElement.closest('button[data-drag-index]');
+                                                    if (targetButton) {
+                                                        const targetIdx = parseInt(targetButton.getAttribute('data-drag-index'), 10);
+                                                        if (!isNaN(targetIdx) && targetIdx !== dragOverItem.current) {
+                                                            dragOverItem.current = targetIdx;
+                                                            setDragOverIdx(targetIdx);
+                                                        }
+                                                    }
+                                                }
+                                            }}
+                                            onTouchEnd={(e) => {
+                                                if (isSidebarCollapsed) return;
+                                                e.target.style.opacity = '1';
+                                                if (dragItem.current !== null && dragOverItem.current !== null) {
+                                                    handleSort();
+                                                } else {
+                                                    // if dropped outside or failed
+                                                    dragItem.current = null;
+                                                    dragOverItem.current = null;
+                                                    setDragOverIdx(null);
+                                                }
+                                            }}
                                             onClick={() => { setSelectedManualIndex(idx); setCurrentLineIndex(0); currentLineIndexRef.current = 0; }}
-                                            className={`w-full ${isSidebarCollapsed ? 'p-2 justify-center' : 'p-4'} rounded-2xl border transition-all text-left flex items-center ${isSidebarCollapsed ? 'space-x-0' : 'space-x-4'} group relative overflow-hidden ${selectedManualIndex === idx ? 'bg-[#B87333] border-[#B87333] shadow-lg shadow-[#B87333]/20' : 'bg-white/5 border-white/5 hover:border-[#B87333]/30'} ${dragOverIdx === idx ? (dragItem.current !== null && dragOverItem.current !== null && dragItem.current < dragOverItem.current ? 'border-b-4 border-b-orange-500' : 'border-t-4 border-t-orange-500') : ''} ${!isSidebarCollapsed ? 'cursor-grab active:cursor-grabbing' : ''}`}
+                                            className={`w-full ${isSidebarCollapsed ? 'p-2 justify-center' : 'p-4'} rounded-2xl border transition-all text-left flex items-center ${isSidebarCollapsed ? 'space-x-0' : 'space-x-4'} group relative overflow-hidden ${selectedManualIndex === idx ? 'bg-[#B87333] border-[#B87333] shadow-lg shadow-[#B87333]/20' : 'bg-white/5 border-white/5 hover:border-[#B87333]/30'} ${dragOverIdx === idx ? (dragItem.current !== null && dragOverItem.current !== null && dragItem.current < dragOverItem.current ? 'border-b-4 border-b-orange-500' : 'border-t-4 border-t-orange-500') : ''} ${!isSidebarCollapsed ? 'cursor-grab active:cursor-grabbing touch-none' : ''}`}
                                             title={isSidebarCollapsed ? `${idx + 1}. ${s.song_name}` : "Arraste para reordenar"}
+                                            data-drag-index={idx}
                                         >
                                             <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-black text-xs shrink-0 transition-all ${selectedManualIndex === idx ? 'bg-white text-[#B87333]' : 'bg-black/60 text-slate-700 group-hover:text-white'}`}>{idx + 1}</div>
                                             {!isSidebarCollapsed && (
