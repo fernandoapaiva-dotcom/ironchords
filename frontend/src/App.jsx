@@ -2704,6 +2704,18 @@ export default function App() {
                                 </div>
                             </div>
 
+                            {/* MIC TOGGLE for Pitch Gauge */}
+                            <div className="flex flex-col items-center shrink-0">
+                                <span className="text-[7px] font-black text-slate-600 uppercase mb-1.5 tracking-tighter">MIC</span>
+                                <button
+                                    onClick={() => setMicEnabled(!micEnabled)}
+                                    className={`p-2 rounded-lg transition-all border ${micEnabled ? 'bg-green-500/20 border-green-500 text-green-400 shadow-[0_0_10px_rgba(34,197,94,0.2)]' : 'bg-white/5 border-white/10 text-slate-600 hover:text-slate-400'}`}
+                                    title={micEnabled ? "Desligar Microfone" : "Ligar Microfone para Afinação"}
+                                >
+                                    <Mic className="w-3.5 h-3.5" />
+                                </button>
+                            </div>
+
                             {/* GROUP 4: Song Adjustments (Capo, Key, Size, Tabs) */}
                             <div className="flex items-center space-x-5">
                                 <div className="flex flex-col items-center">
@@ -2952,7 +2964,7 @@ export default function App() {
                             </div>
 
                             {/* PITCH GAUGE & AUTO-TRANSPOSE UI */}
-                            {micEnabled && activeTab === 'manual' && detectedPitch > 0 && (
+                            {micEnabled && (
                                 <div className="absolute bottom-10 right-10 bg-black/80 backdrop-blur-3xl border border-white/10 rounded-3xl p-6 shadow-2xl flex flex-col items-center z-[150] w-64 animate-in fade-in slide-in-from-bottom-10">
                                     <div className="flex justify-between w-full mb-4 items-center">
                                         <span className="text-[10px] font-black uppercase tracking-[0.2em] text-[#B87333]">Afinação</span>
