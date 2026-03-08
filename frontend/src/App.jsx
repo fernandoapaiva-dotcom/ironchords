@@ -295,6 +295,9 @@ function ChordTooltip({ chord, anchor, onClose }) {
 // Improved Regex: enforces word boundaries so words like 'Deus' don't get 'D' captured unless standalone.
 // Added (^|\s) and (?!\w) to ensure it only captures the chord if it's isolated.
 // Improved Regex: enforces word boundaries and also ensures no accented letters follow the chord.
+const NOTES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+const FLATS = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
+
 const CHORD_TOKEN_RE = /(?:^|\s)([A-G][b#]?(?:m|maj|min|M|dim|aug|sus|add|alt|7|9|11|13|6|2|4|5|b5|#5|#11|b9|#9)*(?:\/[A-G][b#]?)?)(?![a-zA-ZáàâãéèêíïóôõöúçñÁÀÂÃÉÈÊÍÏÓÔÕÖÚÇÑ])/g;
 
 function isChordOnlyLine(line) {
@@ -313,29 +316,51 @@ function isTablatureLine(line) {
     return false;
 }
 
-export function renderChordLine(line, onChordClick) {
+function transposeChord(chord, semitones) {
+    if (!semitones || semitones === 0) return chord;
+    const transposeNote = (note) => {
+        const useFlats = note.includes('b');
+        let idx = NOTES.indexOf(note);
+        if (idx === -1) idx = FLATS.indexOf(note);
+        if (idx === -1) return note;
+        let newIdx = (idx + semitones) % 12;
+        if (newIdx < 0) newIdx += 12;
+        return useFlats ? FLATS[newIdx] : NOTES[newIdx];
+    };
+    const match = chord.match(/^([A-G][b#]?)([^/]*)(?:\/([A-G][b#]?))?$/);
+    if (!match) return chord;
+    const base = match[1];
+    const suffix = match[2];
+    const bass = match[3];
+    let result = transposeNote(base) + suffix;
+    if (bass) result += "/" + transposeNote(bass);
+    return result;
+}
+
+export function renderChordLine(line, onChordClick, capo = 0) {
     const parts = [];
     let last = 0;
     let match;
     CHORD_TOKEN_RE.lastIndex = 0;
     while ((match = CHORD_TOKEN_RE.exec(line)) !== null) {
-        // match.index is the start of the entire match, which might include the leading space
         const fullMatch = match[0];
-        const chord = match[1];
-        const chordIndex = match.index + (fullMatch.length - chord.length);
+        const originalChord = match[1];
+        const chordIndex = match.index + (fullMatch.length - originalChord.length);
 
         if (chordIndex > last) {
             parts.push(line.slice(last, chordIndex));
         }
+
+        // Apply Capo (Sounding Key - Capo = Shape)
+        const displayChord = capo > 0 ? transposeChord(originalChord, -capo) : originalChord;
 
         parts.push(
             <span
                 key={chordIndex}
                 className="cursor-pointer underline decoration-[#B87333]/40 underline-offset-2 text-[#B87333] hover:text-amber-300 hover:decoration-amber-300 transition-colors inline-block"
                 onMouseEnter={(e) => {
-                    // Only trigger hover on desktop (not touch)
                     if (window.matchMedia("(hover: hover)").matches) {
-                        onChordClick(chord, e.currentTarget, false);
+                        onChordClick(displayChord, e.currentTarget, false);
                     }
                 }}
                 onMouseLeave={(e) => {
@@ -345,14 +370,13 @@ export function renderChordLine(line, onChordClick) {
                 }}
                 onClick={(e) => {
                     e.stopPropagation();
-                    // On touch devices (or explicit clicks), toggle it
                     if (!window.matchMedia("(hover: hover)").matches) {
-                        onChordClick(chord, e.currentTarget, true);
+                        onChordClick(displayChord, e.currentTarget, true);
                     }
                 }}
-            >{chord}</span>
+            >{displayChord}</span>
         );
-        last = chordIndex + chord.length;
+        last = chordIndex + originalChord.length;
     }
     if (last < line.length) parts.push(line.slice(last));
     return parts;
@@ -2383,7 +2407,7 @@ export default function App() {
                                                         ${isActive ? 'text-white font-black' : isChordLine ? 'text-[#B87333] font-bold italic opacity-80' : 'text-slate-400 font-medium'}
                                                     `}>
                                                         {isChordLine
-                                                            ? renderChordLine(line, (chord, anchor, isPersistent) => setChordTooltip({ chord, anchor, isPersistent }))
+                                                            ? renderChordLine(line, (chord, anchor, isPersistent) => setChordTooltip({ chord, anchor, isPersistent }), songs[selectedManualIndex]?.capo || 0)
                                                             : (line || ' ')}
                                                     </pre>
                                                 </div>
@@ -2793,7 +2817,7 @@ export default function App() {
                                                                             return (
                                                                                 <pre key={lIdx} className={`font-mono leading-relaxed whitespace-pre-wrap break-inside-avoid ${isChordLine ? 'text-[#B87333] font-black italic tracking-tight mb-0' : 'text-slate-300 font-medium mb-1'}`} style={{ fontSize: `${manualFontSize}px` }}>
                                                                                     {isChordLine
-                                                                                        ? renderChordLine(line, (chord, anchor, isPersistent) => setChordTooltip({ chord, anchor, isPersistent }))
+                                                                                        ? renderChordLine(line, (chord, anchor, isPersistent) => setChordTooltip({ chord, anchor, isPersistent }), manualPreviewSong.capo || 0)
                                                                                         : (line || ' ')}
                                                                                 </pre>
                                                                             );
