@@ -1895,22 +1895,23 @@ export default function App() {
         setDeleteModalOpen(false);
     };
 
-    const handleSaveModifications = () => {
-        if (!activePlaylistName || songs.length === 0) return;
+    const persistSongsToPlaylist = (currentSongs, playlistName) => {
+        if (!playlistName || currentSongs.length === 0) return;
 
         const allPlaylists = JSON.parse(localStorage.getItem('iron_chords_playlists') || '[]');
         const updated = allPlaylists.map(pl => {
-            if (pl.name === activePlaylistName) {
+            if (pl.name === playlistName) {
                 return {
                     ...pl,
-                    songs: songs.map(s => ({
+                    songs: currentSongs.map(s => ({
                         id: s.id || null,
                         song_name: s.song_name,
                         artist_name: s.artist_name,
-                        song_key: s.sounding_key || s.requested_key || s.song_key,
-                        sounding_key: s.sounding_key || s.requested_key || s.song_key,
+                        song_key: s.song_key,
+                        sounding_key: s.sounding_key || s.song_key,
                         original_key: s.original_key || s.song_key,
                         capo: s.capo || 0,
+                        include_tabs: s.include_tabs !== undefined ? s.include_tabs : (s.include_tabs ?? true),
                         content: s.content || ''
                     }))
                 };
@@ -1920,9 +1921,53 @@ export default function App() {
 
         localStorage.setItem('iron_chords_playlists', JSON.stringify(updated));
         setSavedPlaylists(updated);
-        setShowSaveSuccess(true);
-        setTimeout(() => setShowSaveSuccess(false), 2000);
     };
+
+    // AUTO-SAVE EFFECT: Persists whenever songs or active playlist name changes
+    useEffect(() => {
+        if (activePlaylistName && songs.length > 0) {
+            persistSongsToPlaylist(songs, activePlaylistName);
+        }
+    }, [songs, activePlaylistName]);
+
+    // SYNC PLAYER STATES TO GLOBAL SONGS (For Auto-Save)
+    useEffect(() => {
+        const isPlayerActive = activeTab === 'manual' || activeTab === 'player';
+        if (isPlayerActive && songs[selectedManualIndex]) {
+            const current = songs[selectedManualIndex];
+
+            // For manual player, we sync content and sounding_key from manualPreviewSong
+            const contentToSync = activeTab === 'manual' && manualPreviewSong ? manualPreviewSong.content : current.content;
+            const keyToSync = activeTab === 'manual' && manualPreviewSong ? manualPreviewSong.sounding_key : current.sounding_key;
+            // Capo and includeTabs are synced for both since they use global states in player mode
+            const capoToSync = activeTab === 'manual' ? manualCapo : current.capo;
+
+            const changed =
+                contentToSync !== current.content ||
+                keyToSync !== current.sounding_key ||
+                capoToSync !== current.capo ||
+                includeTabs !== current.include_tabs;
+
+            if (changed) {
+                const newSongs = [...songs];
+                newSongs[selectedManualIndex] = {
+                    ...current,
+                    content: contentToSync,
+                    sounding_key: keyToSync,
+                    capo: capoToSync,
+                    include_tabs: includeTabs
+                };
+                setSongs(newSongs);
+            }
+        }
+    }, [manualPreviewSong, manualCapo, includeTabs, activeTab, selectedManualIndex]);
+
+    // Update global includeTabs when a new song is selected
+    useEffect(() => {
+        if (songs[selectedManualIndex]) {
+            setIncludeTabs(songs[selectedManualIndex].include_tabs !== false);
+        }
+    }, [selectedManualIndex]);
 
     const getShareLink = () => {
         if (songs.length === 0) return "";
@@ -2438,20 +2483,8 @@ export default function App() {
                                 </button>
                             </div>
 
-                            {/* NOVO: Botões de Persistência e Compartilhamento */}
+                            {/* Menu de Compartilhamento */}
                             <div className="flex items-center space-x-2">
-                                <button
-                                    onClick={handleSaveModifications}
-                                    disabled={!activePlaylistName}
-                                    className={`
-                                        flex items-center space-x-2 px-4 py-2.5 rounded-2xl border transition-all font-black text-[10px] uppercase italic
-                                        ${activePlaylistName ? 'bg-[#B87333]/10 border-[#B87333]/30 text-[#B87333] hover:bg-[#B87333] hover:text-white shadow-lg shadow-[#B87333]/10' : 'bg-white/5 border-white/5 text-slate-600 cursor-not-allowed opacity-40'}
-                                    `}
-                                    title="Salvar alterações na lista atual"
-                                >
-                                    <Save className="w-3.5 h-3.5" />
-                                    <span>Salvar Modificações</span>
-                                </button>
                                 <button
                                     onClick={handleShareList}
                                     className="flex items-center space-x-2 px-4 py-2.5 bg-white/5 border border-white/10 rounded-2xl text-slate-400 hover:text-white hover:bg-white/10 transition-all font-black text-[10px] uppercase italic"
@@ -2481,6 +2514,19 @@ export default function App() {
                                         <span className="text-[10px] font-black text-[#B87333] italic">{scrollSpeed}x</span>
                                     </div>
                                     <input type="range" min="0.5" max="5" step="0.5" value={scrollSpeed} onChange={(e) => setScrollSpeed(parseFloat(e.target.value))} className="w-full h-1 bg-white/5 rounded-full appearance-none cursor-pointer accent-[#B87333]" />
+                                </div>
+
+                                <div className="h-8 w-px bg-white/10 mx-1"></div>
+
+                                <div className="flex flex-col items-center">
+                                    <span className="text-[7px] font-black text-slate-600 uppercase tracking-widest mb-1.5">Tabs</span>
+                                    <button
+                                        onClick={() => setIncludeTabs(!includeTabs)}
+                                        className={`w-11 h-9 rounded-lg flex items-center justify-center transition-all border ${includeTabs ? 'bg-[#B87333]/20 border-[#B87333] text-[#B87333]' : 'bg-black/40 border-white/5 text-slate-600 hover:text-slate-400'}`}
+                                        title={includeTabs ? "Ocultar Tablaturas" : "Mostrar Tablaturas"}
+                                    >
+                                        <FileText className="w-4 h-4" />
+                                    </button>
                                 </div>
 
                                 <div className="h-8 w-px bg-white/10 mx-1"></div>
