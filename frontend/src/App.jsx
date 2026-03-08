@@ -308,6 +308,20 @@ function isChordOnlyLine(line) {
     return chords.length > 0 && cleaned.length < Math.max(2, line.trim().length * 0.5);
 }
 
+function isEndOfSection(lines, currentIdx) {
+    // A section usually ends before an empty line, a marker like [Chorus], 
+    // or if it's the very last line of the song.
+    if (currentIdx >= lines.length - 1) return true;
+    for (let i = currentIdx + 1; i < lines.length; i++) {
+        const line = lines[i];
+        if (!line || !line.trim()) return true;
+        if (line.trim().startsWith('[')) return true;
+        // If we find another lyric line before a break, it's NOT the end of section
+        if (!isChordOnlyLine(line) && !isTablatureLine(line)) return false;
+    }
+    return true;
+}
+
 function isTablatureLine(line) {
     if (!line) return false;
     const trimmed = line.trim();
@@ -1649,11 +1663,19 @@ export default function App() {
                         // If the lines share a root (e.g. L4 is a substring of L1), we enforce the Recent Unique rule.
                         const isSimilarRoot = stanzaStartText.includes(currentLineText) || currentLineText.includes(stanzaStartText);
 
+                        // --- STRICT FORWARD-ONLY GUARD ---
+                        // Agreement: Always Descending, except at end of Refrao/Stanza or Start
+                        const isRestartingSong = stanzaStartIdx < 5; // First 5 lines
+                        const isSectionBreak = isEndOfSection(lines, currentIdx);
+                        const isStructuralMarker = lines[stanzaStartIdx] && lines[stanzaStartIdx].trim().startsWith('[');
+
                         // Requires an extremely strong match AND proof of restarting.
-                        if (hasStartedStanza && score >= 2 && unique >= 1 && timeSinceAnchor > 2500) {
-                            if (!isSimilarRoot || hasRecentUnique) {
-                                targetIndex = stanzaStartIdx;
-                                lastMatchTimeRef.current = now;
+                        if (hasStartedStanza && score >= 3 && unique >= 1 && timeSinceAnchor > 2500) {
+                            if (isRestartingSong || isSectionBreak || isStructuralMarker) {
+                                if (!isSimilarRoot || hasRecentUnique) {
+                                    targetIndex = stanzaStartIdx;
+                                    lastMatchTimeRef.current = now;
+                                }
                             }
                         }
                     }
