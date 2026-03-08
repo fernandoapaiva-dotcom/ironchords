@@ -975,6 +975,7 @@ export default function App() {
 
     // Mic Level & Frequency Listener
     const audioTrackerRef = useRef(null);
+    const syncLineByTextRef = useRef(null);
 
     useEffect(() => {
         if (audioTrackerRef.current) {
@@ -1001,7 +1002,7 @@ export default function App() {
                     (text, isFinal) => {
                         setTranscriptRaw(text);
                         lastVoiceTimeRef.current = Date.now();
-                        syncLineByText(text, isFinal);
+                        if (syncLineByTextRef.current) syncLineByTextRef.current(text, isFinal);
                     },
                     (state) => setFsmState(state),
                     (status) => setConnectionStatus(status)
@@ -1070,7 +1071,7 @@ export default function App() {
 
     // Vocabulary Extraction for Manual Player
     useEffect(() => {
-        const songIdx = (activeTab === 'player' || isManualFullscreen) ? selectedManualIndex : null;
+        const songIdx = (activeTab === 'presentation') ? presenterSongIndex : ((activeTab === 'player' || isManualFullscreen) ? selectedManualIndex : null);
         if (songIdx !== null && songs[songIdx]) {
             const song = songs[songIdx];
             const lines = (song.content || "").split('\n');
@@ -1119,10 +1120,15 @@ export default function App() {
         lastMatchTimeRef.current = Date.now();
         // Option to reset FSM state here if needed
         setFsmState({ state: 'AGUARDANDO', action: 'freeze' });
-    }, [selectedManualIndex, activeTab, mainNav, isFullScreenPlayer]);
+    }, [selectedManualIndex, activeTab, mainNav, isFullScreenPlayer, presenterSongIndex]);
+
+    // Keep the sync function ref strictly up-to-date with this render's closure
+    useEffect(() => {
+        syncLineByTextRef.current = syncLineByText;
+    });
 
     const syncLineByText = (text, isFinal) => {
-        const songIdx = (isFullScreenPlayer || activeTab === 'player' || mainNav === 'player') ? selectedManualIndex : null;
+        const songIdx = (activeTab === 'presentation') ? presenterSongIndex : ((isFullScreenPlayer || activeTab === 'player' || mainNav === 'player') ? selectedManualIndex : null);
         if (songIdx === null || !songs[songIdx]) return;
 
         // Resume if we hear a voice match
@@ -1170,29 +1176,134 @@ export default function App() {
             return { score: matchedWords.size, unique: uniqueCount };
         };
 
-        // 2. TIER 1 & 2: FAST SEQUENTIAL ADVANCE (DIFF-BASED)
-        const timeSinceAnchor = now - lastMatchTimeRef.current;
-        for (let offset = 1; offset <= 4; offset++) {
-            const testIdx = currentIdx + offset;
-            if (testIdx < lines.length) {
-                const { score, unique } = scoreLine(testIdx);
+        // 2. TIER 1: STRICT LINEAR ADVANCE
+        // Find the IMMEDIATE NEXT valid lyric line, ignoring chords/tabs/empty lines.
+        let nextLyricIdx = -1;
+        for (let i = currentIdx + 1; i < lines.length; i++) {
+            const line = lines[i];
+            if (line && line.trim() && !isChordOnlyLine(line) && !isTablatureLine(line) && !line.trim().startsWith('[')) {
+                nextLyricIdx = i;
+                break;
+            }
+        }
 
-                // MAIN RULE: Jump instantly if we matched a word that belongs to the target line 
-                // but DOES NOT belong to the current line (unique >= 1).
-                // We only need 1 unique word to prove they've advanced, regardless of distance (1-4).
+        const timeSinceAnchor = now - lastMatchTimeRef.current;
+
+        // --- SMART DISAMBIGUATION HUB (STRICT LINEAR & STANZA RESTARTS) ---
+        // 1. Identify valid targets
+        // Evaluate Forward
+        if (nextLyricIdx !== -1) {
+            const testIdx = nextLyricIdx;
+            const { score, unique } = scoreLine(testIdx);
+
+            const testLineText = PhoneticMatcher.normalize(lines[testIdx] || "");
+            const currentLineText = PhoneticMatcher.normalize(lines[currentIdx] || "");
+
+            // Scenario A: The next line is DIFFERENT from the current line
+            if (testLineText !== currentLineText) {
                 if (score >= 1 && unique >= 1) {
                     targetIndex = testIdx;
                     lastMatchTimeRef.current = now;
+                }
+            }
+            // Scenario B: The next line is EXACTLY IDENTICAL to the current line (e.g., 'Quero louvar-te' repeated twice)
+            else {
+                // Wait for the 2nd or 3rd distinct word of the phrase before jumping down,
+                // to prove they have moved on to the second identical line and aren't just holding notes.
+                if (timeSinceAnchor > 1800) {
+                    const targetWordsOrdered = getMeaningfulWords(testLineText);
+                    if (targetWordsOrdered.length > 0) {
+                        const firstWord = targetWordsOrdered[0];
+                        const secondWord = targetWordsOrdered.length > 1 ? targetWordsOrdered[1] : null;
+                        const thirdWord = targetWordsOrdered.length > 2 ? targetWordsOrdered[2] : null;
+
+                        // To prove they've started the second identical line, they must 
+                        // have RECENTLY spoken the 2nd/3rd word of that line.
+                        // We use an 8-word window here (transWords.slice(-8)) instead of 3, 
+                        // because if they sing fast, the trigger words might be pushed out 
+                        // of a 3-word window before the 1800ms timer elapses.
+                        const wideRecentSpoken = transWords.slice(-8);
+
+                        const hasStartedSecondLine =
+                            (secondWord && wideRecentSpoken.includes(secondWord)) ||
+                            (thirdWord && wideRecentSpoken.includes(thirdWord)) ||
+                            (firstWord && wideRecentSpoken.includes(firstWord));
+
+                        // Fallback: If 3.5 seconds have passed and they are generating transcription activity,
+                        // assume they have moved on to the second line even if the engine missed the exact words.
+                        if ((score >= 2 && hasStartedSecondLine) || (score >= 1 && timeSinceAnchor > 3500)) {
+                            targetIndex = testIdx;
+                            lastMatchTimeRef.current = now;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Evaluate Backward (Only if Forward hasn't matched)
+        // STRICT RULE: Only explicitly restart the CURRENT or PREVIOUS stanza.
+        if (targetIndex === -1 && timeSinceAnchor > 1800) {
+            // Find the start of the current stanza
+            let stanzaStartIdx = currentIdx;
+            for (let i = currentIdx - 1; i >= 0 && i >= currentIdx - 20; i--) {
+                const line = lines[i];
+                if (!line || line.trim() === "" || line.trim().startsWith('[')) {
+                    stanzaStartIdx = i + 1;
+                    while (stanzaStartIdx < currentIdx && (isChordOnlyLine(lines[stanzaStartIdx]) || isTablatureLine(lines[stanzaStartIdx]))) {
+                        stanzaStartIdx++;
+                    }
                     break;
                 }
+            }
 
-                // FALLBACK RULE: If the target line is EXACTLY the same words as the current line 
-                // (so unique is always 0), prevent cascade by forcing a 3-second wait before advancing.
-                // In this case, we need at least 1 word to match (score >= 1).
-                if (unique === 0 && score >= 1 && timeSinceAnchor > 3000) {
-                    targetIndex = testIdx;
-                    lastMatchTimeRef.current = now;
-                    break;
+            if (stanzaStartIdx < currentIdx) {
+                const stanzaStartText = PhoneticMatcher.normalize(lines[stanzaStartIdx] || "");
+                const currentLineText = PhoneticMatcher.normalize(lines[currentIdx] || "");
+
+                // CRITICAL ANTI-OSCILLATION: NEVER jump backward to a line that is identical to the current line!
+                if (stanzaStartText !== currentLineText) {
+                    const { score, unique } = scoreLine(stanzaStartIdx);
+
+                    const targetWordsOrdered = getMeaningfulWords(stanzaStartText);
+                    if (targetWordsOrdered.length > 0) {
+                        const firstWord = targetWordsOrdered[0];
+                        const secondWord = targetWordsOrdered.length > 1 ? targetWordsOrdered[1] : null;
+                        const thirdWord = targetWordsOrdered.length > 2 ? targetWordsOrdered[2] : null;
+
+                        const wideRecentSpoken = transWords.slice(-8);
+
+                        // To jump back UP to the start of the stanza, they MUST have recently spoken 
+                        // the exact first words of that specific stanza start line.
+                        const hasStartedStanza =
+                            (firstWord && wideRecentSpoken.includes(firstWord)) ||
+                            (secondWord && wideRecentSpoken.includes(secondWord)) ||
+                            (thirdWord && wideRecentSpoken.includes(thirdWord));
+
+                        // PROTECT AGAINST STALE MEMORY (The "Quero louvar-te" Substring Bug):
+                        // If L4 is "Quero louvar-te" and L1 is "Quero louvar-te sempre mais":
+                        // the 10-word audio array might still contain "mais" from when they sang L2.
+                        // We must demand that the UNIQUE 'proof' word ("sempre" or "mais") was spoken 
+                        // RECENTLY (last 4 words), not 10 words ago.
+                        let hasRecentUnique = false;
+                        const veryRecentSpoken = transWords.slice(-4);
+                        for (const rw of veryRecentSpoken) {
+                            if (targetWordsOrdered.includes(rw) && !currentLineWords.has(rw)) {
+                                hasRecentUnique = true;
+                                break;
+                            }
+                        }
+
+                        // If the lines share a root (e.g. L4 is a substring of L1), we enforce the Recent Unique rule.
+                        const isSimilarRoot = stanzaStartText.includes(currentLineText) || currentLineText.includes(stanzaStartText);
+
+                        // Requires an extremely strong match AND proof of restarting.
+                        if (hasStartedStanza && score >= 2 && unique >= 1 && timeSinceAnchor > 2500) {
+                            if (!isSimilarRoot || hasRecentUnique) {
+                                targetIndex = stanzaStartIdx;
+                                lastMatchTimeRef.current = now;
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -1200,81 +1311,44 @@ export default function App() {
         // If we didn't advance, check if we are still singing the CURRENT line
         if (targetIndex === -1 && scoreLine(currentIdx).score >= 1) {
             targetIndex = currentIdx;
-            lastMatchTimeRef.current = now;
+            // Do NOT touch lastMatchTimeRef.current here!
         }
 
-        // 3. TIER 2: EXTENDED LOOKAHEAD
-        if (targetIndex === -1) {
-            for (let offset = 5; offset <= 12; offset++) {
-                const testIdx = currentIdx + offset;
-                if (testIdx < lines.length) {
-                    const { score, unique } = scoreLine(testIdx);
-                    // To jump very far, we need a SOLID match (3 words) and at least 2 must be UNIQUE
-                    if (score >= 3 && unique >= 2) {
-                        targetIndex = testIdx;
-                        lastMatchTimeRef.current = now;
-                        break;
+        if (targetIndex !== -1) {
+            // 1. Did we actually move to a NEW line?
+            if (targetIndex !== currentIdx) {
+                const now = Date.now();
+                const diff = targetIndex - currentIdx;
+                driftHistoryRef.current.push(diff);
+                if (driftHistoryRef.current.length > 5) driftHistoryRef.current.shift();
+
+                // Rhythm smoothing
+                const timeSinceLastAdjust = now - (lastBpmAdjustTimeRef.current || 0);
+                if (timeSinceLastAdjust > 2500) {
+                    const averageDrift = driftHistoryRef.current.reduce((a, b) => a + b, 0) / (driftHistoryRef.current.length || 1);
+                    if (averageDrift < -0.3) {
+                        setBpm(prev => Math.max(40, prev - 1));
+                        lastBpmAdjustTimeRef.current = now;
+                    } else if (averageDrift > 0.8) {
+                        setBpm(prev => Math.min(220, prev + 1));
+                        lastBpmAdjustTimeRef.current = now;
                     }
                 }
-            }
-        }
 
-        // 4. TIER 3: AUTO-RESTART (End to Beginning)
-        if (targetIndex === -1 && currentIdx > lines.length - 10) {
-            for (let i = 0; i < 10; i++) {
-                if (scoreLine(i).score >= 2) {
-                    targetIndex = i;
-                    lastMatchTimeRef.current = now;
-                    break;
-                }
-            }
-        }
-
-        // 5. TIER 4: GLOBAL RESCUE (Locked by time)
-        if (targetIndex === -1 && timeSinceAnchor > 4000 && transWords.length >= 3) {
-            for (let i = currentIdx + 11; i < lines.length; i++) {
-                if (scoreLine(i).score >= 3) { targetIndex = i; break; }
-            }
-            if (targetIndex === -1) {
-                for (let i = 0; i < currentIdx; i++) {
-                    if (scoreLine(i).score >= 3) { targetIndex = i; break; }
-                }
-            }
-            if (targetIndex !== -1) {
-                lastMatchTimeRef.current = now;
-            }
-        }
-
-        if (targetIndex !== -1 && targetIndex !== currentIdx) {
-            const now = Date.now();
-            const diff = targetIndex - currentIdx;
-            driftHistoryRef.current.push(diff);
-            if (driftHistoryRef.current.length > 5) driftHistoryRef.current.shift();
-
-            // Rhythm smoothing (Matched with VideokePlayer)
-            const timeSinceLastAdjust = now - (lastBpmAdjustTimeRef.current || 0);
-            if (timeSinceLastAdjust > 2500) {
-                const averageDrift = driftHistoryRef.current.reduce((a, b) => a + b, 0) / (driftHistoryRef.current.length || 1);
-                if (averageDrift < -0.3) {
-                    setBpm(prev => Math.max(40, prev - 1));
-                    lastBpmAdjustTimeRef.current = now;
-                } else if (averageDrift > 0.8) {
-                    setBpm(prev => Math.min(220, prev + 1));
-                    lastBpmAdjustTimeRef.current = now;
+                // Apply Jump
+                if (now - (lastJumpRef.current || 0) > 1200) {
+                    updateCurrentLine(targetIndex);
+                    lastVoiceMatchedIndexRef.current = targetIndex;
+                    lastJumpRef.current = now;
                 }
             }
 
+            // 2. Regardless of jumping or staying: Have we officially started tracking?
             if (isWaitingForVoice) {
                 setIsWaitingForVoice(false);
                 setIsAnchored(true);
                 startRhythmicTimer();
-            }
-
-            // Apply Jump with cooling down
-            if (now - (lastJumpRef.current || 0) > 1200) {
-                updateCurrentLine(targetIndex);
-                lastVoiceMatchedIndexRef.current = targetIndex;
-                lastJumpRef.current = now;
+                lastMatchTimeRef.current = Date.now();
             }
         }
     };
@@ -2096,7 +2170,11 @@ export default function App() {
                                 {/* Playback Group (Scroll, Autosync, BPM) */}
                                 <div className="flex items-center space-x-6">
                                     <div className="flex items-center space-x-4 bg-black/20 p-2 rounded-2xl border border-white/5">
-                                        <button onClick={() => setIsAutoScrolling(!isAutoScrolling)} className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${isAutoScrolling ? 'bg-[#B87333] text-white shadow-lg shadow-[#B87333]/30 scale-105' : 'bg-white/5 text-slate-500 hover:text-white'}`}>
+                                        <button onClick={() => {
+                                            const newState = !isAutoScrolling;
+                                            setIsAutoScrolling(newState);
+                                            if (newState) setIsDynamicSpeedActive(false);
+                                        }} className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${isAutoScrolling ? 'bg-[#B87333] text-white shadow-lg shadow-[#B87333]/30 scale-105' : 'bg-white/5 text-slate-500 hover:text-white'}`}>
                                             {isAutoScrolling ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
                                         </button>
                                         <button
@@ -2137,6 +2215,7 @@ export default function App() {
                                                     onClick={() => {
                                                         const newState = !isDynamicSpeedActive;
                                                         setIsDynamicSpeedActive(newState);
+                                                        if (newState) setIsAutoScrolling(false);
                                                         if (newState && !micEnabled) setMicEnabled(true);
                                                     }}
                                                     className={`p-2 rounded-lg transition-all border ${isDynamicSpeedActive ? 'bg-blue-600 border-blue-600 text-white animate-pulse' : 'bg-white/5 border-white/10 text-slate-600'}`}
@@ -2659,13 +2738,6 @@ export default function App() {
                                                                             >
                                                                                 <Archive className="w-4 h-4" />
                                                                                 <span>Salvar no Acervo</span>
-                                                                            </button>
-                                                                            <button
-                                                                                onClick={() => setIsVideokeOpen(true)}
-                                                                                className="w-10 h-10 bg-[#B87333]/10 hover:bg-[#B87333] text-[#B87333] hover:text-white rounded-xl transition-all border border-[#B87333]/20 flex items-center justify-center group"
-                                                                                title="Abrir Modo Videokê (IA)"
-                                                                            >
-                                                                                <Tv className="w-5 h-5 group-hover:scale-110 transition-transform" />
                                                                             </button>
                                                                             <button
                                                                                 onClick={() => setIsManualFullscreen(!isManualFullscreen)}
