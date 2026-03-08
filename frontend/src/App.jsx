@@ -2809,7 +2809,7 @@ export default function App() {
                 {(isFullScreenPlayer || activeTab === 'player' || mainNav === 'player') ? (
                     <div className="fixed inset-0 bg-[#070709] z-[100] flex flex-col animate-in fade-in zoom-in-95 duration-500">
                         {/* PLAYER HEADER — single scrollable row (Feature 4) */}
-                        <div className={`bg-black/60 border-b border-white/5 backdrop-blur-2xl shrink-0 no-print w-full z-50 transition-all duration-300 ${isImmersiveMode && !showImmersiveControls ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+                        <div className={`bg-black/60 border-b border-white/5 backdrop-blur-2xl shrink-0 no-print w-full z-[200] transition-all duration-300 ${isImmersiveMode && !showImmersiveControls ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
                             <div className="flex items-center px-3 py-2 gap-2 overflow-x-auto scrollbar-none">
 
                                 {/* Back + song info */}
