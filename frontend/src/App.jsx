@@ -297,6 +297,8 @@ function ChordTooltip({ chord, anchor, onClose }) {
 // Improved Regex: enforces word boundaries and also ensures no accented letters follow the chord.
 const NOTES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 const FLATS = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
+const KEYS = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B', 'Db', 'Eb', 'Gb', 'Ab', 'Bb'];
+const KEY_SEMITONES = { 'C': 0, 'C#': 1, 'Db': 1, 'D': 2, 'D#': 3, 'Eb': 3, 'E': 4, 'F': 5, 'F#': 6, 'Gb': 6, 'G': 7, 'G#': 8, 'Ab': 8, 'A': 9, 'A#': 10, 'Bb': 10, 'B': 11 };
 
 const CHORD_TOKEN_RE = /(?:^|\s)([A-G][b#]?(?:m|maj|min|M|dim|aug|sus|add|alt|7|9|11|13|6|2|4|5|b5|#5|#11|b9|#9)*(?:\/[A-G][b#]?)?)(?![a-zA-ZáàâãéèêíïóôõöúçñÁÀÂÃÉÈÊÍÏÓÔÕÖÚÇÑ])/g;
 
@@ -3502,8 +3504,12 @@ export default function App() {
                                                                         <div className="flex flex-col items-center">
                                                                             <span className="text-[7px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Tabs</span>
                                                                             <button
-                                                                                onClick={() => setIncludeTabs(!includeTabs)}
-                                                                                className={`w-11 h-9 rounded-lg flex items-center justify-center transition-all border ${includeTabs ? 'bg-[#B87333]/20 border-[#B87333] text-[#B87333]' : 'bg-black/40 border-white/5 text-slate-600 hover:text-slate-400'}`}
+                                                                                onClick={() => {
+                                                                                    const nextVal = !(manualPreviewSong.include_tabs ?? includeTabs);
+                                                                                    setIncludeTabs(nextVal);
+                                                                                    setManualPreviewSong(prev => ({ ...prev, include_tabs: nextVal }));
+                                                                                }}
+                                                                                className={`w-11 h-9 rounded-lg flex items-center justify-center transition-all border ${(manualPreviewSong.include_tabs ?? includeTabs) ? 'bg-[#B87333]/20 border-[#B87333] text-[#B87333]' : 'bg-black/40 border-white/5 text-slate-600 hover:text-slate-400'}`}
                                                                             >
                                                                                 <FileText className="w-4 h-4" />
                                                                             </button>
@@ -3525,9 +3531,21 @@ export default function App() {
                                                                         <div className="flex flex-col items-center">
                                                                             <span className="text-[7px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Capo</span>
                                                                             <div className="flex items-center space-x-1.5 bg-black/40 p-1 rounded-lg border border-white/5">
-                                                                                <button onClick={() => setManualCapo(prev => Math.max(0, prev - 1))} className="p-1 text-slate-500 hover:text-white transition-all"><ChevronDown className="w-3 h-3" /></button>
-                                                                                <span className="text-[10px] font-black text-white w-4 text-center">{manualCapo}</span>
-                                                                                <button onClick={() => setManualCapo(prev => Math.min(12, prev + 1))} className="p-1 text-slate-500 hover:text-white transition-all"><ChevronUp className="w-3 h-3" /></button>
+                                                                                <button onClick={() => {
+                                                                                    setManualCapo(prev => {
+                                                                                        const next = Math.max(0, prev - 1);
+                                                                                        setManualPreviewSong(s => ({ ...s, capo: next }));
+                                                                                        return next;
+                                                                                    });
+                                                                                }} className="p-1 text-slate-500 hover:text-white transition-all"><ChevronDown className="w-3 h-3" /></button>
+                                                                                <span className="text-[10px] font-black text-white w-4 text-center">{manualPreviewSong.capo ?? manualCapo}</span>
+                                                                                <button onClick={() => {
+                                                                                    setManualCapo(prev => {
+                                                                                        const next = Math.min(12, prev + 1);
+                                                                                        setManualPreviewSong(s => ({ ...s, capo: next }));
+                                                                                        return next;
+                                                                                    });
+                                                                                }} className="p-1 text-slate-500 hover:text-white transition-all"><ChevronUp className="w-3 h-3" /></button>
                                                                             </div>
                                                                         </div>
 
@@ -4557,8 +4575,6 @@ export default function App() {
                                                         )}
                                                         {editingList.songs.map((song, si) => {
                                                             const isExpanded = expandedListSongIdx === si;
-                                                            const KEYS = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B', 'Db', 'Eb', 'Gb', 'Ab', 'Bb'];
-                                                            const KEY_SEMITONES = { 'C': 0, 'C#': 1, 'Db': 1, 'D': 2, 'D#': 3, 'Eb': 3, 'E': 4, 'F': 5, 'F#': 6, 'Gb': 6, 'G': 7, 'G#': 8, 'Ab': 8, 'A': 9, 'A#': 10, 'Bb': 10, 'B': 11 };
                                                             const updateSong = (patch) => {
                                                                 if (patch.include_tabs !== undefined) {
                                                                     if (selectedManualIndex === si) setIncludeTabs(patch.include_tabs);
