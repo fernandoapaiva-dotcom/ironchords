@@ -1981,7 +1981,11 @@ export default function App() {
             const res = await fetch(`${API_BASE_URL}/api/search/suggestions?q=${encodeURIComponent(name)}`);
             const data = await res.json();
             let results = data.suggestions || [];
-            results = results.filter(s => !s.song.toLowerCase().includes('agape') && !s.artist.toLowerCase().includes('agape'));
+            results = results.filter(s =>
+                s && s.song && s.artist &&
+                !s.song.toLowerCase().includes('agape') &&
+                !s.artist.toLowerCase().includes('agape')
+            );
             setSuggestions(results);
         } catch (err) { console.error(err); }
     };

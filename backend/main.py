@@ -1,16 +1,16 @@
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, WebSocket, WebSocketDisconnect
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
-from pydantic import BaseModel
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, WebSocket, WebSocketDisconnect # type: ignore
+from fastapi.middleware.cors import CORSMiddleware # type: ignore
+from fastapi.responses import FileResponse # type: ignore
+from pydantic import BaseModel # type: ignore
 from typing import List, Optional, Any, Dict, Union, cast
-import pandas as pd
+import pandas as pd # type: ignore
 import io
 import os
 import time
 import json
 import tempfile
 import zipfile
-import requests
+import requests # type: ignore
 import re
 import platform
 
@@ -51,13 +51,13 @@ def clean_song_name(name: str) -> str:
     # Remove extra spaces
     return name.strip()
 
-import scraper
-from scraper import find_chord_cascade, get_cifraclub_versions
-from database import init_db, get_chord, save_chord, get_db_connection, get_all_chords
-import chord_utils
-from chord_utils import process_chords
-from document_generator import generate_docx
-from audio_processor import IronChordsPlayer
+import scraper # type: ignore
+from scraper import find_chord_cascade, get_cifraclub_versions # type: ignore
+from database import init_db, get_chord, save_chord, get_db_connection, get_all_chords # type: ignore
+import chord_utils # type: ignore
+from chord_utils import process_chords # type: ignore
+from document_generator import generate_docx # type: ignore
+from audio_processor import IronChordsPlayer # type: ignore
 
 def fix_pywin32():
     if platform.system() != "Windows":
@@ -88,9 +88,9 @@ def fix_pywin32():
                 sys.path.append(p)
         
         # Carregamento forçado de pywintypes e pythoncom
-        import win32api
-        import pywintypes
-        import pythoncom
+        import win32api # type: ignore
+        import pywintypes # type: ignore
+        import pythoncom # type: ignore
         return True
     except Exception as e:
         with open("debug_fix.log", "a") as f:
@@ -101,8 +101,8 @@ HAS_PYWIN32 = fix_pywin32()
 PYWIN32_ERR = None
 if HAS_PYWIN32:
     try:
-        import pythoncom
-        import win32com.client
+        import pythoncom # type: ignore
+        import win32com.client # type: ignore
     except Exception as e:
         HAS_PYWIN32 = False
         PYWIN32_ERR = str(e)
@@ -247,7 +247,7 @@ def add_manual_music(request: ManualEntryRequest):
                 song_clean = clean_song_name(request.song_name)
                 artist_clean = clean_song_name(request.artist_name)
                 words = cast(List[str], artist_clean.split())
-                artist_first_words = " ".join(words[0:2])
+                artist_first_words = " ".join(cast(List[str], words[0:2]))  # type: ignore
                 
                 # Send artist first words alongside to vastly improve Solr match capability and bypass typos
                 # Also include the original requested names to ensure we find what the user typed
@@ -270,7 +270,7 @@ def add_manual_music(request: ManualEntryRequest):
                     detail={
                         "error": "not_found",
                         "message": "Música não encontrada.",
-                        "suggestions": cast(List[Any], all_s)[0:15]
+                        "suggestions": cast(List[Any], all_s)[0:15]  # type: ignore
                     }
                 )
         else:
@@ -279,35 +279,37 @@ def add_manual_music(request: ManualEntryRequest):
     
     # Final check for key (Requirement 2)
     if not req_key:
-        req_key = chord_data['key']
+        if chord_data is None:
+             raise HTTPException(status_code=500, detail="Unexpected state: chord_data is None")
+        req_key = cast(str, cast(Dict[str, Any], chord_data).get('key', 'C'))
 
     # Se Capo for aplicado, a cifra bruta (visual_key) desce de tom para que o som mantenha-se igual ao req_key.
     visual_key = req_key
-    if request.capo is not None and request.capo > 0:
+    if request.capo is not None and request.capo > 0:  # type: ignore
         import re
-        from chord_utils import get_note_index, NOTES
+        from chord_utils import get_note_index, NOTES # type: ignore
         match = re.search(r"([A-G][b#]?)", req_key, re.IGNORECASE)
         if match:
             base_note = match.group(1)
             idx = get_note_index(base_note)
             new_idx = (idx - request.capo) % 12
             new_base = NOTES[new_idx]
-            rest = str(req_key)[len(base_note):]
+            rest = cast(str, req_key)[len(base_note):]  # type: ignore
             visual_key = f"{new_base}{rest}"
 
-    final_content = process_chords(chord_data['content'], chord_data['key'], visual_key)
+    final_content = process_chords(cast(Dict[str, Any], chord_data)['content'], cast(Dict[str, Any], chord_data)['key'], visual_key)  # type: ignore
     
     # Requirement: Sounding key = requested key
     sounding_key = req_key
     
     return {
-        "song_name": chord_data['song_name'],
-        "artist_name": chord_data['artist_name'],
-        "original_key": chord_data['key'],
+        "song_name": cast(Dict[str, Any], chord_data)['song_name'],
+        "artist_name": cast(Dict[str, Any], chord_data)['artist_name'],
+        "original_key": cast(Dict[str, Any], chord_data)['key'],
         "requested_key": req_key,
         "sounding_key": sounding_key,
         "content": final_content,
-        "source": chord_data['source'],
+        "source": cast(Dict[str, Any], chord_data)['source'],
         "capo": request.capo
     }
 
@@ -322,20 +324,20 @@ async def get_song_versions(artist_slug: str, song_slug: str):
 @app.post("/api/transpose")
 def transpose_endpoint(request: TransposeRequest):
     try:
-        from chord_utils import transpose_chord, NOTES
+        from chord_utils import transpose_chord, NOTES  # type: ignore
         
         # Calculate new key name
         match = re.search(r"([A-G][b#]?)", request.current_key, re.IGNORECASE)
         if not match:
             new_key = request.current_key
         else:
-            from chord_utils import get_note_index
+            from chord_utils import get_note_index  # type: ignore
             base_note = match.group(1)
             idx = get_note_index(base_note)
             new_idx = (idx + request.semitones) % 12
             new_key = NOTES[new_idx]
             # Preserve minor/other info if present
-            rest = str(request.current_key)[len(base_note):]
+            rest = str(request.current_key)[len(base_note):]  # type: ignore
             new_key = f"{new_key}{rest}"
 
         # Transpose content
@@ -417,19 +419,19 @@ def add_batch_music(request: BatchRequest):
             if chord_data:
                 # Se não houver Tom mapeado, assume o tom original da música
                 if not req_key:
-                    req_key = chord_data['key']
+                    req_key = cast(Dict[str, Any], chord_data)['key']
                     
                 visual_key = req_key
-                if row.capo is not None and row.capo > 0:
+                if row.capo is not None and row.capo > 0:  # type: ignore
                     import re
-                    from chord_utils import get_note_index, NOTES
+                    from chord_utils import get_note_index, NOTES # type: ignore
                     match = re.search(r"([A-G][b#]?)", req_key, re.IGNORECASE)
                     if match:
                         base_note = match.group(1)
                         idx = get_note_index(base_note)
                         new_idx = (idx - row.capo) % 12
                         new_base = NOTES[new_idx]
-                        rest = str(req_key)[len(base_note):]
+                        rest = str(req_key)[len(base_note):]  # type: ignore
                         visual_key = f"{new_base}{rest}"
 
                 final_content = process_chords(chord_data['content'], chord_data['key'], visual_key)
@@ -465,7 +467,7 @@ def add_batch_music(request: BatchRequest):
 
 @app.post("/api/music/batch/pdf")
 async def extract_pdf_table(file: UploadFile = File(...)):
-    import pdfplumber
+    import pdfplumber # type: ignore
     
     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
         tmp.write(await file.read())
@@ -508,7 +510,7 @@ async def extract_pdf_table(file: UploadFile = File(...)):
         
         if is_header:
             headers = [str(h) for h in first_row]
-            body = cast(List[Any], data)[1:len(data)]
+            body = cast(List[Any], data)[1:]  # type: ignore
         else:
             # Generic headers if not obvious
             headers = ["Música", "Artista", "Tom"]
@@ -560,7 +562,7 @@ def get_chords():
 @app.post("/api/chords")
 def create_chord(data: ChordEdit):
     try:
-        from database import save_chord
+        from database import save_chord # type: ignore
         save_chord(data.song_name, data.artist_name, data.song_key, data.content, "manual", data.capo or 0, data.include_tabs)
         return {"status": "ok"}
     except Exception as e:
@@ -676,10 +678,15 @@ def search_suggestions(q: str):
     except Exception as e:
         print(f"DEBUG REMOTE ERROR: {e}")
             
-    # Final filter for branding
-    suggestions = [s for s in suggestions if "agape" not in s['song'].lower() and "agape" not in s['artist'].lower()]
+    # Final filter for branding (redundant but safe)
+    suggestions = [
+        s for s in suggestions 
+        if s.get('song') and s.get('artist') and 
+        "agape" not in str(s['song']).lower() and 
+        "agape" not in str(s['artist']).lower()
+    ]
             
-    return {"suggestions": cast(List[Any], suggestions)[:12]}
+    return {"suggestions": cast(List[Any], suggestions)[:12]}  # type: ignore
 
 @app.get("/api/music/metadata")
 def get_metadata(song_name: str, artist_name: str):

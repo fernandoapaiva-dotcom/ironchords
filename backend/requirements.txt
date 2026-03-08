@@ -13,3 +13,5 @@ websockets
 librosa
 torch
 soundfile
+numpy
+pywin32
