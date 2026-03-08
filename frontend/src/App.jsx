@@ -2153,21 +2153,23 @@ export default function App() {
         } catch (err) { alert(err); }
     };
 
-    // Player Sidebar Song Search (Feature 1)
+    // Player Sidebar Song Search (Feature 1) — same logic as manual mode search
     const handlePlayerSongSearch = (query) => {
         setPlayerSongSearch(query);
-        setPlayerSongSuggestions([]);
         if (playerSearchDebounceRef.current) clearTimeout(playerSearchDebounceRef.current);
-        if (!query.trim()) return;
+        if (query.length < 2) { setPlayerSongSuggestions([]); return; }
         playerSearchDebounceRef.current = setTimeout(async () => {
             setPlayerSongSearchLoading(true);
             try {
-                const res = await fetch(`${API_BASE_URL}/api/music/suggestions?q=${encodeURIComponent(query)}`);
+                const res = await fetch(`${API_BASE_URL}/api/search/suggestions?q=${encodeURIComponent(query)}`);
                 const data = await res.json();
-                setPlayerSongSuggestions(Array.isArray(data) ? data : (data.suggestions || []));
+                let results = data.suggestions || [];
+                // same filter as manual mode
+                results = results.filter(s => !s.song.toLowerCase().includes('agape') && !s.artist.toLowerCase().includes('agape'));
+                setPlayerSongSuggestions(results);
             } catch (e) { console.error(e); }
             finally { setPlayerSongSearchLoading(false); }
-        }, 400);
+        }, 250);
     };
 
     const handleAddSongFromSearch = async (item) => {
@@ -2610,130 +2612,106 @@ export default function App() {
 
                 {(isFullScreenPlayer || activeTab === 'player' || mainNav === 'player') ? (
                     <div className="fixed inset-0 bg-[#070709] z-[100] flex flex-col animate-in fade-in zoom-in-95 duration-500">
-                        {/* PLAYER HEADER — responsive two-row layout (Feature 4) */}
+                        {/* PLAYER HEADER — single scrollable row (Feature 4) */}
                         <div className={`bg-black/60 border-b border-white/5 backdrop-blur-2xl shrink-0 no-print w-full z-50 transition-all duration-300 ${isImmersiveMode && !showImmersiveControls ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
-                            {/* Row 1: Back, Song Info, Navigation, Share, Fullscreen */}
-                            <div className="flex items-center px-4 py-3 gap-3 flex-wrap">
-                                <button onClick={() => { setIsFullScreenPlayer(false); setActiveTab('manual'); setMainNav('escolha'); setIsImmersiveMode(false); }} className="p-2.5 bg-white/5 hover:bg-white/10 rounded-xl transition-all border border-white/5 text-slate-400 hover:text-white shrink-0" title="Voltar para Início">
+                            <div className="flex items-center px-3 py-2 gap-2 overflow-x-auto scrollbar-none">
+
+                                {/* Back + song info */}
+                                <button onClick={() => { setIsFullScreenPlayer(false); setActiveTab('manual'); setMainNav('escolha'); setIsImmersiveMode(false); }} className="p-2 bg-white/5 hover:bg-white/10 rounded-xl transition-all border border-white/5 text-slate-400 hover:text-white shrink-0" title="Voltar">
                                     <ArrowLeft className="w-4 h-4" />
                                 </button>
-                                <div className="flex flex-col min-w-0 flex-1">
-                                    <div className="flex items-center space-x-1.5 mb-0.5">
-                                        <LayoutList className="w-2.5 h-2.5 text-[#B87333] shrink-0" />
-                                        <span className="text-[8px] font-black text-slate-500 uppercase tracking-[0.2em] truncate max-w-[140px]">{activePlaylistName}</span>
-                                    </div>
-                                    <h2 className="text-sm font-black text-white uppercase italic tracking-tighter leading-none truncate">{currentSong?.song_name}</h2>
-                                    <p className="text-[9px] font-bold text-[#B87333] uppercase truncate opacity-60">{currentSong?.artist_name}</p>
-                                </div>
-                                {/* Navigation */}
-                                <div className="flex items-center space-x-1.5 bg-white/5 p-1 rounded-2xl border border-white/5 shrink-0">
-                                    <button onClick={() => { if (selectedManualIndex > 0) { setSelectedManualIndex(selectedManualIndex - 1); setCurrentLineIndex(0); currentLineIndexRef.current = 0; if (scrollContainerRef.current) scrollContainerRef.current.scrollTop = 0; } }} disabled={selectedManualIndex === 0} className="p-2 hover:bg-white/10 rounded-xl transition-all text-slate-500 hover:text-white disabled:opacity-20" title="Anterior"><SkipBack className="w-4 h-4" /></button>
-                                    <button onClick={() => { const newState = !isAutoScrolling; setIsAutoScrolling(newState); if (newState) setIsDynamicSpeedActive(false); }} className={`w-11 h-11 rounded-xl flex items-center justify-center transition-all ${isAutoScrolling ? 'bg-[#B87333] text-white shadow-lg shadow-[#B87333]/40 scale-105' : 'bg-white/10 text-slate-300 hover:text-white hover:bg-white/20'}`}>
-                                        {isAutoScrolling ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 ml-0.5" />}
-                                    </button>
-                                    <button onClick={() => { if (selectedManualIndex < songs.length - 1) { setSelectedManualIndex(selectedManualIndex + 1); setCurrentLineIndex(0); currentLineIndexRef.current = 0; if (scrollContainerRef.current) scrollContainerRef.current.scrollTop = 0; } }} disabled={selectedManualIndex === songs.length - 1} className="p-2 hover:bg-white/10 rounded-xl transition-all text-slate-500 hover:text-white disabled:opacity-20" title="Próxima"><SkipForward className="w-4 h-4" /></button>
-                                </div>
-                                {/* Share */}
-                                <button onClick={handleShareList} className="flex items-center space-x-1.5 px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition-all font-black text-[9px] uppercase shrink-0" title="Compartilhar">
-                                    <Share2 className="w-3.5 h-3.5" /><span className="hidden sm:inline">Compartilhar</span>
-                                </button>
-                                {/* Print current song */}
-                                <button onClick={() => window.print()} className="p-2 bg-white/5 border border-white/10 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition-all shrink-0" title="Imprimir cifra atual">
-                                    <Printer className="w-4 h-4" />
-                                </button>
-                                {/* Fullscreen / Immersive toggle (Feature 6) */}
-                                <button
-                                    onClick={() => { setIsImmersiveMode(!isImmersiveMode); setShowImmersiveControls(false); }}
-                                    className={`p-2 rounded-xl border transition-all shrink-0 ${isImmersiveMode ? 'bg-[#B87333]/20 border-[#B87333] text-[#B87333]' : 'bg-white/5 border-white/10 text-slate-500 hover:text-white'}`}
-                                    title={isImmersiveMode ? "Sair da Tela Cheia" : "Tela Cheia (Imersivo)"}
-                                >
-                                    {isImmersiveMode ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-                                </button>
-                            </div>
-
-                            {/* Row 2: Controls — flex-wrap so they never overflow */}
-                            <div className="flex items-center px-4 py-2 gap-4 flex-wrap border-t border-white/5 bg-black/20">
-                                {/* Reset + Speed */}
-                                <div className="flex items-center space-x-3 shrink-0">
-                                    <button onClick={() => { setCurrentLineIndex(0); currentLineIndexRef.current = 0; if (scrollContainerRef.current) scrollContainerRef.current.scrollTop = 0; }} className="p-2 rounded-lg bg-white/5 text-slate-500 hover:text-white hover:bg-white/10 transition-all" title="Reiniciar">
-                                        <RotateCcw className="w-3.5 h-3.5" />
-                                    </button>
-                                    <div className="flex flex-col">
-                                        <div className="flex items-center justify-between mb-1">
-                                            <span className="text-[7px] font-black text-slate-600 uppercase tracking-widest">Speed</span>
-                                            <span className="text-[9px] font-black text-[#B87333] italic ml-2">{scrollSpeed}x</span>
-                                        </div>
-                                        <input type="range" min="0.5" max="5" step="0.5" value={scrollSpeed} onChange={e => setScrollSpeed(parseFloat(e.target.value))} className="w-20 h-1 bg-white/5 rounded-full appearance-none cursor-pointer accent-[#B87333]" />
-                                    </div>
+                                <div className="flex flex-col min-w-0 shrink-0 max-w-[130px]">
+                                    <h2 className="text-[11px] font-black text-white uppercase italic tracking-tighter leading-none truncate">{currentSong?.song_name || '—'}</h2>
+                                    <p className="text-[8px] font-bold text-[#B87333] uppercase truncate opacity-60">{activePlaylistName}</p>
                                 </div>
 
                                 <div className="w-px h-8 bg-white/10 shrink-0" />
 
-                                {/* Capo */}
-                                <div className="flex flex-col items-center shrink-0">
-                                    <span className="text-[7px] font-black text-slate-500 uppercase tracking-widest mb-1">Capo</span>
-                                    <div className="flex items-center space-x-1 bg-black/40 p-1 rounded-lg border border-white/5">
-                                        <button onClick={() => { if (selectedManualIndex !== null && songs[selectedManualIndex]) { const next = [...songs]; next[selectedManualIndex].capo = Math.max(0, (next[selectedManualIndex].capo || 0) - 1); setSongs(next); } }} className="p-0.5 text-slate-500 hover:text-white transition-all"><Minus className="w-3.5 h-3.5" /></button>
-                                        <span className="text-xs font-black text-[#B87333] w-5 text-center">{currentSong?.capo || 0}</span>
-                                        <button onClick={() => { if (selectedManualIndex !== null && songs[selectedManualIndex]) { const next = [...songs]; next[selectedManualIndex].capo = Math.min(11, (next[selectedManualIndex].capo || 0) + 1); setSongs(next); } }} className="p-0.5 text-slate-500 hover:text-white transition-all"><Plus className="w-3.5 h-3.5" /></button>
+                                {/* Navigation (Skip ← | Play/Pause + Speed | Skip →) — all together */}
+                                <button onClick={() => { if (selectedManualIndex > 0) { setSelectedManualIndex(selectedManualIndex - 1); setCurrentLineIndex(0); currentLineIndexRef.current = 0; if (scrollContainerRef.current) scrollContainerRef.current.scrollTop = 0; } }} disabled={selectedManualIndex === 0} className="p-2 hover:bg-white/10 rounded-xl transition-all text-slate-500 hover:text-white disabled:opacity-20 shrink-0" title="Anterior"><SkipBack className="w-4 h-4" /></button>
+
+                                {/* Play + Speed grouped */}
+                                <div className="flex items-center gap-2 bg-white/5 border border-white/5 rounded-2xl px-2 py-1.5 shrink-0">
+                                    <button onClick={() => { const s = !isAutoScrolling; setIsAutoScrolling(s); if (s) setIsDynamicSpeedActive(false); }} className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all shrink-0 ${isAutoScrolling ? 'bg-[#B87333] text-white shadow-lg shadow-[#B87333]/40' : 'bg-white/10 text-slate-300 hover:text-white hover:bg-white/20'}`}>
+                                        {isAutoScrolling ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
+                                    </button>
+                                    <div className="flex flex-col">
+                                        <span className="text-[6px] font-black text-slate-600 uppercase tracking-widest leading-none mb-1">Speed {scrollSpeed}x</span>
+                                        <input type="range" min="0.5" max="5" step="0.5" value={scrollSpeed} onChange={e => setScrollSpeed(parseFloat(e.target.value))} className="w-16 h-1 bg-white/5 rounded-full appearance-none cursor-pointer accent-[#B87333]" />
                                     </div>
                                 </div>
 
-                                {/* Key */}
-                                <div className="flex flex-col items-center shrink-0">
-                                    <span className="text-[7px] font-black text-slate-500 uppercase tracking-widest mb-1">Tom</span>
-                                    <div className="flex items-center space-x-1 bg-black/40 p-1 rounded-lg border border-[#B87333]/20">
-                                        <button onClick={() => transposeSong(selectedManualIndex, -1)} disabled={isTransposing} className="p-0.5 text-slate-500 hover:text-white transition-all disabled:opacity-50"><Minus className="w-3.5 h-3.5" /></button>
-                                        <span className="text-xs font-black text-white uppercase italic min-w-[1.5rem] text-center">{isTransposing ? '...' : getSoundingKey(currentSong)}</span>
-                                        <button onClick={() => transposeSong(selectedManualIndex, 1)} disabled={isTransposing} className="p-0.5 text-slate-500 hover:text-white transition-all disabled:opacity-50"><Plus className="w-3.5 h-3.5" /></button>
-                                    </div>
+                                <button onClick={() => { if (selectedManualIndex < songs.length - 1) { setSelectedManualIndex(selectedManualIndex + 1); setCurrentLineIndex(0); currentLineIndexRef.current = 0; if (scrollContainerRef.current) scrollContainerRef.current.scrollTop = 0; } }} disabled={selectedManualIndex === songs.length - 1} className="p-2 hover:bg-white/10 rounded-xl transition-all text-slate-500 hover:text-white disabled:opacity-20 shrink-0" title="Próxima"><SkipForward className="w-4 h-4" /></button>
+
+                                <div className="w-px h-8 bg-white/10 shrink-0" />
+
+                                {/* Reset */}
+                                <button onClick={() => { setCurrentLineIndex(0); currentLineIndexRef.current = 0; if (scrollContainerRef.current) scrollContainerRef.current.scrollTop = 0; }} className="p-2 rounded-lg bg-white/5 text-slate-500 hover:text-white hover:bg-white/10 transition-all shrink-0" title="Reiniciar"><RotateCcw className="w-3.5 h-3.5" /></button>
+
+                                {/* Capo */}
+                                <div className="flex items-center gap-1 bg-black/40 px-1.5 py-1 rounded-lg border border-white/5 shrink-0">
+                                    <span className="text-[6px] font-black text-slate-500 uppercase tracking-widest">Capo</span>
+                                    <button onClick={() => { if (selectedManualIndex !== null && songs[selectedManualIndex]) { const n = [...songs]; n[selectedManualIndex].capo = Math.max(0, (n[selectedManualIndex].capo || 0) - 1); setSongs(n); } }} className="p-0.5 text-slate-500 hover:text-white transition-all"><Minus className="w-3 h-3" /></button>
+                                    <span className="text-xs font-black text-[#B87333] w-4 text-center">{currentSong?.capo || 0}</span>
+                                    <button onClick={() => { if (selectedManualIndex !== null && songs[selectedManualIndex]) { const n = [...songs]; n[selectedManualIndex].capo = Math.min(11, (n[selectedManualIndex].capo || 0) + 1); setSongs(n); } }} className="p-0.5 text-slate-500 hover:text-white transition-all"><Plus className="w-3 h-3" /></button>
+                                </div>
+
+                                {/* Tom (Key) */}
+                                <div className="flex items-center gap-1 bg-black/40 px-1.5 py-1 rounded-lg border border-[#B87333]/20 shrink-0">
+                                    <span className="text-[6px] font-black text-slate-500 uppercase tracking-widest">Tom</span>
+                                    <button onClick={() => transposeSong(selectedManualIndex, -1)} disabled={isTransposing} className="p-0.5 text-slate-500 hover:text-white disabled:opacity-50 transition-all"><Minus className="w-3 h-3" /></button>
+                                    <span className="text-xs font-black text-white uppercase italic min-w-[1.4rem] text-center">{isTransposing ? '…' : getSoundingKey(currentSong)}</span>
+                                    <button onClick={() => transposeSong(selectedManualIndex, 1)} disabled={isTransposing} className="p-0.5 text-slate-500 hover:text-white disabled:opacity-50 transition-all"><Plus className="w-3 h-3" /></button>
                                 </div>
 
                                 {/* Size */}
-                                <div className="flex flex-col items-center shrink-0">
-                                    <span className="text-[7px] font-black text-slate-500 uppercase tracking-widest mb-1">Size</span>
-                                    <div className="flex items-center space-x-1 bg-black/40 p-1 rounded-lg border border-white/5">
-                                        <button onClick={() => setPlayerFontSize(prev => Math.max(12, prev - 1))} className="p-0.5 text-slate-500 hover:text-white transition-all"><Minus className="w-3.5 h-3.5" /></button>
-                                        <span className="text-xs font-black text-white w-5 text-center">{playerFontSize}</span>
-                                        <button onClick={() => setPlayerFontSize(prev => Math.min(45, prev + 1))} className="p-0.5 text-slate-500 hover:text-white transition-all"><Plus className="w-3.5 h-3.5" /></button>
-                                    </div>
+                                <div className="flex items-center gap-1 bg-black/40 px-1.5 py-1 rounded-lg border border-white/5 shrink-0">
+                                    <span className="text-[6px] font-black text-slate-500 uppercase tracking-widest">Size</span>
+                                    <button onClick={() => setPlayerFontSize(p => Math.max(12, p - 1))} className="p-0.5 text-slate-500 hover:text-white transition-all"><Minus className="w-3 h-3" /></button>
+                                    <span className="text-xs font-black text-white w-4 text-center">{playerFontSize}</span>
+                                    <button onClick={() => setPlayerFontSize(p => Math.min(45, p + 1))} className="p-0.5 text-slate-500 hover:text-white transition-all"><Plus className="w-3 h-3" /></button>
                                 </div>
 
-                                {/* Tabs toggle */}
-                                <div className="flex flex-col items-center shrink-0">
-                                    <span className="text-[7px] font-black text-slate-500 uppercase tracking-widest mb-1">Tabs</span>
-                                    <button onClick={() => setIncludeTabs(!includeTabs)} className={`p-2 rounded-lg border transition-all ${includeTabs ? 'bg-[#B87333]/20 border-[#B87333] text-[#B87333]' : 'bg-black/40 border-white/5 text-slate-600 hover:text-slate-400'}`} title={includeTabs ? "Ocultar Tablaturas" : "Mostrar Tablaturas"}>
-                                        <FileText className="w-3.5 h-3.5" />
-                                    </button>
-                                </div>
+                                {/* Tabs */}
+                                <button onClick={() => setIncludeTabs(!includeTabs)} className={`p-2 rounded-lg border transition-all shrink-0 ${includeTabs ? 'bg-[#B87333]/20 border-[#B87333] text-[#B87333]' : 'bg-white/5 border-white/10 text-slate-600 hover:text-slate-400'}`} title={includeTabs ? "Ocultar Tabs" : "Mostrar Tabs"}>
+                                    <FileText className="w-3.5 h-3.5" />
+                                </button>
 
                                 <div className="w-px h-8 bg-white/10 shrink-0" />
 
                                 {/* IA Sync */}
-                                <div className="flex flex-col items-center shrink-0 relative">
+                                <div className="relative shrink-0">
                                     {micEnabled && isDynamicSpeedActive && transcriptRaw && (
-                                        <div className="absolute bottom-[calc(100%+8px)] left-1/2 -translate-x-1/2 z-50 pointer-events-none">
-                                            <div className="bg-blue-600/90 text-white px-2.5 py-1 rounded-xl border border-blue-400/30 whitespace-nowrap flex items-center space-x-1.5 text-[9px] font-bold">
+                                        <div className="absolute bottom-[calc(100%+6px)] left-1/2 -translate-x-1/2 z-50 pointer-events-none">
+                                            <div className="bg-blue-600/90 text-white px-2 py-1 rounded-lg whitespace-nowrap flex items-center gap-1.5 text-[8px] font-bold">
                                                 <div className="w-1 h-1 bg-white rounded-full animate-pulse" />
-                                                <span>{transcriptRaw.length > 25 ? '...' + transcriptRaw.slice(-25) : transcriptRaw}</span>
+                                                {transcriptRaw.length > 20 ? '...' + transcriptRaw.slice(-20) : transcriptRaw}
                                             </div>
                                         </div>
                                     )}
-                                    <span className="text-[7px] font-black text-slate-600 uppercase mb-1 tracking-tighter">IA Sync</span>
-                                    <button onClick={() => { const s = !isDynamicSpeedActive; setIsDynamicSpeedActive(s); if (s) setIsAutoScrolling(false); if (s && !micEnabled) setMicEnabled(true); }} className={`p-2 rounded-lg border transition-all ${isDynamicSpeedActive ? 'bg-blue-600 border-blue-600 text-white shadow-[0_0_15px_rgba(37,99,235,0.3)] animate-pulse' : 'bg-white/5 border-white/10 text-slate-600 hover:text-slate-400'}`}>
+                                    <button onClick={() => { const s = !isDynamicSpeedActive; setIsDynamicSpeedActive(s); if (s) setIsAutoScrolling(false); if (s && !micEnabled) setMicEnabled(true); }} className={`p-2 rounded-lg border transition-all ${isDynamicSpeedActive ? 'bg-blue-600 border-blue-600 text-white animate-pulse' : 'bg-white/5 border-white/10 text-slate-600 hover:text-slate-400'}`} title="IA Sync">
                                         <Zap className="w-3.5 h-3.5" />
                                     </button>
                                 </div>
 
                                 {/* MIC */}
-                                <div className="flex flex-col items-center shrink-0">
-                                    <span className="text-[7px] font-black text-slate-600 uppercase mb-1 tracking-tighter">MIC</span>
-                                    <button onClick={() => setMicEnabled(!micEnabled)} className={`p-2 rounded-lg border transition-all ${micEnabled ? 'bg-green-500/20 border-green-500 text-green-400 shadow-[0_0_10px_rgba(34,197,94,0.2)]' : 'bg-white/5 border-white/10 text-slate-600 hover:text-slate-400'}`} title={micEnabled ? "Desligar Microfone" : "Ligar Microfone"}>
-                                        <Mic className="w-3.5 h-3.5" />
-                                    </button>
-                                </div>
+                                <button onClick={() => setMicEnabled(!micEnabled)} className={`p-2 rounded-lg border transition-all shrink-0 ${micEnabled ? 'bg-green-500/20 border-green-500 text-green-400' : 'bg-white/5 border-white/10 text-slate-600 hover:text-slate-400'}`} title={micEnabled ? "Desligar MIC" : "Ligar MIC"}>
+                                    <Mic className="w-3.5 h-3.5" />
+                                </button>
+
+                                <div className="w-px h-8 bg-white/10 shrink-0" />
+
+                                {/* Share + Print + Fullscreen */}
+                                <button onClick={handleShareList} className="p-2 bg-white/5 border border-white/10 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition-all shrink-0" title="Compartilhar"><Share2 className="w-3.5 h-3.5" /></button>
+                                <button onClick={() => window.print()} className="p-2 bg-white/5 border border-white/10 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition-all shrink-0" title="Imprimir"><Printer className="w-3.5 h-3.5" /></button>
+                                <button onClick={() => { setIsImmersiveMode(!isImmersiveMode); setShowImmersiveControls(false); }} className={`p-2 rounded-xl border transition-all shrink-0 ${isImmersiveMode ? 'bg-[#B87333]/20 border-[#B87333] text-[#B87333]' : 'bg-white/5 border-white/10 text-slate-500 hover:text-white'}`} title={isImmersiveMode ? "Sair Tela Cheia" : "Tela Cheia"}>
+                                    {isImmersiveMode ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+                                </button>
+
                             </div>
                         </div>
+
+
 
                         <div className="flex-1 flex overflow-hidden relative">
                             {/* PLAYER PLAYLIST SIDEBAR — hidden in immersive mode */}
