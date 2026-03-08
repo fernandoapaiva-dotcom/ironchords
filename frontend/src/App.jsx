@@ -656,6 +656,7 @@ export default function App() {
     const [songs, setSongs] = useState([]);
     const [selectedManualIndex, setSelectedManualIndex] = useState(null);
     const [isFullScreenPlayer, setIsFullScreenPlayer] = useState(false);
+    const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
     const [isTransposing, setIsTransposing] = useState(false);
     const [isGenerating, setIsGenerating] = useState(false);
     const [forgeMessage, setForgeMessage] = useState("Forjando conteúdo...");
@@ -2618,18 +2619,29 @@ export default function App() {
 
                         <div className="flex-1 flex overflow-hidden">
                             {/* PLAYER PLAYLIST SIDEBAR */}
-                            <div className="w-80 bg-black/40 border-r border-white/5 flex flex-col p-6 space-y-6 shrink-0 relative no-print">
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center space-x-3">
-                                        <LayoutList className="w-4 h-4 text-[#B87333]" />
-                                        <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Fila de Execução</h3>
+                            <div className={`${isSidebarCollapsed ? 'w-20 px-3' : 'w-80 px-6'} bg-black/40 border-r border-white/5 flex flex-col py-6 space-y-6 shrink-0 relative no-print transition-all duration-300 ease-in-out`}>
+                                {/* Toggle Button */}
+                                <button
+                                    onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+                                    className="absolute -right-3 top-6 w-6 h-6 bg-[#B87333] hover:bg-orange-500 text-white rounded-full flex items-center justify-center shadow-[0_0_15px_rgba(184,115,51,0.5)] transition-all z-50 border border-white/20"
+                                    title={isSidebarCollapsed ? "Expandir Lista" : "Recolher Lista"}
+                                >
+                                    {isSidebarCollapsed ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronLeft className="w-3.5 h-3.5" />}
+                                </button>
+
+                                <div className={`flex items-center ${isSidebarCollapsed ? 'justify-center' : 'justify-between'}`}>
+                                    <div className="flex items-center space-x-3" title="Fila de Execução">
+                                        <LayoutList className="w-5 h-5 text-[#B87333] shrink-0" />
+                                        {!isSidebarCollapsed && <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] whitespace-nowrap overflow-hidden transition-all duration-300">Fila de Execução</h3>}
                                     </div>
-                                    <div className="flex bg-black/40 rounded-lg p-1 border border-white/5">
-                                        <button onClick={() => setShowPlaylistManager(!showPlaylistManager)} className={`p-1.5 rounded-md transition-all ${showPlaylistManager ? 'bg-[#B87333] text-white' : 'text-slate-600 hover:text-slate-400'}`}><Save className="w-3.5 h-3.5" /></button>
-                                    </div>
+                                    {!isSidebarCollapsed && (
+                                        <div className="flex bg-black/40 rounded-lg p-1 border border-white/5 shrink-0 transition-all duration-300">
+                                            <button onClick={() => setShowPlaylistManager(!showPlaylistManager)} className={`p-1.5 rounded-md transition-all ${showPlaylistManager ? 'bg-[#B87333] text-white' : 'text-slate-600 hover:text-slate-400'}`}><Save className="w-3.5 h-3.5" /></button>
+                                        </div>
+                                    )}
                                 </div>
 
-                                {showPlaylistManager && (
+                                {!isSidebarCollapsed && showPlaylistManager && (
                                     <div className="bg-[#B87333]/10 border border-[#B87333]/30 p-4 rounded-2xl animate-in slide-in-from-top-4 duration-300">
                                         <p className="text-[9px] font-black text-[#B87333] uppercase mb-3">Salvar Setlist</p>
                                         <div className="flex space-x-2">
@@ -2671,15 +2683,17 @@ export default function App() {
                                     </div>
                                 )}
 
-                                <div className="flex-1 overflow-y-auto space-y-3 pr-2 scrollbar-thin scrollbar-thumb-[#B87333]/20">
+                                <div className={`flex-1 overflow-y-auto space-y-3 scrollbar-thin scrollbar-thumb-[#B87333]/20 ${isSidebarCollapsed ? 'pr-0' : 'pr-2'}`}>
                                     {songs.map((s, idx) => (
-                                        <button key={idx} onClick={() => { setSelectedManualIndex(idx); setCurrentLineIndex(0); currentLineIndexRef.current = 0; }} className={`w-full p-4 rounded-2xl border transition-all text-left flex items-center space-x-4 group relative overflow-hidden ${selectedManualIndex === idx ? 'bg-[#B87333] border-[#B87333] shadow-lg shadow-[#B87333]/20' : 'bg-white/5 border-white/5 hover:border-[#B87333]/30'}`}>
+                                        <button key={idx} onClick={() => { setSelectedManualIndex(idx); setCurrentLineIndex(0); currentLineIndexRef.current = 0; }} className={`w-full ${isSidebarCollapsed ? 'p-2 justify-center' : 'p-4'} rounded-2xl border transition-all text-left flex items-center ${isSidebarCollapsed ? 'space-x-0' : 'space-x-4'} group relative overflow-hidden ${selectedManualIndex === idx ? 'bg-[#B87333] border-[#B87333] shadow-lg shadow-[#B87333]/20' : 'bg-white/5 border-white/5 hover:border-[#B87333]/30'}`} title={isSidebarCollapsed ? `${idx + 1}. ${s.song_name}` : ""}>
                                             <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-black text-xs shrink-0 transition-all ${selectedManualIndex === idx ? 'bg-white text-[#B87333]' : 'bg-black/60 text-slate-700 group-hover:text-white'}`}>{idx + 1}</div>
-                                            <div className="flex-1 min-w-0">
-                                                <p className={`text-[11px] font-black uppercase italic truncate tracking-tight transition-colors ${selectedManualIndex === idx ? 'text-white' : 'text-slate-400 group-hover:text-slate-200'}`}>{s.song_name}</p>
-                                                <p className={`text-[9px] font-bold uppercase truncate transition-colors ${selectedManualIndex === idx ? 'text-white/60' : 'text-slate-600'}`}>{s.artist_name}</p>
-                                            </div>
-                                            {selectedManualIndex === idx && <div className="absolute top-0 right-0 w-16 h-16 bg-white/5 rounded-bl-full -mr-6 -mt-6"></div>}
+                                            {!isSidebarCollapsed && (
+                                                <div className="flex-1 min-w-0 transition-all duration-300">
+                                                    <p className={`text-[11px] font-black uppercase italic truncate tracking-tight transition-colors ${selectedManualIndex === idx ? 'text-white' : 'text-slate-400 group-hover:text-slate-200'}`}>{s.song_name}</p>
+                                                    <p className={`text-[9px] font-bold uppercase truncate transition-colors ${selectedManualIndex === idx ? 'text-white/60' : 'text-slate-600'}`}>{s.artist_name}</p>
+                                                </div>
+                                            )}
+                                            {selectedManualIndex === idx && !isSidebarCollapsed && <div className="absolute top-0 right-0 w-16 h-16 bg-white/5 rounded-bl-full -mr-6 -mt-6"></div>}
                                         </button>
                                     ))}
                                 </div>
