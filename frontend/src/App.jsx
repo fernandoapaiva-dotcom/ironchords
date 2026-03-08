@@ -659,6 +659,9 @@ export default function App() {
     const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
     const [isTransposing, setIsTransposing] = useState(false);
     const [isGenerating, setIsGenerating] = useState(false);
+    const dragItem = useRef(null);
+    const dragOverItem = useRef(null);
+    const [dragOverIdx, setDragOverIdx] = useState(null);
     const [forgeMessage, setForgeMessage] = useState("Forjando conteúdo...");
     const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0 });
     const [downloadUrl, setDownloadUrl] = useState(null);
@@ -2046,6 +2049,40 @@ export default function App() {
         } catch (err) { alert(err); }
     };
 
+    const handleSort = () => {
+        if (dragItem.current === null || dragOverItem.current === null) return;
+        if (dragItem.current === dragOverItem.current) {
+            setDragOverIdx(null);
+            return;
+        }
+
+        const newSongs = [...songs];
+        const draggedSongContent = newSongs.splice(dragItem.current, 1)[0];
+        newSongs.splice(dragOverItem.current, 0, draggedSongContent);
+
+        // Adjust selectedManualIndex to follow the currently selected song
+        if (selectedManualIndex === dragItem.current) {
+            setSelectedManualIndex(dragOverItem.current);
+        } else if (
+            selectedManualIndex !== null &&
+            selectedManualIndex > dragItem.current &&
+            selectedManualIndex <= dragOverItem.current
+        ) {
+            setSelectedManualIndex(selectedManualIndex - 1);
+        } else if (
+            selectedManualIndex !== null &&
+            selectedManualIndex < dragItem.current &&
+            selectedManualIndex >= dragOverItem.current
+        ) {
+            setSelectedManualIndex(selectedManualIndex + 1);
+        }
+
+        dragItem.current = null;
+        dragOverItem.current = null;
+        setDragOverIdx(null);
+        setSongs(newSongs);
+    };
+
     const handleEditSave = async (e) => {
         if (e) e.preventDefault();
         try {
@@ -2685,7 +2722,17 @@ export default function App() {
 
                                 <div className={`flex-1 overflow-y-auto space-y-3 scrollbar-thin scrollbar-thumb-[#B87333]/20 ${isSidebarCollapsed ? 'pr-0' : 'pr-2'}`}>
                                     {songs.map((s, idx) => (
-                                        <button key={idx} onClick={() => { setSelectedManualIndex(idx); setCurrentLineIndex(0); currentLineIndexRef.current = 0; }} className={`w-full ${isSidebarCollapsed ? 'p-2 justify-center' : 'p-4'} rounded-2xl border transition-all text-left flex items-center ${isSidebarCollapsed ? 'space-x-0' : 'space-x-4'} group relative overflow-hidden ${selectedManualIndex === idx ? 'bg-[#B87333] border-[#B87333] shadow-lg shadow-[#B87333]/20' : 'bg-white/5 border-white/5 hover:border-[#B87333]/30'}`} title={isSidebarCollapsed ? `${idx + 1}. ${s.song_name}` : ""}>
+                                        <button
+                                            key={idx}
+                                            draggable={!isSidebarCollapsed}
+                                            onDragStart={() => (dragItem.current = idx)}
+                                            onDragEnter={() => { dragOverItem.current = idx; setDragOverIdx(idx); }}
+                                            onDragEnd={handleSort}
+                                            onDragOver={(e) => e.preventDefault()}
+                                            onClick={() => { setSelectedManualIndex(idx); setCurrentLineIndex(0); currentLineIndexRef.current = 0; }}
+                                            className={`w-full ${isSidebarCollapsed ? 'p-2 justify-center' : 'p-4'} rounded-2xl border transition-all text-left flex items-center ${isSidebarCollapsed ? 'space-x-0' : 'space-x-4'} group relative overflow-hidden ${selectedManualIndex === idx ? 'bg-[#B87333] border-[#B87333] shadow-lg shadow-[#B87333]/20' : 'bg-white/5 border-white/5 hover:border-[#B87333]/30'} ${dragOverIdx === idx ? (dragItem.current !== null && dragOverItem.current !== null && dragItem.current < dragOverItem.current ? 'border-b-4 border-b-orange-500' : 'border-t-4 border-t-orange-500') : ''} ${!isSidebarCollapsed ? 'cursor-grab active:cursor-grabbing' : ''}`}
+                                            title={isSidebarCollapsed ? `${idx + 1}. ${s.song_name}` : "Arraste para reordenar"}
+                                        >
                                             <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-black text-xs shrink-0 transition-all ${selectedManualIndex === idx ? 'bg-white text-[#B87333]' : 'bg-black/60 text-slate-700 group-hover:text-white'}`}>{idx + 1}</div>
                                             {!isSidebarCollapsed && (
                                                 <div className="flex-1 min-w-0 transition-all duration-300">
