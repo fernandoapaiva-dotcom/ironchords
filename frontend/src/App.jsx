@@ -1,7 +1,7 @@
 ﻿import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { PhoneticMatcher } from './utils/PhoneticMatcher';
-import { Music, UploadCloud, Plus, Minus, FileText, CheckCircle, AlertCircle, Eye, EyeOff, FileAudio, Info, X, Guitar, Settings2, Image as ImageIcon, Database, Edit3, Trash2, ArrowRight, Play, Maximize, Maximize2, Pause, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Download, ArrowLeft, SkipBack, SkipForward, Save, Share2, FolderHeart, Flame, Hammer, Sparkles, RefreshCw, Zap, ShieldCheck, Monitor, Tv, Check, LayoutList, Layout, Mic, Search, RotateCcw, Printer, Archive, GripVertical, Minimize2 } from 'lucide-react';
+import { Music, UploadCloud, Plus, Minus, FileText, CheckCircle, AlertCircle, Eye, EyeOff, FileAudio, Info, X, Guitar, Settings2, Image as ImageIcon, Database, Edit3, Trash2, ArrowRight, Play, Maximize, Maximize2, Pause, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Download, ArrowLeft, SkipBack, SkipForward, Save, Share2, FolderHeart, Flame, Hammer, Sparkles, RefreshCw, Zap, ShieldCheck, Monitor, Tv, Check, LayoutList, Layout, Mic, Search, RotateCcw, Printer, Archive, GripVertical, Minimize2, Link, MessageCircle, Mail, ExternalLink } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { SVGuitarChord } from 'svguitar';
 import { AudioTracker } from './utils/AudioTracker';
@@ -510,6 +510,147 @@ const TopNav = ({ current, onChange }) => (
     </div>
 );
 
+// -------------------------------------------------------------------
+// SHARE MODAL COMPONENT (Internal View)
+// -------------------------------------------------------------------
+const ShareModal = ({ isOpen, onClose, listName, link }) => {
+    if (!isOpen) return null;
+
+    const handleWhatsApp = () => {
+        const text = encodeURIComponent(`Olha esse repertório no IronChords: ${listName}\n\n${link}`);
+        window.open(`https://wa.me/?text=${text}`, '_blank');
+    };
+
+    const handleEmail = () => {
+        const subject = encodeURIComponent(`Repertório: ${listName}`);
+        const body = encodeURIComponent(`Olá, segue o link do repertório no IronChords:\n\n${link}`);
+        window.open(`mailto:?subject=${subject}&body=${body}`, '_blank');
+    };
+
+    const handleCopy = () => {
+        navigator.clipboard.writeText(link).then(() => {
+            alert("Link copiado!");
+        });
+    };
+
+    const handleNativeShare = async () => {
+        if (navigator.share) {
+            try {
+                await navigator.share({
+                    title: `IronChords - ${listName}`,
+                    text: 'Confira este repertório!',
+                    url: link,
+                });
+            } catch (err) { console.log("Share cancelado", err); }
+        } else {
+            handleCopy();
+        }
+    };
+
+    return createPortal(
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-[#070709]/90 backdrop-blur-xl animate-in fade-in duration-300" onClick={onClose} />
+            <div className="relative w-full max-w-md bg-[#16161D] border border-white/10 rounded-[40px] p-8 shadow-2xl animate-in zoom-in-95 duration-300">
+                <div className="flex items-center justify-between mb-8">
+                    <div className="flex items-center space-x-4">
+                        <div className="p-3 bg-blue-500/20 rounded-2xl border border-blue-500/30">
+                            <Share2 className="w-6 h-6 text-blue-400" />
+                        </div>
+                        <div>
+                            <h3 className="text-xl font-black text-white italic uppercase tracking-tighter">Compartilhar Lista</h3>
+                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{listName}</p>
+                        </div>
+                    </div>
+                    <button onClick={onClose} className="p-2 bg-white/5 hover:bg-white/10 rounded-xl transition-all"><X className="w-5 h-5 text-slate-400" /></button>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 mb-8">
+                    <button onClick={handleWhatsApp} className="flex flex-col items-center justify-center p-6 bg-green-500/10 hover:bg-green-500/20 border border-green-500/20 rounded-3xl transition-all group">
+                        <MessageCircle className="w-8 h-8 text-green-500 mb-3 group-hover:scale-110 transition-transform" />
+                        <span className="text-[9px] font-black text-green-500 uppercase">WhatsApp</span>
+                    </button>
+                    <button onClick={handleEmail} className="flex flex-col items-center justify-center p-6 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 rounded-3xl transition-all group">
+                        <Mail className="w-8 h-8 text-red-500 mb-3 group-hover:scale-110 transition-transform" />
+                        <span className="text-[9px] font-black text-red-500 uppercase">E-mail</span>
+                    </button>
+                </div>
+
+                <div className="space-y-3">
+                    <button onClick={handleCopy} className="w-full flex items-center justify-between p-4 bg-white/5 hover:bg-white/10 border border-white/5 rounded-2xl transition-all">
+                        <div className="flex items-center space-x-3">
+                            <Link className="w-4 h-4 text-slate-400" />
+                            <span className="text-xs font-bold text-white">Copiar Link</span>
+                        </div>
+                        <div className="text-[9px] font-black text-[#B87333] uppercase">Ctrl+C</div>
+                    </button>
+                    <button onClick={handleNativeShare} className="w-full flex items-center justify-between p-4 bg-[#B87333]/10 hover:bg-[#B87333]/20 border border-[#B87333]/20 rounded-2xl transition-all">
+                        <div className="flex items-center space-x-3">
+                            <ExternalLink className="w-4 h-4 text-[#B87333]" />
+                            <span className="text-xs font-bold text-white">Outras Redes</span>
+                        </div>
+                        <ArrowRight className="w-4 h-4 text-[#B87333]" />
+                    </button>
+                </div>
+            </div>
+        </div>,
+        document.body
+    );
+};
+
+// -------------------------------------------------------------------
+// IMPORT MODAL COMPONENT (Internal View)
+// -------------------------------------------------------------------
+const ImportModal = ({ data, onImport, onClose }) => {
+    if (!data) return null;
+
+    return createPortal(
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-[#070709]/95 backdrop-blur-2xl animate-in fade-in duration-300" />
+            <div className="relative w-full max-w-2xl bg-[#16161D] border border-white/10 rounded-[50px] overflow-hidden shadow-2xl animate-in slide-in-from-bottom-8 duration-500">
+                <div className="p-12">
+                    <div className="flex items-center space-x-6 mb-10">
+                        <div className="w-20 h-20 bg-orange-500/20 rounded-[30px] border border-orange-500/30 flex items-center justify-center">
+                            <Download className="w-10 h-10 text-orange-500" />
+                        </div>
+                        <div>
+                            <h3 className="text-4xl font-black text-white italic uppercase tracking-tighter">Importar Lista</h3>
+                            <p className="text-sm font-bold text-orange-500 uppercase tracking-[0.3em] mt-1">{data.name}</p>
+                        </div>
+                    </div>
+
+                    <p className="text-slate-400 text-lg font-medium mb-8 leading-relaxed">
+                        Você recebeu um repertório compartilhado contendo <span className="text-white font-black">{data.songs?.length} músicas</span>. Deseja carregar agora e salvar nos seus favoritos?
+                    </p>
+
+                    <div className="max-h-60 overflow-y-auto pr-4 mb-10 scrollbar-thin scrollbar-thumb-white/10">
+                        {data.songs?.map((s, i) => (
+                            <div key={i} className="flex items-center justify-between py-4 border-b border-white/5 last:border-0 hover:bg-white/5 px-4 rounded-2xl transition-all">
+                                <div>
+                                    <p className="text-white font-black uppercase italic tracking-tight">{s.song_name}</p>
+                                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{s.artist_name}</p>
+                                </div>
+                                <span className="text-xs font-black text-[#B87333] bg-[#B87333]/10 px-3 py-1 rounded-full uppercase italic">{s.song_key || 'C'}</span>
+                            </div>
+                        ))}
+                    </div>
+
+                    <div className="flex items-center space-x-4">
+                        <button onClick={() => onImport(data)} className="flex-1 py-6 bg-[#B87333] hover:bg-[#8B4513] text-white rounded-[24px] font-black uppercase text-sm tracking-widest shadow-xl shadow-[#B87333]/20 transition-all flex items-center justify-center space-x-3">
+                            <Check className="w-5 h-5" />
+                            <span>Importar Agora</span>
+                        </button>
+                        <button onClick={onClose} className="px-10 py-6 bg-white/5 hover:bg-white/10 text-slate-400 rounded-[24px] border border-white/10 font-black uppercase text-sm transition-all">
+                            Ignorar
+                        </button>
+                    </div>
+                </div>
+                <div className="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-[#B87333] to-transparent opacity-50"></div>
+            </div>
+        </div>,
+        document.body
+    );
+};
+
 export default function App() {
     const [activeTab, setActiveTab] = useState('manual');
     const [songs, setSongs] = useState([]);
@@ -605,6 +746,10 @@ export default function App() {
     const [selectedListsToAddTo, setSelectedListsToAddTo] = useState([]);
     const [showSaveSuccess, setShowSaveSuccess] = useState(false);
     const [showSaveConflict, setShowSaveConflict] = useState(false);
+
+    // Share & Import State
+    const [shareModalOpen, setShareModalOpen] = useState(false);
+    const [importData, setImportData] = useState(null); // { name, songs }
 
     // Deletion Modal State
     const [deleteModalOpen, setDeleteModalOpen] = useState(false);
@@ -804,9 +949,29 @@ export default function App() {
     const isPausedBySilenceRef = useRef(false);
     useEffect(() => { isPausedBySilenceRef.current = isPausedBySilence; }, [isPausedBySilence]);
 
+    // URL-Based Import Check
+    useEffect(() => {
+        const urlParams = new URLSearchParams(window.location.search);
+        const importDataB64 = urlParams.get('import');
+        if (importDataB64) {
+            try {
+                // Handle Base64 with UTF-8 support
+                const decoded = JSON.parse(decodeURIComponent(escape(atob(importDataB64))));
+                if (decoded && decoded.songs) {
+                    setImportData(decoded);
+                }
+                // Clear URL param without refreshing the page
+                window.history.replaceState({}, document.title, window.location.pathname);
+            } catch (err) {
+                console.error("Erro ao importar lista do link:", err);
+            }
+        }
+    }, []);
+
     // AutoScroll Effect with Mic interaction (Manual / Player / Presentation)
     useEffect(() => {
         let interval;
+
         const isPlayerViewActive = activeTab === 'presentation' || activeTab === 'player' || isFullScreenPlayer || mainNav === 'player';
         const isManualViewActive = activeTab === 'manual' && isManualAutoScrolling && manualScrollContainerRef.current;
 
@@ -1759,25 +1924,61 @@ export default function App() {
         setTimeout(() => setShowSaveSuccess(false), 2000);
     };
 
+    const getShareLink = () => {
+        if (songs.length === 0) return "";
+        try {
+            const data = JSON.stringify({
+                name: activePlaylistName || "Lista Compartilhada",
+                songs: songs.map(s => ({
+                    song_name: s.song_name,
+                    artist_name: s.artist_name,
+                    song_key: s.sounding_key || s.requested_key || s.song_key,
+                    capo: s.capo || 0,
+                    content: s.content || ''
+                }))
+            });
+            // Encode Base64 with UTF-8 support
+            const b64 = btoa(unescape(encodeURIComponent(data)));
+            return `${window.location.origin}${window.location.pathname}?import=${b64}`;
+        } catch (err) {
+            console.error("Erro ao gerar link de compartilhamento:", err);
+            return "";
+        }
+    };
+
     const handleShareList = () => {
         if (songs.length === 0) return;
-        const data = JSON.stringify({
-            name: activePlaylistName || "Lista Compartilhada",
-            songs: songs.map(s => ({
-                song_name: s.song_name,
-                artist_name: s.artist_name,
-                song_key: s.sounding_key || s.requested_key || s.song_key,
-                capo: s.capo || 0,
-                content: s.content || ''
-            }))
-        });
+        setShareModalOpen(true);
+    };
 
-        navigator.clipboard.writeText(data).then(() => {
-            alert("Lista copiada para a área de transferência! Você pode colar este código para compartilhar.");
-        }).catch(err => {
-            console.error("Erro ao copiar lista:", err);
-            alert("Erro ao copiar lista. Tente novamente.");
-        });
+    const handleImportList = (data) => {
+        if (!data || !data.songs) return;
+
+        const newList = {
+            id: Date.now().toString(),
+            name: data.name || "Lista Importada",
+            songs: data.songs.map(s => ({
+                ...s,
+                id: null,
+                sounding_key: s.song_key,
+                original_key: s.song_key
+            }))
+        };
+
+        const existing = JSON.parse(localStorage.getItem('iron_chords_playlists') || '[]');
+        const updated = [...existing, newList];
+        localStorage.setItem('iron_chords_playlists', JSON.stringify(updated));
+        setSavedPlaylists(updated);
+
+        setSongs(newList.songs);
+        setActivePlaylistName(newList.name);
+        setSelectedManualIndex(0);
+        setImportData(null);
+        setShowSaveSuccess(true);
+        setTimeout(() => setShowSaveSuccess(false), 2000);
+
+        setMainNav('escolha');
+        setActiveTab('player');
     };
 
     const handleEditOpen = async (id) => {
@@ -4457,6 +4658,19 @@ export default function App() {
                 </div>,
                 document.body
             )}
+
+            {/* Share and Import Modals */}
+            <ShareModal
+                isOpen={shareModalOpen}
+                onClose={() => setShareModalOpen(false)}
+                listName={activePlaylistName || "Repertório"}
+                link={getShareLink()}
+            />
+            <ImportModal
+                data={importData}
+                onClose={() => setImportData(null)}
+                onImport={handleImportList}
+            />
         </div>
     );
 }
