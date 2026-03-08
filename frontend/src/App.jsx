@@ -4319,8 +4319,10 @@ export default function App() {
                                                                 if (patch.include_tabs !== undefined && selectedManualIndex === si) {
                                                                     setIncludeTabs(patch.include_tabs);
                                                                 }
-                                                                if (patch.capo !== undefined && selectedManualIndex === si) {
-                                                                    setManualCapo(patch.capo);
+                                                                if (patch.capo !== undefined) {
+                                                                    const diff = (song.capo || 0) - patch.capo;
+                                                                    if (diff !== 0) transpose(diff);
+                                                                    if (selectedManualIndex === si) setManualCapo(patch.capo);
                                                                 }
                                                                 setEditingList(prev => {
                                                                     const s2 = [...prev.songs];
@@ -4332,24 +4334,38 @@ export default function App() {
                                                                 try {
                                                                     if (targetKey !== null) {
                                                                         // Dropdown: always transpose from the ORIGINAL content/key
-                                                                        const origKey = song._orig_key || song.sounding_key || song.song_key || 'C';
-                                                                        const origContent = song._orig_content || song.content || '';
-                                                                        const diff = ((KEY_SEMITONES[targetKey] ?? 0) - (KEY_SEMITONES[origKey] ?? 0) + 12) % 12;
-                                                                        if (diff === 0) { updateSong({ song_key: targetKey, sounding_key: targetKey, content: origContent }); return; }
-                                                                        const res = await fetch(`${API_BASE_URL}/api/transpose`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: origContent, current_key: origKey, semitones: diff }) });
+                                                                        const origKeyStr = song._orig_key || song.sounding_key || song.song_key || 'C';
+                                                                        const match = origKeyStr.match(/^[A-G][b#]?/);
+                                                                        const root = match ? match[0] : 'C';
+
+                                                                        const targetMatch = targetKey.match(/^[A-G][b#]?/);
+                                                                        const targetRoot = targetMatch ? targetMatch[0] : 'C';
+
+                                                                        const diff = ((KEY_SEMITONES[targetRoot] ?? 0) - (KEY_SEMITONES[root] ?? 0) + 12) % 12;
+
+                                                                        if (diff === 0) {
+                                                                            updateSong({ song_key: targetKey, sounding_key: targetKey, content: song._orig_content || song.content });
+                                                                            return;
+                                                                        }
+
+                                                                        const res = await fetch(`${API_BASE_URL}/api/transpose`, {
+                                                                            method: 'POST',
+                                                                            headers: { 'Content-Type': 'application/json' },
+                                                                            body: JSON.stringify({ content: song._orig_content || song.content || '', current_key: origKeyStr, semitones: diff })
+                                                                        });
                                                                         const d = await res.json();
                                                                         if (d.transposed_content) updateSong({ content: d.transposed_content, sounding_key: targetKey, song_key: targetKey });
                                                                     } else {
                                                                         // ♭/♯ buttons: transpose incrementally from current content
                                                                         const currentKey = song.sounding_key || song.song_key || 'C';
-                                                                        const res = await fetch(`${API_BASE_URL}/api/transpose`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: song.content, current_key: currentKey, semitones }) });
+                                                                        const res = await fetch(`${API_BASE_URL}/api/transpose`, {
+                                                                            method: 'POST',
+                                                                            headers: { 'Content-Type': 'application/json' },
+                                                                            body: JSON.stringify({ content: song.content, current_key: currentKey, semitones })
+                                                                        });
                                                                         const d = await res.json();
                                                                         if (d.transposed_content) {
-                                                                            setEditingList(prev => {
-                                                                                const s2 = [...prev.songs];
-                                                                                s2[si] = { ...s2[si], content: d.transposed_content, sounding_key: d.new_key, song_key: d.new_key, _orig_key: d.new_key, _orig_content: d.transposed_content };
-                                                                                return { ...prev, songs: s2 };
-                                                                            });
+                                                                            updateSong({ content: d.transposed_content, sounding_key: d.new_key, song_key: d.new_key });
                                                                         }
                                                                     }
                                                                 } catch (e) { console.error(e); }
@@ -4398,7 +4414,7 @@ export default function App() {
                                                                             {/* Row 2: Key + Capo + Tabs + Transpose + Actions */}
                                                                             <div className="flex items-end flex-wrap gap-3">
                                                                                 <div>
-                                                                                    <label className="block text-[10px] font-black uppercase text-slate-500 mb-1.5 tracking-widest">Tom Original</label>
+                                                                                    <label className="block text-[10px] font-black uppercase text-slate-500 mb-1.5 tracking-widest">Tom da Cifra</label>
                                                                                     <select value={song.sounding_key || song.song_key || 'C'} onChange={e => transpose(0, e.target.value)} className="bg-black/60 border border-white/10 rounded-xl px-4 py-2.5 text-white font-bold text-sm outline-none cursor-pointer appearance-none">
                                                                                         {KEYS.map(k => <option key={k} value={k}>{k}</option>)}
                                                                                     </select>
@@ -4408,6 +4424,12 @@ export default function App() {
                                                                                     <select value={song.capo || 0} onChange={e => updateSong({ capo: Number(e.target.value) })} className="bg-black/60 border border-white/10 rounded-xl px-4 py-2.5 text-white font-bold text-sm outline-none cursor-pointer appearance-none">
                                                                                         {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map(n => <option key={n} value={n}>Capo {n}</option>)}
                                                                                     </select>
+                                                                                </div>
+                                                                                <div>
+                                                                                    <label className="block text-[10px] font-black uppercase text-slate-500 mb-1.5 tracking-widest">Reset</label>
+                                                                                    <button onClick={() => updateSong({ content: song._orig_content, sounding_key: song._orig_key, song_key: song._orig_key, capo: 0 })} className="p-2.5 bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white rounded-xl border border-white/10 transition-all" title="Resetar para o original desta lista">
+                                                                                        <RefreshCw className="w-4 h-4" />
+                                                                                    </button>
                                                                                 </div>
                                                                                 <div>
                                                                                     <label className="block text-[10px] font-black uppercase text-slate-500 mb-1.5 tracking-widest">Tablatura</label>
