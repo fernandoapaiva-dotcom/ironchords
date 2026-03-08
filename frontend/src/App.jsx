@@ -1,4 +1,4 @@
-﻿import React, { useState, useRef, useEffect } from 'react';
+﻿import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { PhoneticMatcher } from './utils/PhoneticMatcher';
 import { Music, UploadCloud, Plus, Minus, FileText, CheckCircle, AlertCircle, Eye, EyeOff, FileAudio, Info, X, Guitar, Settings2, Image as ImageIcon, Database, Edit3, Trash2, ArrowRight, Play, Maximize, Maximize2, Pause, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Download, ArrowLeft, SkipBack, SkipForward, Save, Share2, FolderHeart, Flame, Hammer, Sparkles, RefreshCw, Zap, ShieldCheck, Monitor, Tv, Check, LayoutList, Layout, Mic, Search, RotateCcw, Printer, Archive, GripVertical, Minimize2, Link, MessageCircle, Mail, ExternalLink } from 'lucide-react';
@@ -821,6 +821,7 @@ export default function App() {
     const [isDynamicSpeedActive, setIsDynamicSpeedActive] = useState(false);
     const [scrollSpeed, setScrollSpeed] = useState(1);
     const scrollContainerRef = useRef(null);
+    const wasInPlayerRef = useRef(false);
 
 
     // Save List State
@@ -1998,10 +1999,13 @@ export default function App() {
         return () => clearTimeout(delayDebounceFn);
     }, [songName]);
 
-    const resetSearchSession = () => {
+    const resetSearchSession = useCallback(() => {
         setSongName('');
         setArtistName('');
         setSuggestions([]);
+        setSongs([]);
+        setPlayerSongSearch('');
+        setPlayerSongSuggestions([]);
         setSongKey('C');
         setSongVersion('Principal');
         setAvailableVersions([{ name: 'Principal', key: 'Principal' }]);
@@ -2015,7 +2019,16 @@ export default function App() {
         setCurrentLineIndex(0);
         if (currentLineIndexRef) currentLineIndexRef.current = 0;
         if (scrollContainerRef.current) scrollContainerRef.current.scrollTop = 0;
-    };
+    }, []);
+
+    // Automated Session Reset on Player Exit
+    useEffect(() => {
+        const isInPlayer = isFullScreenPlayer || activeTab === 'player' || mainNav === 'player';
+        if (wasInPlayerRef.current && !isInPlayer) {
+            resetSearchSession();
+        }
+        wasInPlayerRef.current = isInPlayer;
+    }, [isFullScreenPlayer, activeTab, mainNav, resetSearchSession]);
 
     const fetchSuggestions = async (name) => {
         try {
@@ -3403,8 +3416,10 @@ export default function App() {
                                                                     <span className="text-[10px] font-black uppercase tracking-widest">Buscando cifra...</span>
                                                                 </div>
                                                             )}
-                                                            {/* Hidden submit for keyboard Enter support */}
-                                                            <button type="submit" disabled={manualLoading} className="sr-only" aria-hidden="true">Buscar</button>
+                                                            <div className="flex items-center space-x-3">
+                                                                <button type="submit" disabled={manualLoading} className="flex-1 py-4 bg-[#B87333] hover:bg-[#8B4513] text-white rounded-2xl font-black uppercase text-[10px] tracking-widest transition-all active:scale-95">Buscar</button>
+                                                                <button type="button" onClick={resetSearchSession} className="p-4 bg-white/5 hover:bg-red-500/10 border border-white/10 hover:border-red-500/20 rounded-2xl text-slate-500 hover:text-red-500 transition-all" title="Limpar Sessão"><Trash2 className="w-4 h-4" /></button>
+                                                            </div>
                                                         </div>
                                                     </form>
 
@@ -3580,6 +3595,13 @@ export default function App() {
 
                                                                         {/* Fullscreen/Exit/Print */}
                                                                         <div className="flex items-center space-x-2">
+                                                                            <button
+                                                                                onClick={resetSearchSession}
+                                                                                className="w-10 h-10 bg-white/5 hover:bg-red-500/10 text-slate-400 hover:text-red-500 rounded-xl transition-all border border-white/5 flex items-center justify-center"
+                                                                                title="Limpar Sessão (Nova Busca)"
+                                                                            >
+                                                                                <Trash2 className="w-5 h-5" />
+                                                                            </button>
                                                                             <button
                                                                                 onClick={handlePrint}
                                                                                 className="w-10 h-10 bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white rounded-xl transition-all border border-white/5 flex items-center justify-center"
