@@ -825,6 +825,11 @@ export default function App() {
     const [deleteModalOpen, setDeleteModalOpen] = useState(false);
     const [deleteTarget, setDeleteTarget] = useState({ type: '', id: null, name: '' });
 
+    // Player Versions State
+    const [currentPlayerVersions, setCurrentPlayerVersions] = useState([]);
+    const [isPlayerVersionsOpen, setIsPlayerVersionsOpen] = useState(false);
+    const [playerVersionLoading, setPlayerVersionLoading] = useState(false);
+
     const saveOneChordToAcervo = async (song, force = false) => {
         // Prepare song data
         const songToSave = {
@@ -2140,6 +2145,67 @@ export default function App() {
         }
     }, [selectedManualIndex]);
 
+    // FETCH VERSIONS FOR PLAYER
+    useEffect(() => {
+        const fetchPlayerVersions = async () => {
+            const isPlayerVisible = isFullScreenPlayer || activeTab === 'player' || mainNav === 'player' || isManualFullscreen;
+            if (!isPlayerVisible || selectedManualIndex === null || !songs[selectedManualIndex]) {
+                setCurrentPlayerVersions([]);
+                return;
+            }
+            const s = songs[selectedManualIndex];
+            const artistSlug = s.artist_name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+            const songSlug = s.song_name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+
+            try {
+                const res = await fetch(`${API_BASE_URL}/api/song/versions?artist_slug=${artistSlug}&song_slug=${songSlug}`);
+                const data = await res.json();
+                setCurrentPlayerVersions(data.versions || []);
+            } catch (err) {
+                console.error("Erro ao buscar versões no player:", err);
+                setCurrentPlayerVersions([]);
+            }
+        };
+        fetchPlayerVersions();
+    }, [activeTab, mainNav, isFullScreenPlayer, isManualFullscreen, selectedManualIndex, songs[selectedManualIndex]?.song_name]);
+
+    const handleSwitchVersion = async (versionKey) => {
+        if (selectedManualIndex === null || !songs[selectedManualIndex]) return;
+        setPlayerVersionLoading(true);
+        setIsPlayerVersionsOpen(false);
+        const s = songs[selectedManualIndex];
+
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/music/manual`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    song_name: s.song_name,
+                    artist_name: s.artist_name,
+                    version: versionKey,
+                    force_refresh: true
+                })
+            });
+            const data = await res.json();
+            if (data.content) {
+                const updatedSongs = [...songs];
+                updatedSongs[selectedManualIndex] = {
+                    ...updatedSongs[selectedManualIndex],
+                    content: data.content,
+                    song_key: data.key || s.song_key,
+                    original_key: data.key || s.song_key,
+                    sounding_key: data.key || s.song_key,
+                    capo: 0 // Reset capo on version switch as it usually needs a fresh look
+                };
+                setSongs(updatedSongs);
+            }
+        } catch (err) {
+            console.error("Erro ao trocar versão:", err);
+        } finally {
+            setPlayerVersionLoading(false);
+        }
+    };
+
     const getShareLink = () => {
         if (songs.length === 0) return "";
         try {
@@ -2780,6 +2846,46 @@ export default function App() {
                                     <span className="text-xs font-black text-white w-4 text-center">{playerFontSize}</span>
                                     <button onClick={() => setPlayerFontSize(p => Math.min(45, p + 1))} className="p-0.5 text-slate-500 hover:text-white transition-all"><Plus className="w-3 h-3" /></button>
                                 </div>
+
+                                {currentPlayerVersions.length > 1 && (
+                                    <div className="relative shrink-0 no-print">
+                                        <button
+                                            onClick={() => setIsPlayerVersionsOpen(!isPlayerVersionsOpen)}
+                                            className={`flex items-center space-x-2 px-3 py-1.5 rounded-lg border transition-all ${isPlayerVersionsOpen ? 'bg-[#B87333] border-[#B87333] text-white' : 'bg-white/5 border-white/10 text-slate-400 hover:text-white'}`}
+                                            title="Versões Disponíveis"
+                                        >
+                                            {playerVersionLoading ? (
+                                                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                                            ) : (
+                                                <Layout className="w-3.5 h-3.5" />
+                                            )}
+                                            <span className="text-[10px] font-black uppercase tracking-widest">Versões</span>
+                                            <ChevronDown className={`w-3 h-3 transition-transform ${isPlayerVersionsOpen ? 'rotate-180' : ''}`} />
+                                        </button>
+
+                                        {isPlayerVersionsOpen && (
+                                            <div className="absolute top-full mt-2 left-0 min-w-[200px] bg-[#12121A] border border-white/10 rounded-xl shadow-2xl overflow-hidden z-[110] animate-in fade-in slide-in-from-top-2 duration-200">
+                                                <div className="p-2 border-b border-white/5 bg-white/5">
+                                                    <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Opções de Cifra</span>
+                                                </div>
+                                                <div className="max-h-64 overflow-y-auto scrollbar-thin scrollbar-thumb-white/10">
+                                                    {currentPlayerVersions.map((v, i) => (
+                                                        <button
+                                                            key={v.key || i}
+                                                            onClick={() => handleSwitchVersion(v.key)}
+                                                            className="w-full px-4 py-3 flex items-center justify-between group hover:bg-[#B87333]/10 transition-all border-b border-white/5 last:border-0"
+                                                        >
+                                                            <span className="text-xs font-bold text-slate-300 group-hover:text-white">{v.name}</span>
+                                                            <div className="w-1.5 h-1.5 rounded-full bg-slate-800 group-hover:bg-[#B87333] shadow-[0_0_5px_rgba(184,115,51,0.5)] transition-all"></div>
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                        {/* Click outside to close */}
+                                        {isPlayerVersionsOpen && <div className="fixed inset-0 z-[105]" onClick={() => setIsPlayerVersionsOpen(false)} />}
+                                    </div>
+                                )}
 
                                 {/* Tabs */}
                                 <button onClick={() => setIncludeTabs(!includeTabs)} className={`p-2 rounded-lg border transition-all shrink-0 ${includeTabs ? 'bg-[#B87333]/20 border-[#B87333] text-[#B87333]' : 'bg-white/5 border-white/10 text-slate-600 hover:text-slate-400'}`} title={includeTabs ? "Ocultar Tabs" : "Mostrar Tabs"}>
