@@ -2374,6 +2374,9 @@ export default function App() {
                     sounding_key: data.sounding_key || data.original_key || '',
                     requested_key: data.requested_key || data.original_key || '',
                     original_key: data.original_key || '',
+                    song_key: data.song_key || data.original_key || '',
+                    _orig_key: data.original_key || data.song_key || '',
+                    _orig_content: data.content || '',
                     capo: data.capo || 0,
                     include_tabs: true
                 };
@@ -2408,6 +2411,9 @@ export default function App() {
                     sounding_key: data.sounding_key || data.original_key || '',
                     original_key: data.original_key || s.original_key,
                     requested_key: data.original_key || s.original_key,
+                    song_key: data.original_key || s.original_key,
+                    _orig_key: data.original_key || s.original_key,
+                    _orig_content: data.content || s.content,
                     capo: 0
                 };
                 const next = [...songs];
@@ -2539,6 +2545,8 @@ export default function App() {
                 requested_key: data.requested_key || data.original_key || '',
                 original_key: data.original_key || '',
                 song_key: data.original_key || data.requested_key || '',
+                _orig_key: data.original_key || data.requested_key || '',
+                _orig_content: data.content || '',
                 capo: data.capo || manualCapo
             };
             setManualPreviewSong(newSong);
@@ -3528,16 +3536,35 @@ export default function App() {
                                                                             <span className="text-[7px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Tom</span>
                                                                             <div className="flex items-center space-x-1.5 bg-black/40 p-1 rounded-lg border border-white/5">
                                                                                 <button onClick={async () => {
-                                                                                    const currentKeyToUse = manualPreviewSong.sounding_key || manualPreviewSong.song_key || 'C';
+                                                                                    const currentKey = manualPreviewSong.sounding_key || manualPreviewSong.song_key || 'C';
+                                                                                    const origKeyStr = manualPreviewSong._orig_key || manualPreviewSong.song_key || currentKey;
+                                                                                    const origContent = manualPreviewSong._orig_content || manualPreviewSong.content || '';
+
+                                                                                    // Calculate new target key
+                                                                                    const match = currentKey.match(/^[A-G][b#]?/);
+                                                                                    const root = match ? match[0] : 'C';
+                                                                                    const currentIdx = KEYS.indexOf(root);
+                                                                                    let newTargetKey = currentKey;
+                                                                                    if (currentIdx !== -1) {
+                                                                                        const newIdx = (currentIdx - 1 + 12) % 12;
+                                                                                        newTargetKey = currentKey.replace(root, NOTES[newIdx]);
+                                                                                    }
+
+                                                                                    const matchOrig = origKeyStr.match(/^[A-G][b#]?/);
+                                                                                    const rootOrig = matchOrig ? matchOrig[0] : 'C';
+                                                                                    const targetMatch = newTargetKey.match(/^[A-G][b#]?/);
+                                                                                    const targetRoot = targetMatch ? targetMatch[0] : 'C';
+                                                                                    const diff = ((KEY_SEMITONES[targetRoot] ?? 0) - (KEY_SEMITONES[rootOrig] ?? 0) + 12) % 12;
+
                                                                                     try {
                                                                                         const res = await fetch(`${API_BASE_URL}/api/transpose`, {
                                                                                             method: 'POST',
                                                                                             headers: { 'Content-Type': 'application/json' },
-                                                                                            body: JSON.stringify({ content: manualPreviewSong.content, current_key: currentKeyToUse, semitones: -1 })
+                                                                                            body: JSON.stringify({ content: origContent, current_key: origKeyStr, semitones: diff })
                                                                                         });
                                                                                         const data = await res.json();
                                                                                         if (data.transposed_content) {
-                                                                                            setManualPreviewSong({ ...manualPreviewSong, content: data.transposed_content, sounding_key: data.new_key });
+                                                                                            setManualPreviewSong({ ...manualPreviewSong, content: data.transposed_content, sounding_key: newTargetKey });
                                                                                         }
                                                                                     } catch (err) { console.error(err); }
                                                                                 }} className="p-1 text-slate-500 hover:text-white transition-all"><ChevronDown className="w-3 h-3" /></button>
@@ -3546,16 +3573,35 @@ export default function App() {
                                                                                     <span className="text-[7px] font-black text-slate-700 uppercase tracking-widest mt-0.5">({manualPreviewSong.original_key || manualPreviewSong.song_key})</span>
                                                                                 </div>
                                                                                 <button onClick={async () => {
-                                                                                    const currentKeyToUse = manualPreviewSong.sounding_key || manualPreviewSong.song_key || 'C';
+                                                                                    const currentKey = manualPreviewSong.sounding_key || manualPreviewSong.song_key || 'C';
+                                                                                    const origKeyStr = manualPreviewSong._orig_key || manualPreviewSong.song_key || currentKey;
+                                                                                    const origContent = manualPreviewSong._orig_content || manualPreviewSong.content || '';
+
+                                                                                    // Calculate new target key
+                                                                                    const match = currentKey.match(/^[A-G][b#]?/);
+                                                                                    const root = match ? match[0] : 'C';
+                                                                                    const currentIdx = KEYS.indexOf(root);
+                                                                                    let newTargetKey = currentKey;
+                                                                                    if (currentIdx !== -1) {
+                                                                                        const newIdx = (currentIdx + 1) % 12;
+                                                                                        newTargetKey = currentKey.replace(root, NOTES[newIdx]);
+                                                                                    }
+
+                                                                                    const matchOrig = origKeyStr.match(/^[A-G][b#]?/);
+                                                                                    const rootOrig = matchOrig ? matchOrig[0] : 'C';
+                                                                                    const targetMatch = newTargetKey.match(/^[A-G][b#]?/);
+                                                                                    const targetRoot = targetMatch ? targetMatch[0] : 'C';
+                                                                                    const diff = ((KEY_SEMITONES[targetRoot] ?? 0) - (KEY_SEMITONES[rootOrig] ?? 0) + 12) % 12;
+
                                                                                     try {
                                                                                         const res = await fetch(`${API_BASE_URL}/api/transpose`, {
                                                                                             method: 'POST',
                                                                                             headers: { 'Content-Type': 'application/json' },
-                                                                                            body: JSON.stringify({ content: manualPreviewSong.content, current_key: currentKeyToUse, semitones: 1 })
+                                                                                            body: JSON.stringify({ content: origContent, current_key: origKeyStr, semitones: diff })
                                                                                         });
                                                                                         const data = await res.json();
                                                                                         if (data.transposed_content) {
-                                                                                            setManualPreviewSong({ ...manualPreviewSong, content: data.transposed_content, sounding_key: data.new_key });
+                                                                                            setManualPreviewSong({ ...manualPreviewSong, content: data.transposed_content, sounding_key: newTargetKey });
                                                                                         }
                                                                                     } catch (err) { console.error(err); }
                                                                                 }} className="p-1 text-slate-500 hover:text-white transition-all"><ChevronUp className="w-3 h-3" /></button>
@@ -3582,7 +3628,12 @@ export default function App() {
                                                                         <button
                                                                             onClick={() => {
                                                                                 if (manualPreviewSong && !songs.some(s => s.song_name === manualPreviewSong.song_name && s.artist_name === manualPreviewSong.artist_name)) {
-                                                                                    setSongs(prev => [...prev, manualPreviewSong]);
+                                                                                    const toAdd = {
+                                                                                        ...manualPreviewSong,
+                                                                                        _orig_key: manualPreviewSong._orig_key || manualPreviewSong.song_key || manualPreviewSong.original_key || 'C',
+                                                                                        _orig_content: manualPreviewSong._orig_content || manualPreviewSong.content || ''
+                                                                                    };
+                                                                                    setSongs(prev => [...prev, toAdd]);
                                                                                 }
                                                                                 setSongName('');
                                                                                 setArtistName('');
@@ -3897,7 +3948,11 @@ export default function App() {
                                                                 </div>
                                                                 <div className="flex items-center space-x-4">
                                                                     <button onClick={() => {
-                                                                        setSongs([...songs, ...batchResults.filter(r => r.status === 'success')]);
+                                                                        setSongs([...songs, ...batchResults.filter(r => r.status === 'success').map(r => ({
+                                                                            ...r,
+                                                                            _orig_key: r.original_key || r.requested_key || 'C',
+                                                                            _orig_content: r.content || ''
+                                                                        }))]);
                                                                         setShowBatchReview(false);
                                                                         setBatchResults([]);
                                                                     }} className="px-6 py-3 bg-[#B87333] text-white font-black uppercase text-[10px] italic rounded-xl shadow-lg shadow-[#B87333]/20 hover:bg-[#8B4513] transition-all flex items-center">
@@ -4280,7 +4335,16 @@ export default function App() {
                                                                                     }
                                                                                 }
                                                                             }
-                                                                            setSongs([...songs, { ...item, requested_key: item.song_key, sounding_key: s_key, capo: item.capo || 0, show_chords: true, include_tabs: item.include_tabs ?? true }]);
+                                                                            setSongs([...songs, {
+                                                                                ...item,
+                                                                                requested_key: item.song_key,
+                                                                                sounding_key: s_key,
+                                                                                _orig_key: item.song_key,
+                                                                                _orig_content: item.content || '',
+                                                                                capo: item.capo || 0,
+                                                                                show_chords: true,
+                                                                                include_tabs: item.include_tabs ?? true
+                                                                            }]);
                                                                         }} className="w-10 h-10 bg-white/5 hover:bg-[#B87333] text-slate-500 hover:text-white rounded-xl flex items-center justify-center transition-all border border-white/5 active:scale-90" title="Adicionar à Forja">
                                                                             <Plus className="w-4 h-4" />
                                                                         </button>
@@ -4528,41 +4592,48 @@ export default function App() {
                                                             };
                                                             const transpose = async (semitones, targetKey = null) => {
                                                                 try {
-                                                                    if (targetKey !== null) {
-                                                                        // Dropdown: always transpose from the ORIGINAL content/key
-                                                                        const origKeyStr = song._orig_key || song.sounding_key || song.song_key || 'C';
-                                                                        const match = origKeyStr.match(/^[A-G][b#]?/);
+                                                                    const currentKey = song.sounding_key || song.song_key || 'C';
+                                                                    const origKeyStr = song._orig_key || song.song_key || currentKey;
+                                                                    const origContent = song._orig_content || song.content || '';
+
+                                                                    let newTargetKey = targetKey;
+                                                                    if (newTargetKey === null) {
+                                                                        // ♭/♯ buttons: calculate new target from current sounding_key
+                                                                        const match = currentKey.match(/^[A-G][b#]?/);
                                                                         const root = match ? match[0] : 'C';
-
-                                                                        const targetMatch = targetKey.match(/^[A-G][b#]?/);
-                                                                        const targetRoot = targetMatch ? targetMatch[0] : 'C';
-
-                                                                        const diff = ((KEY_SEMITONES[targetRoot] ?? 0) - (KEY_SEMITONES[root] ?? 0) + 12) % 12;
-
-                                                                        if (diff === 0) {
-                                                                            updateSong({ song_key: targetKey, sounding_key: targetKey, content: song._orig_content || song.content });
-                                                                            return;
+                                                                        const currentIdx = KEYS.indexOf(root);
+                                                                        if (currentIdx !== -1) {
+                                                                            const newIdx = (currentIdx + semitones + 12) % 12; // Use first 12 (sharps)
+                                                                            newTargetKey = currentKey.replace(root, NOTES[newIdx]);
+                                                                        } else {
+                                                                            // fallback for flats if not in NOTES (though they shouldn't be here)
+                                                                            const flatIdx = KEY_SEMITONES[root] || 0;
+                                                                            const newIdx = (flatIdx + semitones + 12) % 12;
+                                                                            newTargetKey = currentKey.replace(root, NOTES[newIdx]);
                                                                         }
+                                                                    }
 
-                                                                        const res = await fetch(`${API_BASE_URL}/api/transpose`, {
-                                                                            method: 'POST',
-                                                                            headers: { 'Content-Type': 'application/json' },
-                                                                            body: JSON.stringify({ content: song._orig_content || song.content || '', current_key: origKeyStr, semitones: diff })
-                                                                        });
-                                                                        const d = await res.json();
-                                                                        if (d.transposed_content) updateSong({ content: d.transposed_content, sounding_key: targetKey, song_key: targetKey });
-                                                                    } else {
-                                                                        // ♭/♯ buttons: transpose incrementally from current content
-                                                                        const currentKey = song.sounding_key || song.song_key || 'C';
-                                                                        const res = await fetch(`${API_BASE_URL}/api/transpose`, {
-                                                                            method: 'POST',
-                                                                            headers: { 'Content-Type': 'application/json' },
-                                                                            body: JSON.stringify({ content: song.content, current_key: currentKey, semitones })
-                                                                        });
-                                                                        const d = await res.json();
-                                                                        if (d.transposed_content) {
-                                                                            updateSong({ content: d.transposed_content, sounding_key: d.new_key, song_key: d.new_key });
-                                                                        }
+                                                                    // Always transpose from ORIGINAL
+                                                                    const matchOrig = origKeyStr.match(/^[A-G][b#]?/);
+                                                                    const rootOrig = matchOrig ? matchOrig[0] : 'C';
+                                                                    const targetMatch = newTargetKey.match(/^[A-G][b#]?/);
+                                                                    const targetRoot = targetMatch ? targetMatch[0] : 'C';
+
+                                                                    const diff = ((KEY_SEMITONES[targetRoot] ?? 0) - (KEY_SEMITONES[rootOrig] ?? 0) + 12) % 12;
+
+                                                                    if (diff === 0) {
+                                                                        updateSong({ sounding_key: newTargetKey, song_key: newTargetKey, content: origContent });
+                                                                        return;
+                                                                    }
+
+                                                                    const res = await fetch(`${API_BASE_URL}/api/transpose`, {
+                                                                        method: 'POST',
+                                                                        headers: { 'Content-Type': 'application/json' },
+                                                                        body: JSON.stringify({ content: origContent, current_key: origKeyStr, semitones: diff })
+                                                                    });
+                                                                    const d = await res.json();
+                                                                    if (d.transposed_content) {
+                                                                        updateSong({ content: d.transposed_content, sounding_key: newTargetKey, song_key: newTargetKey });
                                                                     }
                                                                 } catch (e) { console.error(e); }
                                                             };

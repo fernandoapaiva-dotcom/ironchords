@@ -4,10 +4,16 @@ NOTES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
 FLAT_TO_SHARP = {"Db": "C#", "Eb": "D#", "Gb": "F#", "Ab": "G#", "Bb": "A#"}
 
 def normalize_note(note: str) -> str:
-    return FLAT_TO_SHARP.get(note, note)
+    if not note: return note
+    # Standardize to Title Case for 2-char notes (e.g. ab -> Ab, d# -> D#)
+    if len(note) > 1:
+        n = note[0].upper() + note[1:].lower()
+    else:
+        n = note.upper()
+    return FLAT_TO_SHARP.get(n, n)
 
 def get_note_index(note: str) -> int:
-    n = normalize_note(note.upper())
+    n = normalize_note(note)
     if n in NOTES:
         return NOTES.index(n)
     return -1
