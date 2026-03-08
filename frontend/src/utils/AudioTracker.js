@@ -60,7 +60,24 @@ export class AudioTracker {
 
             this.pitchAnalyser = this.audioContext.createAnalyser();
             this.pitchAnalyser.fftSize = 2048;
-            this.gainNode.connect(this.pitchAnalyser);
+
+            // Voice-focused bandpass filter: keep only vocal range (80Hz - 1100Hz)
+            // High-pass: cuts sub-bass and deep guitar rumble
+            this.voiceHighPass = this.audioContext.createBiquadFilter();
+            this.voiceHighPass.type = 'highpass';
+            this.voiceHighPass.frequency.value = 80;  // cut below 80Hz
+            this.voiceHighPass.Q.value = 1.0;
+
+            // Low-pass: cuts high-frequency guitar string harmonics & cymbals
+            this.voiceLowPass = this.audioContext.createBiquadFilter();
+            this.voiceLowPass.type = 'lowpass';
+            this.voiceLowPass.frequency.value = 1100; // cut above 1100Hz
+            this.voiceLowPass.Q.value = 1.0;
+
+            // Chain: gain → highpass → lowpass → pitchAnalyser
+            this.gainNode.connect(this.voiceHighPass);
+            this.voiceHighPass.connect(this.voiceLowPass);
+            this.voiceLowPass.connect(this.pitchAnalyser);
 
             // WebSocket is OPTIONAL — if it fails, mic + speech still work
             try {
@@ -318,12 +335,17 @@ export class AudioTracker {
 
         // We run a secondary tight loop to avoid clogging the main one
         let lastPitchTick = 0;
+        // Smoothing: rolling average with exponential weight
+        let smoothCents = 0;
+        let lastNoteStr = null;
+        const SMOOTH_ALPHA = 0.2; // lower = smoother/slower, 0.2 = gentle
+        const DEAD_ZONE = 8; // cents, small fluctuations in this range are ignored
 
         const checkPitch = (timestamp) => {
             if (!this.isMicActive) return;
 
-            // Limit pitch detection frequency to save CPU (~15fps is enough for visual gauge)
-            if (timestamp - lastPitchTick > 60) {
+            // Slow down the update rate: 120ms ≈ ~8fps is enough for stable visual
+            if (timestamp - lastPitchTick > 120) {
                 lastPitchTick = timestamp;
                 this.pitchAnalyser.getFloatTimeDomainData(buf);
                 const pitch = detectPitch(buf);
@@ -331,12 +353,26 @@ export class AudioTracker {
                 if (pitch > -1 && pitch > 50 && pitch < 2000) {
                     const noteNum = noteFromPitch(pitch);
                     const noteStr = noteStrings[noteNum % 12];
-                    const centsOff = centsOffFromPitch(pitch, noteNum);
+                    const rawCents = centsOffFromPitch(pitch, noteNum);
+
+                    // Reset smooth value when note changes
+                    if (noteStr !== lastNoteStr) {
+                        smoothCents = rawCents;
+                        lastNoteStr = noteStr;
+                    } else {
+                        // Exponential moving average
+                        smoothCents = smoothCents + SMOOTH_ALPHA * (rawCents - smoothCents);
+                    }
+
+                    // Dead-zone: snap to centre if very close
+                    const displayCents = Math.abs(smoothCents) < DEAD_ZONE ? 0 : Math.round(smoothCents);
 
                     if (this.onNoteDetected) {
-                        this.onNoteDetected(noteStr, centsOff, pitch);
+                        this.onNoteDetected(noteStr, displayCents, pitch);
                     }
                 } else {
+                    lastNoteStr = null;
+                    smoothCents = 0;
                     if (this.onNoteDetected) {
                         this.onNoteDetected(null, 0, 0); // Reset or no pitch
                     }

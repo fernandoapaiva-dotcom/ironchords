@@ -2985,7 +2985,7 @@ export default function App() {
                                         <div className="absolute top-0 bottom-0 w-0.5 bg-white/30 left-1/2 -translate-x-1/2 z-10"></div>
                                         {detectedNote && (
                                             <div
-                                                className={`absolute top-0 bottom-0 w-4 rounded-full transition-all duration-100 ${Math.abs(detectedCents) < 15 ? 'bg-green-500' : 'bg-red-500'}`}
+                                                className={`absolute top-0 bottom-0 w-4 rounded-full transition-all duration-500 ${Math.abs(detectedCents) < 15 ? 'bg-green-500' : 'bg-red-500'}`}
                                                 style={{ left: `calc(50% + ${Math.max(-45, Math.min(45, (detectedCents / 50) * 50))}%)`, transform: 'translateX(-50%)' }}
                                             ></div>
                                         )}
