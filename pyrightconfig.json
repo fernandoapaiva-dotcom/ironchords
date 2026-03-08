@@ -1,0 +1,16 @@
+{
+    "pythonVersion": "3.13",
+    "pythonPlatform": "Windows",
+    "include": [
+        "backend"
+    ],
+    "exclude": [
+        "frontend",
+        "**/__pycache__"
+    ],
+    "venvPath": ".",
+    "typeCheckingMode": "off",
+    "reportMissingModuleSource": "none",
+    "reportMissingImports": "none",
+    "reportMissingTypeStubs": "none"
+}

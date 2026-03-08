@@ -1,7 +1,6 @@
 ﻿import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { PhoneticMatcher } from './utils/PhoneticMatcher';
-import VideokePlayer from './components/VideokePlayer';
 import { Music, UploadCloud, Plus, Minus, FileText, CheckCircle, AlertCircle, Eye, EyeOff, FileAudio, Info, X, Guitar, Settings2, Image as ImageIcon, Database, Edit3, Trash2, ArrowRight, Play, Maximize, Maximize2, Pause, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Download, ArrowLeft, SkipBack, SkipForward, Save, FolderHeart, Flame, Hammer, Sparkles, RefreshCw, Zap, ShieldCheck, Monitor, Tv, Check, LayoutList, Layout, Mic, Search, RotateCcw, Printer, Archive, GripVertical, Minimize2 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { SVGuitarChord } from 'svguitar';
@@ -755,7 +754,7 @@ export default function App() {
     const [connectionStatus, setConnectionStatus] = useState('offline');
     const [lastVoiceMatchedIndex, setLastVoiceMatchedIndex] = useState(0);
 
-    const [isVideokeOpen, setIsVideokeOpen] = useState(false);
+    const [activePlaylistName, setActivePlaylistName] = useState('Lista Personalizada');
     const isBpmSyncing = micEnabled && isRhythmicMode && fsmState.state === 'SINCRONIZANDO';
     const [currentStep, setCurrentStep] = useState(1);
 
@@ -1423,9 +1422,6 @@ export default function App() {
             startRhythmicTimer();
         }
     };
-
-
-
     const transposeSong = async (index, semitones) => {
         const song = songs[index];
         if (!song) return;
@@ -2111,167 +2107,167 @@ export default function App() {
 
                 {(isFullScreenPlayer || activeTab === 'player' || mainNav === 'player') ? (
                     <div className="fixed inset-0 bg-[#070709] z-[100] flex flex-col animate-in fade-in zoom-in-95 duration-500">
-                        {/* PLAYER HEADER UNIFICADO */}
-                        <div className="bg-black/40 border-b border-white/5 flex flex-col justify-center px-8 py-3 backdrop-blur-xl shrink-0 no-print gap-3 w-full max-w-full overflow-x-auto scrollbar-none z-50">
-                            {/* TOP ROW: Title & Main Actions */}
-                            <div className="flex items-center justify-between min-w-max w-full">
-                                <div className="flex items-center space-x-6">
-                                    <button onClick={() => { setIsFullScreenPlayer(false); setActiveTab('manual'); setMainNav('escolha'); }} className="p-3 bg-white/5 hover:bg-white/10 rounded-xl transition-all border border-white/5 text-slate-400 hover:text-white"><ArrowLeft className="w-5 h-5" /></button>
-                                    <div>
-                                        <h2 className="text-xl font-black text-white uppercase italic tracking-tighter leading-none">{currentSong?.song_name}</h2>
-                                        <p className="text-[10px] font-bold text-[#B87333] uppercase tracking-widest mt-1 opacity-60 italic">{currentSong?.artist_name}</p>
-                                    </div>
-                                </div>
-                                <div className="flex items-center space-x-4">
-                                    <div className="flex items-center space-x-2 border-r border-white/10 pr-6">
-                                        <button onClick={handlePrint} className="p-3 bg-white/5 hover:bg-white/10 rounded-xl transition-all border border-white/5 text-slate-400 hover:text-white" title="Imprimir Cifra">
-                                            <Printer className="w-5 h-5" />
-                                        </button>
-                                        <button
-                                            onClick={async () => {
-                                                if (currentSong) {
-                                                    const alreadySaved = acervo.some(a => a.song_name.toLowerCase() === currentSong.song_name.toLowerCase());
-                                                    if (alreadySaved) {
-                                                        setShowSaveConflict(true);
-                                                        setTimeout(() => setShowSaveConflict(false), 2500);
-                                                        return;
-                                                    }
-                                                    const res = await saveOneChordToAcervo(currentSong, true);
-                                                    if (res.success) {
-                                                        fetchAcervo();
-                                                        setShowSaveSuccess(true);
-                                                        setTimeout(() => setShowSaveSuccess(false), 2000);
-                                                    }
-                                                }
-                                            }}
-                                            className="p-3 bg-white/5 hover:bg-[#B87333]/20 rounded-xl transition-all border border-white/5 text-slate-400 hover:text-[#B87333]" title="Salvar no Acervo">
-                                            <Archive className="w-5 h-5" />
-                                        </button>
-                                    </div>
-                                    <div className="flex flex-col items-center">
-                                        <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Escala</span>
-                                        <div className="flex items-center space-x-2 bg-black/40 p-1 rounded-xl border border-white/5">
-                                            <button onClick={() => setPlayerFontSize(prev => Math.max(12, prev - 1))} className="p-2 text-slate-500 hover:text-white transition-all"><Minus className="w-4 h-4" /></button>
-                                            <span className="text-xs font-black text-white w-8 text-center">{playerFontSize}</span>
-                                            <button onClick={() => setPlayerFontSize(prev => Math.min(45, prev + 1))} className="p-2 text-slate-500 hover:text-white transition-all"><Plus className="w-4 h-4" /></button>
+                        {/* PLAYER HEADER UNIFICADO (REDESENHADO) */}
+                        <div className="bg-black/60 border-b border-white/5 flex items-center px-8 py-4 backdrop-blur-2xl shrink-0 no-print gap-8 w-full z-50 justify-between">
+
+                            {/* GROUP 1: Title & List Context */}
+                            <div className="flex items-center space-x-6 min-w-[250px]">
+                                <button onClick={() => { setIsFullScreenPlayer(false); setActiveTab('manual'); setMainNav('escolha'); }} className="p-3 bg-white/5 hover:bg-white/10 rounded-2xl transition-all border border-white/5 text-slate-400 hover:text-white" title="Voltar para Início">
+                                    <ArrowLeft className="w-5 h-5" />
+                                </button>
+                                <div className="flex flex-col">
+                                    <div className="flex items-center space-x-2 mb-1.5 overflow-hidden">
+                                        <div className="p-1 bg-[#B87333]/20 rounded-md border border-[#B87333]/30">
+                                            <LayoutList className="w-2.5 h-2.5 text-[#B87333]" />
                                         </div>
+                                        <span className="text-[9px] font-black text-slate-500 uppercase tracking-[0.2em] truncate max-w-[150px]">{activePlaylistName}</span>
                                     </div>
-                                    <div className="flex flex-col items-center">
-                                        <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Tabs</span>
-                                        <button onClick={() => setIncludeTabs(!includeTabs)} className={`p-3 rounded-xl transition-all border ${includeTabs ? 'bg-[#B87333]/20 border-[#B87333] text-[#B87333]' : 'bg-black/40 border-white/5 text-slate-600 hover:text-slate-400'}`} title={includeTabs ? "Esconder Tablaturas" : "Mostrar Tablaturas"}>
-                                            <FileText className="w-5 h-5" />
+                                    <h2 className="text-xl font-black text-white uppercase italic tracking-tighter leading-none truncate max-w-[200px]">{currentSong?.song_name}</h2>
+                                    <p className="text-[10px] font-bold text-[#B87333] uppercase tracking-widest mt-1 opacity-60 italic truncate max-w-[200px]">{currentSong?.artist_name}</p>
+                                </div>
+                            </div>
+
+                            {/* GROUP 2: Navigation & Basic Controls */}
+                            <div className="flex items-center space-x-3 bg-white/5 p-1.5 rounded-[24px] border border-white/5">
+                                <button
+                                    onClick={() => {
+                                        if (selectedManualIndex > 0) {
+                                            setSelectedManualIndex(selectedManualIndex - 1);
+                                            setCurrentLineIndex(0);
+                                            currentLineIndexRef.current = 0;
+                                            if (scrollContainerRef.current) scrollContainerRef.current.scrollTop = 0;
+                                        }
+                                    }}
+                                    disabled={selectedManualIndex === 0}
+                                    className="p-3 hover:bg-white/10 rounded-2xl transition-all text-slate-500 hover:text-white disabled:opacity-20"
+                                    title="Música Anterior"
+                                >
+                                    <SkipBack className="w-5 h-5" />
+                                </button>
+                                <button onClick={() => {
+                                    const newState = !isAutoScrolling;
+                                    setIsAutoScrolling(newState);
+                                    if (newState) setIsDynamicSpeedActive(false);
+                                }} className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all ${isAutoScrolling ? 'bg-[#B87333] text-white shadow-xl shadow-[#B87333]/40 scale-105' : 'bg-white/10 text-slate-300 hover:text-white hover:bg-white/20'}`}>
+                                    {isAutoScrolling ? <Pause className="w-6 h-6" /> : <Play className="w-6 h-6 ml-1" />}
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        if (selectedManualIndex < songs.length - 1) {
+                                            setSelectedManualIndex(selectedManualIndex + 1);
+                                            setCurrentLineIndex(0);
+                                            currentLineIndexRef.current = 0;
+                                            if (scrollContainerRef.current) scrollContainerRef.current.scrollTop = 0;
+                                        }
+                                    }}
+                                    disabled={selectedManualIndex === songs.length - 1}
+                                    className="p-3 hover:bg-white/10 rounded-2xl transition-all text-slate-500 hover:text-white disabled:opacity-20"
+                                    title="Próxima Música"
+                                >
+                                    <SkipForward className="w-5 h-5" />
+                                </button>
+                            </div>
+
+                            {/* GROUP 3: Performance Helper (Reset & Speed) */}
+                            <div className="flex items-center space-x-6 bg-black/40 px-5 py-2.5 rounded-2xl border border-white/5">
+                                <button
+                                    onClick={() => {
+                                        setCurrentLineIndex(0);
+                                        currentLineIndexRef.current = 0;
+                                        if (scrollContainerRef.current) scrollContainerRef.current.scrollTop = 0;
+                                    }}
+                                    className="p-2.5 rounded-xl flex items-center justify-center transition-all bg-white/5 text-slate-500 hover:text-white hover:bg-white/10"
+                                    title="Reiniciar Do Início"
+                                >
+                                    <RotateCcw className="w-4 h-4" />
+                                </button>
+                                <div className="w-28 min-w-[110px]">
+                                    <div className="flex items-center justify-between mb-1.5">
+                                        <span className="text-[8px] font-black text-slate-600 uppercase tracking-widest leading-none">Speed</span>
+                                        <span className="text-[10px] font-black text-[#B87333] italic">{scrollSpeed}x</span>
+                                    </div>
+                                    <input type="range" min="0.5" max="5" step="0.5" value={scrollSpeed} onChange={(e) => setScrollSpeed(parseFloat(e.target.value))} className="w-full h-1 bg-white/5 rounded-full appearance-none cursor-pointer accent-[#B87333]" />
+                                </div>
+
+                                <div className="h-8 w-px bg-white/10 mx-1"></div>
+
+                                <div className="flex flex-col items-center shrink-0 relative">
+                                    {/* Live Transcript Bubble */}
+                                    {micEnabled && isDynamicSpeedActive && transcriptRaw && (
+                                        <div className="absolute bottom-[calc(100%+12px)] left-1/2 -translate-x-1/2 z-50 pointer-events-none">
+                                            <div className="bg-blue-600/90 backdrop-blur-md text-white px-3 py-1.5 rounded-2xl shadow-xl shadow-blue-500/20 border border-blue-400/30 whitespace-nowrap flex items-center space-x-2 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                                                <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></div>
+                                                <span className="text-[10px] font-bold uppercase tracking-tight antialiased">
+                                                    {transcriptRaw.length > 30 ? '...' + transcriptRaw.slice(-30) : transcriptRaw}
+                                                </span>
+                                            </div>
+                                            <div className="w-2 h-2 bg-blue-600/90 rotate-45 absolute -bottom-1 left-1/2 -translate-x-1/2 border-r border-b border-blue-400/30"></div>
+                                        </div>
+                                    )}
+
+                                    <span className="text-[7px] font-black text-slate-600 uppercase mb-1.5 tracking-tighter">IA Sync</span>
+                                    <div className="flex items-center space-x-2">
+                                        <button
+                                            onClick={() => {
+                                                const newState = !isDynamicSpeedActive;
+                                                setIsDynamicSpeedActive(newState);
+                                                if (newState) setIsAutoScrolling(false);
+                                                if (newState && !micEnabled) setMicEnabled(true);
+                                            }}
+                                            className={`p-2 rounded-lg transition-all border ${isDynamicSpeedActive ? 'bg-blue-600 border-blue-600 text-white shadow-[0_0_15px_rgba(37,99,235,0.3)] animate-pulse' : 'bg-white/5 border-white/10 text-slate-600 hover:text-slate-400'}`}
+                                            title="IA Sync: Sincroniza com sua voz"
+                                        >
+                                            <Zap className="w-3.5 h-3.5" />
                                         </button>
+                                        {micEnabled && isDynamicSpeedActive && (
+                                            <div className="flex items-end space-x-0.5 h-3 w-4">
+                                                <div className="w-1 bg-blue-500/40 rounded-full transition-all duration-75" style={{ height: `${Math.min(100, micLevel * 2)}%` }}></div>
+                                                <div className="w-1 bg-blue-500/60 rounded-full transition-all duration-75" style={{ height: `${Math.min(100, micLevel * 3)}%` }}></div>
+                                                <div className="w-1 bg-blue-500 rounded-full transition-all duration-75" style={{ height: `${Math.min(100, micLevel * 4)}%` }}></div>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             </div>
 
-                            {/* BOTTOM ROW: Playback, Pitch & Layout Controls */}
-                            <div className="flex items-center justify-between border-t border-white/5 pt-3 min-w-max w-full">
-                                {/* Playback Group (Scroll, Autosync, BPM) */}
-                                <div className="flex items-center space-x-6">
-                                    <div className="flex items-center space-x-4 bg-black/20 p-2 rounded-2xl border border-white/5">
-                                        <button onClick={() => {
-                                            const newState = !isAutoScrolling;
-                                            setIsAutoScrolling(newState);
-                                            if (newState) setIsDynamicSpeedActive(false);
-                                        }} className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${isAutoScrolling ? 'bg-[#B87333] text-white shadow-lg shadow-[#B87333]/30 scale-105' : 'bg-white/5 text-slate-500 hover:text-white'}`}>
-                                            {isAutoScrolling ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
-                                        </button>
-                                        <button
-                                            onClick={() => {
-                                                setCurrentLineIndex(0);
-                                                currentLineIndexRef.current = 0;
-                                                if (scrollContainerRef.current) scrollContainerRef.current.scrollTop = 0;
-                                            }}
-                                            className="w-10 h-10 rounded-xl flex items-center justify-center transition-all bg-white/5 text-slate-500 hover:text-white hover:bg-white/10"
-                                            title="Reiniciar Música"
-                                        >
-                                            <RotateCcw className="w-4 h-4" />
-                                        </button>
-                                        <div className="w-24 pr-2">
-                                            <div className="flex items-center justify-between mb-1">
-                                                <span className="text-[8px] font-black text-slate-600 uppercase tracking-widest leading-none">Scrolloff</span>
-                                                <span className="text-[9px] font-black text-white italic">{scrollSpeed}x</span>
-                                            </div>
-                                            <input type="range" min="0.5" max="5" step="0.5" value={scrollSpeed} onChange={(e) => setScrollSpeed(parseFloat(e.target.value))} className="w-full h-1 bg-white/5 rounded-full appearance-none cursor-pointer accent-[#B87333]" />
-                                        </div>
-                                        <div className="flex flex-col items-center ml-2 border-l border-white/5 pl-4 shrink-0 relative">
-                                            {/* Live Transcript Bubble */}
-                                            {micEnabled && isDynamicSpeedActive && transcriptRaw && (
-                                                <div className="absolute bottom-[calc(100%+8px)] left-1/2 -translate-x-1/2 z-50 pointer-events-none">
-                                                    <div className="bg-blue-600/90 backdrop-blur-md text-white px-3 py-1.5 rounded-2xl shadow-xl shadow-blue-500/20 border border-blue-400/30 whitespace-nowrap flex items-center space-x-2 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                                                        <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></div>
-                                                        <span className="text-[10px] font-bold uppercase tracking-tight antialiased">
-                                                            {transcriptRaw.length > 30 ? '...' + transcriptRaw.slice(-30) : transcriptRaw}
-                                                        </span>
-                                                    </div>
-                                                    <div className="w-2 h-2 bg-blue-600/90 rotate-45 absolute -bottom-1 left-1/2 -translate-x-1/2 border-r border-b border-blue-400/30"></div>
-                                                </div>
-                                            )}
-
-                                            <span className="text-[7px] font-black text-slate-600 uppercase mb-1">IA Sync</span>
-                                            <div className="flex items-center space-x-2">
-                                                <button
-                                                    onClick={() => {
-                                                        const newState = !isDynamicSpeedActive;
-                                                        setIsDynamicSpeedActive(newState);
-                                                        if (newState) setIsAutoScrolling(false);
-                                                        if (newState && !micEnabled) setMicEnabled(true);
-                                                    }}
-                                                    className={`p-2 rounded-lg transition-all border ${isDynamicSpeedActive ? 'bg-blue-600 border-blue-600 text-white animate-pulse' : 'bg-white/5 border-white/10 text-slate-600'}`}
-                                                    title="Velocidade Adaptativa (Sincroniza com sua voz)"
-                                                >
-                                                    <Zap className="w-3 h-3" />
-                                                </button>
-                                                {micEnabled && isDynamicSpeedActive && (
-                                                    <div className="flex items-end space-x-0.5 h-3 w-4">
-                                                        <div className="w-1 bg-blue-500/40 rounded-full transition-all duration-75" style={{ height: `${Math.min(100, micLevel * 2)}%` }}></div>
-                                                        <div className="w-1 bg-blue-500/60 rounded-full transition-all duration-75" style={{ height: `${Math.min(100, micLevel * 3)}%` }}></div>
-                                                        <div className="w-1 bg-blue-500 rounded-full transition-all duration-75" style={{ height: `${Math.min(100, micLevel * 4)}%` }}></div>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                    </div>
-                                    {/* Videoke (Sync Mode) */}
-                                    <div className="flex items-center space-x-4 bg-black/20 p-2 rounded-2xl border border-white/5">
-                                        <button
-                                            onClick={() => setIsVideokeOpen(true)}
-                                            className="flex items-center space-x-2 px-4 py-2 bg-[#B87333]/10 hover:bg-[#B87333] border border-[#B87333]/30 text-[#B87333] hover:text-white rounded-xl transition-all font-black uppercase text-[10px] tracking-widest group"
-                                            title="Abrir Modo Videokê com IA de Sincronia"
-                                        >
-                                            <Tv className="w-4 h-4 group-hover:scale-110 transition-transform" />
-                                            <span>Videokê IA</span>
-                                        </button>
+                            {/* GROUP 4: Song Adjustments (Capo, Key, Size, Tabs) */}
+                            <div className="flex items-center space-x-5">
+                                <div className="flex flex-col items-center">
+                                    <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Capo</span>
+                                    <div className="flex items-center space-x-1.5 bg-black/40 p-1 rounded-xl border border-white/5">
+                                        <button onClick={() => { if (selectedManualIndex !== null && songs[selectedManualIndex]) { const next = [...songs]; next[selectedManualIndex].capo = Math.max(0, (next[selectedManualIndex].capo || 0) - 1); setSongs(next); } }} className="p-1 text-slate-500 hover:text-white transition-all"><Minus className="w-4 h-4" /></button>
+                                        <span className="text-xs font-black text-[#B87333] w-5 text-center leading-none">{currentSong?.capo || 0}</span>
+                                        <button onClick={() => { if (selectedManualIndex !== null && songs[selectedManualIndex]) { const next = [...songs]; next[selectedManualIndex].capo = Math.min(11, (next[selectedManualIndex].capo || 0) + 1); setSongs(next); } }} className="p-1 text-slate-500 hover:text-white transition-all"><Plus className="w-4 h-4" /></button>
                                     </div>
                                 </div>
 
-                                {/* Pitch & Layout Group */}
-                                <div className="flex items-center space-x-6">
-                                    <div className="flex flex-col items-end">
-                                        <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Capotraste</span>
-                                        <div className="flex items-center space-x-2 bg-black/40 p-1 rounded-xl border border-white/5">
-                                            <button onClick={() => { if (selectedManualIndex !== null && songs[selectedManualIndex]) { const next = [...songs]; next[selectedManualIndex].capo = Math.max(0, (next[selectedManualIndex].capo || 0) - 1); setSongs(next); } }} className="p-1.5 text-slate-500 hover:text-white transition-all"><Minus className="w-3.5 h-3.5" /></button>
-                                            <span className="text-xs font-black text-[#B87333] w-6 text-center">{currentSong?.capo || 0}</span>
-                                            <button onClick={() => { if (selectedManualIndex !== null && songs[selectedManualIndex]) { const next = [...songs]; next[selectedManualIndex].capo = Math.min(11, (next[selectedManualIndex].capo || 0) + 1); setSongs(next); } }} className="p-1.5 text-slate-500 hover:text-white transition-all"><Plus className="w-3.5 h-3.5" /></button>
+                                <div className="flex flex-col items-center">
+                                    <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Key</span>
+                                    <div className="flex items-center space-x-1.5 bg-black/40 p-1 rounded-xl border border-[#B87333]/20 shadow-[0_0_15px_rgba(184,115,51,0.1)]">
+                                        <button onClick={() => transposeSong(selectedManualIndex, -1)} disabled={isTransposing} className="p-1 text-slate-500 hover:text-white transition-all disabled:opacity-50"><Minus className="w-4 h-4" /></button>
+                                        <div className="flex items-center space-x-1 px-1.5 pointer-events-none">
+                                            <span className="text-xs font-black text-white uppercase italic min-w-[1.2rem] text-center">{isTransposing ? '...' : getSoundingKey(currentSong)}</span>
+                                        </div>
+                                        <button onClick={() => transposeSong(selectedManualIndex, 1)} disabled={isTransposing} className="p-1 text-slate-500 hover:text-white transition-all disabled:opacity-50"><Plus className="w-4 h-4" /></button>
+                                    </div>
+                                </div>
+
+                                <div className="h-10 w-px bg-white/5 mx-1"></div>
+
+                                <div className="flex items-center space-x-3">
+                                    <div className="flex flex-col items-center">
+                                        <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Size</span>
+                                        <div className="flex items-center space-x-1.5 bg-black/40 p-1 rounded-xl border border-white/5">
+                                            <button onClick={() => setPlayerFontSize(prev => Math.max(12, prev - 1))} className="p-1 text-slate-500 hover:text-white transition-all"><Minus className="w-4 h-4" /></button>
+                                            <span className="text-xs font-black text-white w-5 text-center leading-none">{playerFontSize}</span>
+                                            <button onClick={() => setPlayerFontSize(prev => Math.min(45, prev + 1))} className="p-1 text-slate-500 hover:text-white transition-all"><Plus className="w-4 h-4" /></button>
                                         </div>
                                     </div>
-                                    <div className="flex flex-col items-end">
-                                        <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Tom Atual</span>
-                                        <div className="flex items-center space-x-2 bg-black/40 p-1 rounded-xl border border-[#B87333]/20 shadow-[0_0_15px_rgba(184,115,51,0.1)]">
-                                            <button onClick={() => transposeSong(selectedManualIndex, -1)} disabled={isTransposing} className="p-1.5 text-slate-500 hover:text-white transition-all disabled:opacity-50"><Minus className="w-3.5 h-3.5" /></button>
-                                            <div className="flex items-center space-x-1 px-2 pointer-events-none">
-                                                <Music className="w-3.5 h-3.5 text-[#B87333]" />
-                                                <span className="text-sm font-black text-white uppercase italic min-w-[1.5rem] text-center">{isTransposing ? '...' : getSoundingKey(currentSong)}</span>
-                                            </div>
-                                            <button onClick={() => transposeSong(selectedManualIndex, 1)} disabled={isTransposing} className="p-1.5 text-slate-500 hover:text-white transition-all disabled:opacity-50"><Plus className="w-3.5 h-3.5" /></button>
-                                        </div>
-                                    </div>
-                                    <div className="flex flex-col items-end opacity-40">
-                                        <span className="text-[9px] font-black text-slate-600 uppercase tracking-widest mb-1">Original</span>
-                                        <div className="flex items-center space-x-3 bg-black/20 px-4 py-1.5 rounded-xl border border-white/5">
-                                            <span className="text-xs font-black text-slate-400 uppercase italic">{currentSong?.original_key || currentSong?.song_key}</span>
-                                        </div>
+                                    <div className="flex flex-col items-center">
+                                        <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Tabs</span>
+                                        <button onClick={() => setIncludeTabs(!includeTabs)} className={`p-2.5 rounded-xl transition-all border ${includeTabs ? 'bg-[#B87333]/20 border-[#B87333] text-[#B87333]' : 'bg-black/40 border-white/5 text-slate-600 hover:text-slate-400'}`} title={includeTabs ? "Esconder Tablaturas" : "Mostrar Tablaturas"}>
+                                            <FileText className="w-4 h-4" />
+                                        </button>
                                     </div>
                                 </div>
                             </div>
@@ -2295,13 +2291,13 @@ export default function App() {
                                         <p className="text-[9px] font-black text-[#B87333] uppercase mb-3">Salvar Setlist</p>
                                         <div className="flex space-x-2">
                                             <input type="text" placeholder="Nome..." value={playlistNameInput} onChange={e => setPlaylistNameInput(e.target.value)} className="flex-1 bg-black/40 border border-[#B87333]/20 rounded-lg px-3 py-2 text-[10px] font-bold text-white focus:outline-none" />
-                                            <button onClick={() => { if (!playlistNameInput.trim()) return; setSavedPlaylists({ ...savedPlaylists, [playlistNameInput]: songs }); localStorage.setItem('iron_chords_playlists', JSON.stringify({ ...savedPlaylists, [playlistNameInput]: songs })); setPlaylistNameInput(''); setShowPlaylistManager(false); }} className="bg-[#B87333] text-white p-2 rounded-lg hover:bg-[#8B4513] transition-all"><Plus className="w-4 h-4" /></button>
+                                            <button onClick={() => { if (!playlistNameInput.trim()) return; setSavedPlaylists({ ...savedPlaylists, [playlistNameInput]: songs }); localStorage.setItem('iron_chords_playlists', JSON.stringify({ ...savedPlaylists, [playlistNameInput]: songs })); setActivePlaylistName(playlistNameInput); setPlaylistNameInput(''); setShowPlaylistManager(false); }} className="bg-[#B87333] text-white p-2 rounded-lg hover:bg-[#8B4513] transition-all"><Plus className="w-4 h-4" /></button>
                                         </div>
                                         {Object.keys(savedPlaylists).length > 0 && (
                                             <div className="mt-4 space-y-2 border-t border-[#B87333]/20 pt-3">
                                                 {Object.keys(savedPlaylists).map(name => (
                                                     <div key={name} className="flex items-center justify-between group">
-                                                        <button onClick={() => { setSongs(savedPlaylists[name]); setSelectedManualIndex(0); setShowPlaylistManager(false); }} className="text-[10px] font-bold text-slate-400 hover:text-white truncate flex-1 text-left uppercase italic">{name}</button>
+                                                        <button onClick={() => { setSongs(savedPlaylists[name]); setSelectedManualIndex(0); setActivePlaylistName(name); setShowPlaylistManager(false); }} className="text-[10px] font-bold text-slate-400 hover:text-white truncate flex-1 text-left uppercase italic">{name}</button>
                                                         <button onClick={() => { const next = { ...savedPlaylists }; delete next[name]; setSavedPlaylists(next); localStorage.setItem('iron_chords_playlists', JSON.stringify(next)); }} className="text-red-900 opacity-0 group-hover:opacity-100 transition-all ml-2"><Trash2 className="w-3 h-3" /></button>
                                                     </div>
                                                 ))}
@@ -2398,15 +2394,6 @@ export default function App() {
 
                             </div>
                         </div>
-
-                        {/* Videokeê Player overlay for the list player */}
-                        {isVideokeOpen && currentSong && (
-                            <VideokePlayer
-                                song={currentSong}
-                                includeTabs={currentSong?.include_tabs ?? includeTabs}
-                                onClose={() => setIsVideokeOpen(false)}
-                            />
-                        )}
                     </div>
                 ) : activeTab === 'presentation' ? (
                     <div className="fixed inset-0 bg-black z-[200] flex flex-col cursor-none">
@@ -4198,14 +4185,6 @@ export default function App() {
                         </div>
                     </div>
                 </div>
-            )}
-            {/* Videoke Player Overlay */}
-            {isVideokeOpen && manualPreviewSong && (
-                <VideokePlayer
-                    song={manualPreviewSong}
-                    includeTabs={includeTabs}
-                    onClose={() => setIsVideokeOpen(false)}
-                />
             )}
 
             {/* DEDICATED PRINT SHEET (Hidden by default, shown via CSS @media print) */}
