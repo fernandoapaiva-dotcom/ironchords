@@ -4575,15 +4575,19 @@ export default function App() {
                                                                         if (currentKey !== origKey) {
                                                                             // Trigger a re-transposition from orig to current
                                                                             transpose(0, currentKey);
-                                                                            return; // transpose will call updateSong again
+                                                                            return; // transpose will call setEditingList
                                                                         }
                                                                     }
                                                                 }
                                                                 if (patch.capo !== undefined) {
-                                                                    const diff = (song.capo || 0) - patch.capo;
-                                                                    if (diff !== 0) transpose(diff);
+                                                                    const diff = patch.capo - (song.capo || 0); // Correct diff calculation
+                                                                    if (diff !== 0) {
+                                                                        transpose(diff);
+                                                                        return; // transpose will call setEditingList
+                                                                    }
                                                                     if (selectedManualIndex === si) setManualCapo(patch.capo);
                                                                 }
+
                                                                 setEditingList(prev => {
                                                                     const s2 = [...prev.songs];
                                                                     s2[si] = { ...s2[si], ...patch };
@@ -4621,8 +4625,18 @@ export default function App() {
 
                                                                     const diff = ((KEY_SEMITONES[targetRoot] ?? 0) - (KEY_SEMITONES[rootOrig] ?? 0) + 12) % 12;
 
+                                                                    const patch = { sounding_key: newTargetKey, song_key: newTargetKey };
+                                                                    if (targetKey === null && song.capo !== undefined) {
+                                                                        // If it was a relative shift from capo or ♭/♯
+                                                                        // transpose() is called with diff in capo change
+                                                                    }
+
                                                                     if (diff === 0) {
-                                                                        updateSong({ sounding_key: newTargetKey, song_key: newTargetKey, content: origContent });
+                                                                        setEditingList(prev => {
+                                                                            const s2 = [...prev.songs];
+                                                                            s2[si] = { ...s2[si], ...patch, content: origContent };
+                                                                            return { ...prev, songs: s2 };
+                                                                        });
                                                                         return;
                                                                     }
 
@@ -4633,7 +4647,11 @@ export default function App() {
                                                                     });
                                                                     const d = await res.json();
                                                                     if (d.transposed_content) {
-                                                                        updateSong({ content: d.transposed_content, sounding_key: newTargetKey, song_key: newTargetKey });
+                                                                        setEditingList(prev => {
+                                                                            const s2 = [...prev.songs];
+                                                                            s2[si] = { ...s2[si], ...patch, content: d.transposed_content };
+                                                                            return { ...prev, songs: s2 };
+                                                                        });
                                                                     }
                                                                 } catch (e) { console.error(e); }
                                                             };
