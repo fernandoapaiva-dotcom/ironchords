@@ -2047,7 +2047,14 @@ export default function App() {
             } catch (err) { alert(err); }
         } else if (deleteTarget.type === 'lista') {
             const existing = JSON.parse(localStorage.getItem('iron_chords_playlists') || '[]');
-            const updated = existing.filter((_, i) => i !== deleteTarget.id);
+            const updated = existing.filter(pl => pl.id !== deleteTarget.id);
+            localStorage.setItem('iron_chords_playlists', JSON.stringify(updated));
+            setSavedPlaylists(updated);
+            setSelectedLists(prev => prev.filter(id => id !== deleteTarget.id));
+        } else if (deleteTarget.type === 'lista_multi') {
+            const existing = JSON.parse(localStorage.getItem('iron_chords_playlists') || '[]');
+            const idsToRemove = Array.isArray(deleteTarget.id) ? deleteTarget.id : [];
+            const updated = existing.filter(pl => !idsToRemove.includes(pl.id));
             localStorage.setItem('iron_chords_playlists', JSON.stringify(updated));
             setSavedPlaylists(updated);
             setSelectedLists([]);
@@ -4137,7 +4144,7 @@ export default function App() {
                                                     <span className="text-[10px] font-black text-slate-600 bg-white/5 px-3 py-1 rounded-full border border-white/5">{allPlaylists.length}</span>
                                                 </div>
                                                 {selectedLists.length > 0 && (
-                                                    <button onClick={() => { setDeleteTarget({ type: 'lista_multi', id: selectedLists, name: `${selectedLists.length} lista(s)` }); setDeleteModalOpen(true); }} className="px-4 py-2 bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white border border-red-600/30 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center space-x-2">
+                                                    <button onClick={() => { setDeleteTarget({ type: 'lista_multi', id: [...selectedLists], name: `${selectedLists.length} lista(s)` }); setDeleteModalOpen(true); }} className="px-4 py-2 bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white border border-red-600/30 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center space-x-2">
                                                         <Trash2 className="w-3.5 h-3.5" /><span>Excluir {selectedLists.length} Lista(s)</span>
                                                     </button>
                                                 )}
@@ -4186,7 +4193,7 @@ export default function App() {
                                                                         setEditingList({ ...pl, songs: enriched });
                                                                         setEditListName(pl.name);
                                                                     }} className="p-2 bg-white/5 hover:bg-[#B87333]/20 text-slate-500 hover:text-[#B87333] rounded-lg transition-all border border-white/5" title="Editar Lista"><Edit3 className="w-3.5 h-3.5" /></button>
-                                                                    <button onClick={() => { setDeleteTarget({ type: 'lista', id: idx, name: pl.name }); setDeleteModalOpen(true); }} className="p-2 bg-white/5 hover:bg-red-600/20 text-slate-500 hover:text-red-500 rounded-lg transition-all border border-white/5" title="Excluir"><Trash2 className="w-3.5 h-3.5" /></button>
+                                                                    <button onClick={() => { setDeleteTarget({ type: 'lista', id: pl.id, name: pl.name }); setDeleteModalOpen(true); }} className="p-2 bg-white/5 hover:bg-red-600/20 text-slate-500 hover:text-red-500 rounded-lg transition-all border border-white/5" title="Excluir"><Trash2 className="w-3.5 h-3.5" /></button>
                                                                 </div>
                                                             </div>
                                                             <div className="mb-4">
