@@ -58,6 +58,10 @@ export class AudioTracker {
             this.analyser.fftSize = 256;
             this.gainNode.connect(this.analyser);
 
+            this.pitchAnalyser = this.audioContext.createAnalyser();
+            this.pitchAnalyser.fftSize = 2048;
+            this.gainNode.connect(this.pitchAnalyser);
+
             // WebSocket is OPTIONAL — if it fails, mic + speech still work
             try {
                 await this.setupWebSocket();
@@ -83,6 +87,7 @@ export class AudioTracker {
 
             this.isMicActive = true;
             this.startLevelAnalysis();
+            this.startPitchAnalysis();
             this.startSpeechRecognition();
 
         } catch (err) {
@@ -249,9 +254,104 @@ export class AudioTracker {
         checkAudio();
     }
 
+    startPitchAnalysis() {
+        if (!this.pitchAnalyser) return;
+        const bufferLength = this.pitchAnalyser.fftSize;
+        const buf = new Float32Array(bufferLength);
+        const sampleRate = this.audioContext.sampleRate;
+
+        // Auto-correlation algorithm for fundamental frequency
+        const detectPitch = (buffer) => {
+            let SIZE = buffer.length;
+            let rms = 0;
+            for (let i = 0; i < SIZE; i++) {
+                rms += buffer[i] * buffer[i];
+            }
+            rms = Math.sqrt(rms / SIZE);
+            if (rms < 0.01) return -1; // Ignore silence or low noise
+
+            let r1 = 0, r2 = SIZE - 1, thres = 0.2;
+            for (let i = 0; i < SIZE / 2; i++)
+                if (Math.abs(buffer[i]) < thres) { r1 = i; break; }
+            for (let i = 1; i < SIZE / 2; i++)
+                if (Math.abs(buffer[SIZE - i]) < thres) { r2 = SIZE - i; break; }
+
+            let slicedBuf = buffer.slice(r1, r2);
+            let nSize = slicedBuf.length;
+
+            let c = new Array(nSize).fill(0);
+            for (let i = 0; i < nSize; i++) {
+                for (let j = 0; j < nSize - i; j++) {
+                    c[i] = c[i] + slicedBuf[j] * slicedBuf[j + i];
+                }
+            }
+
+            let d = 0; while (c[d] > c[d + 1]) d++;
+            let maxval = -1, maxpos = -1;
+            for (let i = d; i < nSize; i++) {
+                if (c[i] > maxval) {
+                    maxval = c[i];
+                    maxpos = i;
+                }
+            }
+            let T0 = maxpos;
+
+            let x1 = c[T0 - 1], x2 = c[T0], x3 = c[T0 + 1];
+            let a = (x1 + x3 - 2 * x2) / 2;
+            let b = (x3 - x1) / 2;
+            if (a) T0 = T0 - b / (2 * a);
+
+            return sampleRate / T0;
+        };
+
+        const noteStrings = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+        const noteFromPitch = (frequency) => {
+            let noteNum = 12 * (Math.log(frequency / 440) / Math.log(2));
+            return Math.round(noteNum) + 69;
+        };
+        const frequencyFromNoteNumber = (note) => {
+            return 440 * Math.pow(2, (note - 69) / 12);
+        };
+        const centsOffFromPitch = (frequency, note) => {
+            return Math.floor(1200 * Math.log(frequency / frequencyFromNoteNumber(note)) / Math.log(2));
+        };
+
+        // We run a secondary tight loop to avoid clogging the main one
+        let lastPitchTick = 0;
+
+        const checkPitch = (timestamp) => {
+            if (!this.isMicActive) return;
+
+            // Limit pitch detection frequency to save CPU (~15fps is enough for visual gauge)
+            if (timestamp - lastPitchTick > 60) {
+                lastPitchTick = timestamp;
+                this.pitchAnalyser.getFloatTimeDomainData(buf);
+                const pitch = detectPitch(buf);
+
+                if (pitch > -1 && pitch > 50 && pitch < 2000) {
+                    const noteNum = noteFromPitch(pitch);
+                    const noteStr = noteStrings[noteNum % 12];
+                    const centsOff = centsOffFromPitch(pitch, noteNum);
+
+                    if (this.onNoteDetected) {
+                        this.onNoteDetected(noteStr, centsOff, pitch);
+                    }
+                } else {
+                    if (this.onNoteDetected) {
+                        this.onNoteDetected(null, 0, 0); // Reset or no pitch
+                    }
+                }
+            }
+
+            this.pitchAnimationFrameId = requestAnimationFrame(checkPitch);
+        };
+        this.pitchAnimationFrameId = requestAnimationFrame(checkPitch);
+    }
+
     stop() {
         this.isMicActive = false;
         if (this.animationFrameId) cancelAnimationFrame(this.animationFrameId);
+        if (this.pitchAnimationFrameId) cancelAnimationFrame(this.pitchAnimationFrameId);
 
         if (this.ws) {
             this.ws.close();

@@ -682,6 +682,11 @@ export default function App() {
     const [includeTabs, setIncludeTabs] = useState(true);
     const [manualLoading, setManualLoading] = useState(false);
     const [manualError, setManualError] = useState('');
+
+    // Pitch Gauge & Auto Transpose States
+    const [detectedCents, setDetectedCents] = useState(0);
+    const [detectedPitch, setDetectedPitch] = useState(0);
+    const [isAutoPitchEnabled, setIsAutoPitchEnabled] = useState(false);
     const [suggestions, setSuggestions] = useState([]);
     const [showSuggestions, setShowSuggestions] = useState(false);
     const [availableVersions, setAvailableVersions] = useState([{ name: 'Principal', key: 'Principal' }]);
@@ -1190,7 +1195,11 @@ export default function App() {
                         setMicLevel(level);
                         micLevelRef.current = level;
                     },
-                    (note) => setDetectedNote(note),
+                    (noteStr, centsOff, pitch) => {
+                        setDetectedNote(noteStr);
+                        setDetectedCents(centsOff);
+                        setDetectedPitch(pitch);
+                    },
                     (text, isFinal) => {
                         setTranscriptRaw(text);
                         lastVoiceTimeRef.current = Date.now();
@@ -1260,6 +1269,90 @@ export default function App() {
             }
         };
     }, [micEnabled, isRhythmicMode]);
+
+    // AUTO-TRANSPOSE LOGIC: Monitor pitch stability and auto-shift the song key
+    const autoTransposeTimerRef = useRef(null);
+    const lastStableNoteRef = useRef(null);
+    const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+
+    useEffect(() => {
+        if (!isAutoPitchEnabled || !micEnabled || !detectedNote) return;
+
+        const currentSong = songs[selectedManualIndex];
+        if (!currentSong) return;
+
+        // Get the current song's root note (ignoring minor/maj suffixes)
+        const currentKey = (currentSong.sounding_key || currentSong.song_key || 'C')
+            .replace(/m|maj|min|7|sus|aug|dim|\d/g, '')
+            .trim();
+
+        // If the singer is already on the right note, no need to transpose
+        if (detectedNote === currentKey) {
+            if (autoTransposeTimerRef.current) {
+                clearTimeout(autoTransposeTimerRef.current);
+                autoTransposeTimerRef.current = null;
+            }
+            lastStableNoteRef.current = null;
+            return;
+        }
+
+        // Same note as last detected? Start/continue the stability timer
+        if (detectedNote !== lastStableNoteRef.current) {
+            lastStableNoteRef.current = detectedNote;
+            if (autoTransposeTimerRef.current) clearTimeout(autoTransposeTimerRef.current);
+
+            // 2.5 seconds of consistent deviation triggers auto-transpose
+            autoTransposeTimerRef.current = setTimeout(async () => {
+                const targetNote = lastStableNoteRef.current;
+                if (!targetNote) return;
+
+                const fromIdx = NOTE_NAMES.indexOf(currentKey);
+                const toIdx = NOTE_NAMES.indexOf(targetNote);
+                if (fromIdx === -1 || toIdx === -1) return;
+
+                let semitones = toIdx - fromIdx;
+                // Use shortest path around chromatic circle
+                if (semitones > 6) semitones -= 12;
+                if (semitones < -6) semitones += 12;
+
+                if (semitones === 0) return;
+
+                try {
+                    const res = await fetch(`${API_BASE_URL}/api/transpose`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            content: currentSong.content,
+                            current_key: currentKey,
+                            semitones
+                        })
+                    });
+                    const data = await res.json();
+                    if (data.transposed_content) {
+                        const updatedSongs = [...songs];
+                        updatedSongs[selectedManualIndex] = {
+                            ...currentSong,
+                            content: data.transposed_content,
+                            sounding_key: data.new_key
+                        };
+                        setSongs(updatedSongs);
+                        setManualPreviewSong(updatedSongs[selectedManualIndex]);
+                    }
+                } catch (e) {
+                    console.error('[AutoTranspose] Error:', e);
+                }
+                lastStableNoteRef.current = null;
+                autoTransposeTimerRef.current = null;
+            }, 2500);
+        }
+
+        return () => {
+            if (autoTransposeTimerRef.current) {
+                clearTimeout(autoTransposeTimerRef.current);
+                autoTransposeTimerRef.current = null;
+            }
+        };
+    }, [detectedNote, isAutoPitchEnabled, micEnabled, selectedManualIndex]);
 
     // Vocabulary Extraction for Manual Player
     useEffect(() => {
@@ -2857,6 +2950,41 @@ export default function App() {
                                 </div>
 
                             </div>
+
+                            {/* PITCH GAUGE & AUTO-TRANSPOSE UI */}
+                            {micEnabled && activeTab === 'manual' && detectedPitch > 0 && (
+                                <div className="absolute bottom-10 right-10 bg-black/80 backdrop-blur-3xl border border-white/10 rounded-3xl p-6 shadow-2xl flex flex-col items-center z-[150] w-64 animate-in fade-in slide-in-from-bottom-10">
+                                    <div className="flex justify-between w-full mb-4 items-center">
+                                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-[#B87333]">Afinação</span>
+                                        <button
+                                            onClick={() => setIsAutoPitchEnabled(!isAutoPitchEnabled)}
+                                            className={`p-1.5 rounded-lg border transition-all ${isAutoPitchEnabled ? 'bg-[#B87333]/20 border-[#B87333] text-[#B87333]' : 'bg-white/5 border-white/10 text-slate-500 hover:text-white'}`}
+                                            title="Ligar/Desligar Auto-Regulagem de Tom"
+                                        >
+                                            <Zap className="w-4 h-4" />
+                                        </button>
+                                    </div>
+
+                                    <div className="text-5xl font-black text-white italic tracking-tighter mb-2">
+                                        {detectedNote || "--"}
+                                    </div>
+
+                                    <div className="w-full h-2 bg-white/10 rounded-full relative overflow-hidden mt-4">
+                                        <div className="absolute top-0 bottom-0 w-0.5 bg-white/30 left-1/2 -translate-x-1/2 z-10"></div>
+                                        {detectedNote && (
+                                            <div
+                                                className={`absolute top-0 bottom-0 w-4 rounded-full transition-all duration-100 ${Math.abs(detectedCents) < 15 ? 'bg-green-500' : 'bg-red-500'}`}
+                                                style={{ left: `calc(50% + ${Math.max(-45, Math.min(45, (detectedCents / 50) * 50))}%)`, transform: 'translateX(-50%)' }}
+                                            ></div>
+                                        )}
+                                    </div>
+                                    <div className="flex justify-between w-full mt-3 text-[8px] font-black text-slate-500 uppercase">
+                                        <span>Baixo</span>
+                                        <span className="text-white">{detectedCents > 0 ? '+' : ''}{detectedCents}c</span>
+                                        <span>Alto</span>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
                 ) : activeTab === 'presentation' ? (
