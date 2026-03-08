@@ -830,8 +830,8 @@ export default function App() {
         const songToSave = {
             song_name: song.song_name,
             artist_name: song.artist_name,
-            song_key: song.sounding_key || song.requested_key || song.song_key,
-            content: song.content || '',
+            song_key: song.original_key || song.song_key || 'C',
+            content: (song.original_key && song._orig_content && song.original_key !== (song.sounding_key || song.song_key)) ? song._orig_content : (song.content || ''),
             capo: song.capo || 0,
             include_tabs: song.include_tabs !== undefined ? song.include_tabs : true
         };
@@ -900,7 +900,7 @@ export default function App() {
                 artist_name: s.artist_name,
                 song_key: s.sounding_key || s.requested_key || s.song_key,
                 sounding_key: s.sounding_key || s.requested_key || s.song_key,
-                original_key: s.original_key || s.song_key,
+                original_key: s.original_key || s.song_key || 'C',
                 capo: s.capo || 0,
                 include_tabs: s.include_tabs !== undefined ? s.include_tabs : true,
                 content: s.content || ''
@@ -943,7 +943,7 @@ export default function App() {
             artist_name: s.artist_name,
             song_key: s.sounding_key || s.requested_key || s.song_key,
             sounding_key: s.sounding_key || s.requested_key || s.song_key,
-            original_key: s.original_key || s.song_key,
+            original_key: s.original_key || s.song_key || 'C',
             capo: s.capo || 0,
             include_tabs: s.include_tabs !== undefined ? s.include_tabs : true,
             content: s.content || ''
@@ -2235,7 +2235,16 @@ export default function App() {
             });
             const data = await res.json();
             if (res.ok) {
-                const newSong = { ...data, status: 'success', show_chords: true, sounding_key: data.sounding_key || data.original_key || '', capo: data.capo || 0, include_tabs: true };
+                const newSong = {
+                    ...data,
+                    status: 'success',
+                    show_chords: true,
+                    sounding_key: data.sounding_key || data.original_key || '',
+                    requested_key: data.requested_key || data.original_key || '',
+                    original_key: data.original_key || '',
+                    capo: data.capo || 0,
+                    include_tabs: true
+                };
                 setSongs(prev => [...prev, newSong]);
                 setSelectedManualIndex(songs.length); // jump to the new song
             }
@@ -2253,9 +2262,10 @@ export default function App() {
                 body: JSON.stringify({
                     song_name: s.song_name,
                     artist_name: s.artist_name || '',
-                    key: s.original_key || '',
+                    key: '', // Empty string forces backend to look for original key
                     include_tabs: s.include_tabs !== undefined ? s.include_tabs : true,
-                    capo: 0
+                    capo: 0,
+                    force_refresh: true // Bypass cache
                 })
             });
             const data = await res.json();
@@ -2263,7 +2273,7 @@ export default function App() {
                 const updatedSong = {
                     ...s,
                     content: data.content || s.content,
-                    sounding_key: data.sounding_key || data.original_key || s.original_key || '',
+                    sounding_key: data.sounding_key || data.original_key || '',
                     original_key: data.original_key || s.original_key,
                     requested_key: data.original_key || s.original_key,
                     capo: 0
@@ -2393,9 +2403,10 @@ export default function App() {
                 ...data,
                 status: 'success',
                 show_chords: true,
-                sounding_key: data.sounding_key || data.requested_key || data.original_key || useKey,
-                requested_key: data.requested_key || data.original_key || useKey,
-                song_key: data.original_key || data.requested_key || useKey,
+                sounding_key: data.sounding_key || data.requested_key || data.original_key || '',
+                requested_key: data.requested_key || data.original_key || '',
+                original_key: data.original_key || '',
+                song_key: data.original_key || data.requested_key || '',
                 capo: data.capo || manualCapo
             };
             setManualPreviewSong(newSong);
@@ -4330,7 +4341,7 @@ export default function App() {
                                                                 } catch (e) { console.error(e); }
                                                             };
                                                             const printSong = () => {
-                                                                setManualPreviewSong({ ...song, requested_key: song.sounding_key || song.song_key, original_key: song.sounding_key || song.song_key });
+                                                                setManualPreviewSong({ ...song, requested_key: song.sounding_key || song.song_key, original_key: song.original_key || song.song_key });
                                                                 setTimeout(() => window.print(), 300);
                                                             };
 

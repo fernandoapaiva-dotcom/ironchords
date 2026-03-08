@@ -159,6 +159,7 @@ class ManualEntryRequest(BaseModel):
     version: Optional[str] = "Principal"
     include_tabs: bool = True
     capo: Optional[int] = 0
+    force_refresh: bool = False
 
 class TransposeRequest(BaseModel):
     content: str
@@ -171,12 +172,14 @@ def add_manual_music(request: ManualEntryRequest):
     # Normalize key from request
     req_key = request.key.strip() if request.key else ""
     
-    # Try to find exactly the requested key in DB first for efficiency
-    chord_data = get_chord(request.song_name, request.artist_name, req_key if req_key else None)
-    
-    if not chord_data:
-        # If not found exactly, try any version of this song in DB
-        chord_data = get_chord(request.song_name, request.artist_name)
+    # Try to find exactly the requested key in DB first for efficiency (skip if force_refresh)
+    chord_data = None
+    if not request.force_refresh:
+        chord_data = get_chord(request.song_name, request.artist_name, req_key if req_key else None)
+        
+        if not chord_data:
+            # If not found exactly, try any version of this song in DB
+            chord_data = get_chord(request.song_name, request.artist_name)
     
     if chord_data:
         # Normalize key name from DB
