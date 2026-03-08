@@ -4187,8 +4187,10 @@ export default function App() {
                                                                     <button onClick={() => {
                                                                         const enriched = (pl.songs || []).map(s => ({
                                                                             ...s,
-                                                                            _orig_key: s.sounding_key || s.song_key || 'C',
-                                                                            _orig_content: s.content || ''
+                                                                            include_tabs: s.include_tabs !== false,
+                                                                            capo: s.capo || 0,
+                                                                            _orig_key: s._orig_key || s.sounding_key || s.song_key || 'C',
+                                                                            _orig_content: s._orig_content || s.content || ''
                                                                         }));
                                                                         setEditingList({ ...pl, songs: enriched });
                                                                         setEditListName(pl.name);
@@ -4316,8 +4318,24 @@ export default function App() {
                                                             const KEYS = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B', 'Db', 'Eb', 'Gb', 'Ab', 'Bb'];
                                                             const KEY_SEMITONES = { 'C': 0, 'C#': 1, 'Db': 1, 'D': 2, 'D#': 3, 'Eb': 3, 'E': 4, 'F': 5, 'F#': 6, 'Gb': 6, 'G': 7, 'G#': 8, 'Ab': 8, 'A': 9, 'A#': 10, 'Bb': 10, 'B': 11 };
                                                             const updateSong = (patch) => {
-                                                                if (patch.include_tabs !== undefined && selectedManualIndex === si) {
-                                                                    setIncludeTabs(patch.include_tabs);
+                                                                if (patch.include_tabs !== undefined) {
+                                                                    if (selectedManualIndex === si) setIncludeTabs(patch.include_tabs);
+
+                                                                    // Functional toggle: filter or restore content in the textarea
+                                                                    if (patch.include_tabs === false) {
+                                                                        patch.content = removeTablatureBlocks(song.content || '');
+                                                                    } else if (patch.include_tabs === true && song.include_tabs === false) {
+                                                                        // Restore from original if re-enabling tabs
+                                                                        patch.content = song._orig_content || song.content;
+                                                                        // If we restore content, we might need to re-transpose it if current key differs
+                                                                        const currentKey = song.sounding_key || song.song_key || 'C';
+                                                                        const origKey = song._orig_key || currentKey;
+                                                                        if (currentKey !== origKey) {
+                                                                            // Trigger a re-transposition from orig to current
+                                                                            transpose(0, currentKey);
+                                                                            return; // transpose will call updateSong again
+                                                                        }
+                                                                    }
                                                                 }
                                                                 if (patch.capo !== undefined) {
                                                                     const diff = (song.capo || 0) - patch.capo;
