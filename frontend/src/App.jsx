@@ -3030,7 +3030,6 @@ export default function App() {
                                                 // - A lyric line is active when currentLineIndex points to it
                                                 // - The chord line directly above an active lyric is also active (paired)
                                                 // - Purely instrumental chord-only sections are NEVER active
-                                                const allLines = (currentSong?.content || '').split('\n');
                                                 const isLyricActive = !isChordLine && currentLineIndex === lIdx;
                                                 const isPairedChordActive = isChordLine && (() => {
                                                     // Check if there's a lyric right below this chord that is the active line
