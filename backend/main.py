@@ -157,6 +157,7 @@ class ManualEntryRequest(BaseModel):
     artist_name: str
     key: str
     version: Optional[str] = "Principal"
+    slug: Optional[str] = None
     include_tabs: bool = True
     capo: Optional[int] = 0
     force_refresh: bool = False
@@ -214,7 +215,18 @@ def add_manual_music(request: ManualEntryRequest):
         suggestions_res = search_suggestions(search_query)
         suggestions = [s for s in suggestions_res.get("suggestions", []) if s.get("source") == "cifraclub"]
         
-        if suggestions:
+        # If we have a direct slug from front-end, prioritize it
+        selected_slug = request.slug
+        scraped = None
+        if selected_slug:
+            print(f"DEBUG SMART SEARCH: Usando slug direto do frontend: {selected_slug}")
+            scraped = scraper.scrape_cifraclub(request.song_name, selected_slug, request.version, request.include_tabs)
+            if scraped:
+                found_via_suggestion = True
+                suggested_song = scraped['song_name']
+                suggested_artist = scraped['artist_name']
+
+        if not scraped and suggestions:
             top = suggestions[0]
             # Normalize names to check if the top suggestion is actually what was requested
             # but being more flexible (matching parts of the name)
@@ -232,7 +244,8 @@ def add_manual_music(request: ManualEntryRequest):
                 found_via_suggestion = True
 
         # Attempt 2: Scrape with resolved metadata
-        scraped = find_chord_cascade(suggested_song, suggested_artist, version=request.version, include_tabs=request.include_tabs)
+        if not scraped:
+            scraped = find_chord_cascade(suggested_song, suggested_artist, version=request.version, include_tabs=request.include_tabs)
         
         # Attempt 3: Normal cleaning fallback if smart search didn't resolve or scraper failed
         if not scraped:
@@ -275,6 +288,19 @@ def add_manual_music(request: ManualEntryRequest):
                 )
         else:
             chord_data = scraped
+            try:
+                from database import save_chord
+                save_chord(
+                    song_name=chord_data['song_name'],
+                    artist_name=chord_data['artist_name'],
+                    song_key=chord_data['key'],
+                    content=chord_data['content'],
+                    source=chord_data['source'],
+                    capo=0,
+                    include_tabs=request.include_tabs
+                )
+            except Exception as e:
+                print(f"Error auto-saving manual search: {e}")
 
     
     # Final check for key (Requirement 2)
@@ -400,8 +426,19 @@ def add_batch_music(request: BatchRequest):
                 scraped = find_chord_cascade(song_name, artist_name, version=row.version, include_tabs=row.include_tabs)
                 if scraped:
                     chord_data = scraped
-
-            
+                    try:
+                        from database import save_chord
+                        save_chord(
+                            song_name=chord_data['song_name'],
+                            artist_name=chord_data['artist_name'],
+                            song_key=chord_data['key'],
+                            content=chord_data['content'],
+                            source=chord_data['source'],
+                            capo=0,
+                            include_tabs=row.include_tabs
+                        )
+                    except Exception as e:
+                        print(f"Error auto-saving batch search: {e}")
             if not chord_data:
                 # Fallback to any version if specific scrape failed
                 chord_data = get_chord(song_name, artist_name)
@@ -414,8 +451,19 @@ def add_batch_music(request: BatchRequest):
                 scraped = find_chord_cascade(song_name, artist_name)
                 if scraped:
                     chord_data = scraped
-
-            
+                    try:
+                        from database import save_chord
+                        save_chord(
+                            song_name=chord_data['song_name'],
+                            artist_name=chord_data['artist_name'],
+                            song_key=chord_data['key'],
+                            content=chord_data['content'],
+                            source=chord_data['source'],
+                            capo=0,
+                            include_tabs=row.include_tabs
+                        )
+                    except Exception as e:
+                        print(f"Error auto-saving batch fallback search: {e}")
             if chord_data:
                 # Se não houver Tom mapeado, assume o tom original da música
                 if not req_key:

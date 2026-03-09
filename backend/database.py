@@ -12,46 +12,67 @@ def get_db_connection():
 
 def init_db():
     conn = get_db_connection()
-    # Migration 1: Change UNIQUE constraint from (name, artist, key) to (name, artist)
-    # Check current columns and constraints
     cursor = conn.cursor()
-    cursor.execute("PRAGMA table_info(chords)")
-    cols = cursor.fetchall()
     
-    # We need to recreate the table to change UNIQUE constraint in SQLite or use a smart move
-    # First, let's handle duplicates if they exist before trying to apply a stricter UNIQUE
-    conn.execute('''
-        CREATE TABLE IF NOT EXISTS chords_new (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            song_name TEXT NOT NULL COLLATE NOCASE,
-            artist_name TEXT NOT NULL COLLATE NOCASE,
-            song_key TEXT NOT NULL COLLATE NOCASE,
-            content TEXT NOT NULL,
-            source TEXT NOT NULL,
-            capo INTEGER DEFAULT 0,
-            include_tabs INTEGER DEFAULT 1,
-            UNIQUE(song_name, artist_name)
-        )
-    ''')
-    
-    # Check if old table exists
     cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='chords'")
-    if cursor.fetchone():
-        # Check for include_tabs column
+    has_chords = cursor.fetchone() is not None
+
+    if not has_chords:
+        # Create fresh table
+        conn.execute('''
+            CREATE TABLE chords (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                song_name TEXT NOT NULL COLLATE NOCASE,
+                artist_name TEXT NOT NULL COLLATE NOCASE,
+                song_key TEXT NOT NULL COLLATE NOCASE,
+                content TEXT NOT NULL,
+                source TEXT NOT NULL,
+                capo INTEGER DEFAULT 0,
+                include_tabs INTEGER DEFAULT 1,
+                UNIQUE(song_name, artist_name)
+            )
+        ''')
+    else:
+        # Check columns for migration
         cursor.execute("PRAGMA table_info(chords)")
         cols_info = cursor.fetchall()
-        has_include_tabs = any(c[1] == 'include_tabs' for c in cols_info)
+        col_names = [c[1] for c in cols_info]
         
-        if not has_include_tabs:
+        # Add capo if missing
+        if 'capo' not in col_names:
+            print("MIGRATION: Adding capo column...")
+            conn.execute("ALTER TABLE chords ADD COLUMN capo INTEGER DEFAULT 0")
+            
+        # Add include_tabs if missing
+        if 'include_tabs' not in col_names:
             print("MIGRATION: Adding include_tabs column...")
             conn.execute("ALTER TABLE chords ADD COLUMN include_tabs INTEGER DEFAULT 1")
-            conn.commit()
-
-        # Check if the UNIQUE constraint is already the new one
-        cursor.execute("PRAGMA index_list(chords)")
-        # ... rest of the migration logic for uniqueness if needed ...
-        # (The existing logic below handles uniqueness via recreation if necessary)
-    
+            
+        # Recreate table to update UNIQUE constraint to (song_name, artist_name)
+        conn.execute('DROP TABLE IF EXISTS chords_tmp')
+        conn.execute('''
+            CREATE TABLE chords_tmp (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                song_name TEXT NOT NULL COLLATE NOCASE,
+                artist_name TEXT NOT NULL COLLATE NOCASE,
+                song_key TEXT NOT NULL COLLATE NOCASE,
+                content TEXT NOT NULL,
+                source TEXT NOT NULL,
+                capo INTEGER DEFAULT 0,
+                include_tabs INTEGER DEFAULT 1,
+                UNIQUE(song_name, artist_name)
+            )
+        ''')
+        
+        # Copy data using only the columns that exist in the temporary table to be safe
+        conn.execute('''
+            INSERT OR IGNORE INTO chords_tmp (id, song_name, artist_name, song_key, content, source, capo, include_tabs)
+            SELECT id, song_name, artist_name, song_key, content, source, capo, include_tabs FROM chords
+        ''')
+        
+        conn.execute('DROP TABLE chords')
+        conn.execute('ALTER TABLE chords_tmp RENAME TO chords')
+        
     conn.commit()
     conn.close()
 

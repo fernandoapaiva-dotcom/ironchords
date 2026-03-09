@@ -26,12 +26,16 @@ def scrape_cifraclub(song_name: str, artist_url_name: str, version: Optional[str
         v_clean = version.lower().replace(".html", "")
         path_version = f"/{v_clean}"
     
-    url = f"https://www.cifraclub.com.br/{artist_url_name}/{s_slug}{path_version}/imprimir.html"
+    # If artist_url_name already contains the song slug (like from Solr dns: "artist/song")
+    if "/" in artist_url_name:
+        url = f"https://www.cifraclub.com.br/{artist_url_name}{path_version}/imprimir.html"
+        meta_url = f"https://www.cifraclub.com.br/{artist_url_name}{path_version}/"
+    else:
+        url = f"https://www.cifraclub.com.br/{artist_url_name}/{s_slug}{path_version}/imprimir.html"
+        meta_url = f"https://www.cifraclub.com.br/{artist_url_name}/{s_slug}{path_version}/"
     # Fallback to non-print URL if we need meta info like capo
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
     try:
-        # First, try to get the regular page to extract metadata like capo
-        meta_url = f"https://www.cifraclub.com.br/{artist_url_name}/{s_slug}{path_version}/"
         meta_res = requests.get(meta_url, headers=headers, timeout=10)
         capo = 0
         if meta_res.status_code == 200:
@@ -74,7 +78,7 @@ def scrape_cifraclub(song_name: str, artist_url_name: str, version: Optional[str
             
         return {
             "song_name": song_name,
-            "artist_name": artist_url_name.replace("-", " ").title(),
+            "artist_name": (artist_url_name.split('/')[0] if "/" in artist_url_name else artist_url_name).replace("-", " ").title(),
             "key": key,
             "capo": capo,
             "content": clean_text(content),
@@ -257,6 +261,11 @@ def find_chord_cascade(song_name: str, artist_name: str, version: Optional[str] 
         attempts = []
         if a_name:
             attempts.append(("cifraclub", a_name))
+            if " & " in a_name:
+                attempts.append(("cifraclub", a_name.replace(" & ", " e ")))
+            if " e " in a_name.lower():
+                attempts.append(("cifraclub", a_name.lower().replace(" e ", " & ")))
+                
             attempts.append(("cifras", a_name))
             attempts.append(("bananacifras", a_name))
         attempts.append(("musicasparamissa", ""))
