@@ -808,6 +808,9 @@ export default function App() {
     const [showSaveSuccess, setShowSaveSuccess] = useState(false);
     const [showSaveConflict, setShowSaveConflict] = useState(false);
 
+    // Batch Modal State
+    const [batchModalOpen, setBatchModalOpen] = useState(false);
+
     // Share & Import State
     const [shareModalOpen, setShareModalOpen] = useState(false);
     const [importData, setImportData] = useState(null); // { name, songs }
@@ -2370,7 +2373,7 @@ export default function App() {
                         capo: newSong.capo || 0,
                         include_tabs: newSong.include_tabs !== undefined ? newSong.include_tabs : true
                     })
-                }).catch(() => {/* silent fail - db save is best-effort */});
+                }).catch(() => {/* silent fail - db save is best-effort */ });
             }
         } catch (e) { console.error('[PlayerSearch] Error adding song:', e); }
     };
@@ -3029,167 +3032,167 @@ export default function App() {
 
                                 {playerSidebarTab === 'fila' && (
                                     <div className="flex flex-col flex-1 overflow-hidden space-y-6">
-                                {/* ——— SEARCH BAR (Feature 1) ——— */}
-                                {!isSidebarCollapsed && (
-                                    <div className="relative">
-                                        <div className="relative">
-                                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/60 pointer-events-none" />
-                                            <input
-                                                type="text"
-                                                placeholder="Buscar e adicionar música..."
-                                                value={playerSongSearch}
-                                                onChange={e => handlePlayerSongSearch(e.target.value)}
-                                                className="w-full bg-[#B87333] border border-[#B87333]/50 rounded-xl pl-9 pr-4 py-3 text-[11px] font-bold text-white placeholder:text-white/60 focus:outline-none focus:ring-2 focus:ring-white/30 shadow-lg shadow-[#B87333]/20 transition-all"
-                                            />
-                                            {playerSongSearchLoading && <RefreshCw className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/60 animate-spin" />}
-                                        </div>
-                                        {playerSongSuggestions.length > 0 && (
-                                            <div className="absolute z-[200] w-full mt-1 bg-[#16161D] border border-white/10 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.7)] overflow-hidden backdrop-blur-3xl animate-in fade-in zoom-in-95 duration-200">
-                                                <div className="max-h-[280px] overflow-y-auto">
-                                                    {playerSongSuggestions.map((item, i) => (
-                                                        <button key={i} type="button"
-                                                            onClick={() => handleAddSongFromSearch(item)}
-                                                            className="w-full text-left px-4 py-3 hover:bg-[#B87333]/15 transition-all border-b border-white/5 last:border-none flex items-center justify-between group"
-                                                        >
-                                                            <div className="flex flex-col min-w-0">
-                                                                <span className="text-[11px] font-black text-white uppercase italic truncate group-hover:text-[#B87333]">{item.song}</span>
-                                                                <span className="text-[9px] text-slate-500 truncate">{item.artist}</span>
-                                                            </div>
-                                                            <Plus className="w-3.5 h-3.5 text-[#B87333] opacity-0 group-hover:opacity-100 shrink-0 ml-2" />
-                                                        </button>
-                                                    ))}
+                                        {/* ——— SEARCH BAR (Feature 1) ——— */}
+                                        {!isSidebarCollapsed && (
+                                            <div className="relative">
+                                                <div className="relative">
+                                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/60 pointer-events-none" />
+                                                    <input
+                                                        type="text"
+                                                        placeholder="Buscar e adicionar música..."
+                                                        value={playerSongSearch}
+                                                        onChange={e => handlePlayerSongSearch(e.target.value)}
+                                                        className="w-full bg-[#B87333] border border-[#B87333]/50 rounded-xl pl-9 pr-4 py-3 text-[11px] font-bold text-white placeholder:text-white/60 focus:outline-none focus:ring-2 focus:ring-white/30 shadow-lg shadow-[#B87333]/20 transition-all"
+                                                    />
+                                                    {playerSongSearchLoading && <RefreshCw className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/60 animate-spin" />}
                                                 </div>
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-
-                                {/* ——— HEADER: title + save button ——— */}
-                                <div className={`flex items-center ${isSidebarCollapsed ? 'justify-center' : 'justify-between'}`}>
-                                    <div className="flex items-center space-x-3" title="Fila de Execução">
-                                        <LayoutList className="w-5 h-5 text-[#B87333] shrink-0" />
-                                        {!isSidebarCollapsed && <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] whitespace-nowrap">Fila de Execução</h3>}
-                                    </div>
-                                    {!isSidebarCollapsed && (
-                                        <button onClick={() => { setShowPlaylistManager(!showPlaylistManager); setSaveMode('new'); }} className={`p-1.5 rounded-md transition-all ${showPlaylistManager ? 'bg-[#B87333] text-white' : 'text-slate-600 hover:text-slate-400'}`} title="Salvar Setlist">
-                                            <Save className="w-3.5 h-3.5" />
-                                        </button>
-                                    )}
-                                </div>
-
-                                {/* ——— SAVE MODAL (Feature 3) ——— */}
-                                {!isSidebarCollapsed && showPlaylistManager && (
-                                    <div className="bg-[#B87333]/10 border border-[#B87333]/30 p-4 rounded-2xl animate-in slide-in-from-top-4 duration-300 space-y-3">
-                                        {/* Mode Tabs */}
-                                        <div className="flex space-x-1 bg-black/40 p-1 rounded-xl">
-                                            <button onClick={() => setSaveMode('new')} className={`flex-1 py-1.5 text-[9px] font-black uppercase rounded-lg transition-all ${saveMode === 'new' ? 'bg-[#B87333] text-white' : 'text-slate-500 hover:text-white'}`}>✨ Nova</button>
-                                            <button onClick={() => setSaveMode('append')} className={`flex-1 py-1.5 text-[9px] font-black uppercase rounded-lg transition-all ${saveMode === 'append' ? 'bg-[#B87333] text-white' : 'text-slate-500 hover:text-white'}`}>➕ Adicionar em...</button>
-                                        </div>
-
-                                        {saveMode === 'new' ? (
-                                            <div className="flex space-x-2">
-                                                <input type="text" placeholder="Nome da Setlist..." value={playlistNameInput} onChange={e => setPlaylistNameInput(e.target.value)}
-                                                    onKeyDown={e => { if (e.key === 'Enter' && playlistNameInput.trim()) { const newList = { id: Date.now().toString(), name: playlistNameInput, songs: songs.map(s => ({ ...s })) }; const next = [...savedPlaylists, newList]; setSavedPlaylists(next); localStorage.setItem('iron_chords_playlists', JSON.stringify(next)); setActivePlaylistName(playlistNameInput); setPlaylistNameInput(''); setShowPlaylistManager(false); } }}
-                                                    className="flex-1 bg-black/40 border border-[#B87333]/20 rounded-lg px-3 py-2 text-[10px] font-bold text-white focus:outline-none focus:ring-1 focus:ring-[#B87333]/40" />
-                                                <button onClick={() => {
-                                                    if (!playlistNameInput.trim()) return;
-                                                    const newList = { id: Date.now().toString(), name: playlistNameInput, songs: songs.map(s => ({ ...s })) };
-                                                    const next = [...savedPlaylists, newList];
-                                                    setSavedPlaylists(next);
-                                                    localStorage.setItem('iron_chords_playlists', JSON.stringify(next));
-                                                    setActivePlaylistName(playlistNameInput);
-                                                    setPlaylistNameInput('');
-                                                    setShowPlaylistManager(false);
-                                                }} className="bg-[#B87333] text-white p-2 rounded-lg hover:bg-[#8B4513] transition-all shrink-0">
-                                                    <Plus className="w-4 h-4" />
-                                                </button>
-                                            </div>
-                                        ) : (
-                                            <div className="space-y-1.5 max-h-[150px] overflow-y-auto">
-                                                {savedPlaylists.length === 0 ? (
-                                                    <p className="text-[9px] text-slate-600 italic text-center py-2">Nenhuma setlist salva</p>
-                                                ) : savedPlaylists.map(pl => (
-                                                    <button key={pl.id} onClick={() => {
-                                                        const merged = [...pl.songs, ...songs.filter(s => !pl.songs.some(ps => ps.song_name === s.song_name))];
-                                                        const updated = savedPlaylists.map(p => p.id === pl.id ? { ...p, songs: merged } : p);
-                                                        setSavedPlaylists(updated);
-                                                        localStorage.setItem('iron_chords_playlists', JSON.stringify(updated));
-                                                        setShowPlaylistManager(false);
-                                                    }} className="w-full text-left px-3 py-2 rounded-lg bg-white/5 hover:bg-[#B87333]/20 border border-white/5 hover:border-[#B87333]/30 text-[10px] font-bold text-slate-400 hover:text-white uppercase italic transition-all flex items-center justify-between group">
-                                                        <span className="truncate">{pl.name}</span>
-                                                        <Plus className="w-3 h-3 opacity-0 group-hover:opacity-100 shrink-0 ml-1" />
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-
-                                {/* ——— SONG LIST (with trash + print) ——— */}
-                                <div className={`flex-1 overflow-y-auto space-y-2 scrollbar-thin scrollbar-thumb-[#B87333]/20 ${isSidebarCollapsed ? 'pr-0' : 'pr-1'}`}>
-                                    {songs.map((s, idx) => (
-                                        <div key={idx} className="relative group/song">
-                                            <button
-                                                draggable={!isSidebarCollapsed}
-                                                onDragStart={() => (dragItem.current = idx)}
-                                                onDragEnter={() => { dragOverItem.current = idx; setDragOverIdx(idx); }}
-                                                onDragEnd={handleSort}
-                                                onDragOver={(e) => e.preventDefault()}
-                                                onTouchStart={(e) => { if (isSidebarCollapsed) return; dragItem.current = idx; e.target.style.opacity = '0.5'; }}
-                                                onTouchMove={(e) => {
-                                                    if (isSidebarCollapsed || dragItem.current === null) return;
-                                                    e.preventDefault();
-                                                    const touchIndex = e.touches[0];
-                                                    const hoverElement = document.elementFromPoint(touchIndex.clientX, touchIndex.clientY);
-                                                    if (hoverElement) {
-                                                        const targetButton = hoverElement.closest('[data-drag-index]');
-                                                        if (targetButton) {
-                                                            const targetIdx = parseInt(targetButton.getAttribute('data-drag-index'), 10);
-                                                            if (!isNaN(targetIdx) && targetIdx !== dragOverItem.current) { dragOverItem.current = targetIdx; setDragOverIdx(targetIdx); }
-                                                        }
-                                                    }
-                                                }}
-                                                onTouchEnd={(e) => {
-                                                    if (isSidebarCollapsed) return;
-                                                    e.target.style.opacity = '1';
-                                                    if (dragItem.current !== null && dragOverItem.current !== null) handleSort();
-                                                    else { dragItem.current = null; dragOverItem.current = null; setDragOverIdx(null); }
-                                                }}
-                                                onClick={() => { setSelectedManualIndex(idx); setCurrentLineIndex(0); currentLineIndexRef.current = 0; }}
-                                                className={`w-full ${isSidebarCollapsed ? 'p-2 justify-center' : 'p-3'} rounded-2xl border transition-all text-left flex items-center ${isSidebarCollapsed ? 'space-x-0' : 'space-x-3'} relative overflow-hidden ${selectedManualIndex === idx ? 'bg-[#B87333] border-[#B87333] shadow-lg shadow-[#B87333]/20' : 'bg-white/5 border-white/5 hover:border-[#B87333]/30'} ${dragOverIdx === idx ? (dragItem.current !== null && dragOverItem.current !== null && dragItem.current < dragOverItem.current ? 'border-b-4 border-b-orange-500' : 'border-t-4 border-t-orange-500') : ''} ${!isSidebarCollapsed ? 'cursor-grab active:cursor-grabbing touch-none' : ''}`}
-                                                title={isSidebarCollapsed ? `${idx + 1}. ${s.song_name}` : "Clique para tocar • Arraste para reordenar"}
-                                                data-drag-index={idx}
-                                            >
-                                                <div className={`w-7 h-7 rounded-xl flex items-center justify-center font-black text-xs shrink-0 transition-all ${selectedManualIndex === idx ? 'bg-white text-[#B87333]' : 'bg-black/60 text-slate-700 group-hover/song:text-white'}`}>{idx + 1}</div>
-                                                {!isSidebarCollapsed && (
-                                                    <div className="flex-1 min-w-0">
-                                                        <p className={`text-[11px] font-black uppercase italic truncate tracking-tight ${selectedManualIndex === idx ? 'text-white' : 'text-slate-400 group-hover/song:text-slate-200'}`}>{s.song_name}</p>
-                                                        <p className={`text-[9px] font-bold uppercase truncate ${selectedManualIndex === idx ? 'text-white/60' : 'text-slate-600'}`}>{s.artist_name}</p>
+                                                {playerSongSuggestions.length > 0 && (
+                                                    <div className="absolute z-[200] w-full mt-1 bg-[#16161D] border border-white/10 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.7)] overflow-hidden backdrop-blur-3xl animate-in fade-in zoom-in-95 duration-200">
+                                                        <div className="max-h-[280px] overflow-y-auto">
+                                                            {playerSongSuggestions.map((item, i) => (
+                                                                <button key={i} type="button"
+                                                                    onClick={() => handleAddSongFromSearch(item)}
+                                                                    className="w-full text-left px-4 py-3 hover:bg-[#B87333]/15 transition-all border-b border-white/5 last:border-none flex items-center justify-between group"
+                                                                >
+                                                                    <div className="flex flex-col min-w-0">
+                                                                        <span className="text-[11px] font-black text-white uppercase italic truncate group-hover:text-[#B87333]">{item.song}</span>
+                                                                        <span className="text-[9px] text-slate-500 truncate">{item.artist}</span>
+                                                                    </div>
+                                                                    <Plus className="w-3.5 h-3.5 text-[#B87333] opacity-0 group-hover:opacity-100 shrink-0 ml-2" />
+                                                                </button>
+                                                            ))}
+                                                        </div>
                                                     </div>
                                                 )}
-                                            </button>
-                                            {/* Trash + Print action buttons */}
+                                            </div>
+                                        )}
+
+                                        {/* ——— HEADER: title + save button ——— */}
+                                        <div className={`flex items-center ${isSidebarCollapsed ? 'justify-center' : 'justify-between'}`}>
+                                            <div className="flex items-center space-x-3" title="Fila de Execução">
+                                                <LayoutList className="w-5 h-5 text-[#B87333] shrink-0" />
+                                                {!isSidebarCollapsed && <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] whitespace-nowrap">Fila de Execução</h3>}
+                                            </div>
                                             {!isSidebarCollapsed && (
-                                                <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center space-x-0.5 opacity-0 group-hover/song:opacity-100 transition-all">
-                                                    <button
-                                                        onClick={(e) => { e.stopPropagation(); setSelectedManualIndex(idx); setTimeout(() => window.print(), 50); }}
-                                                        className="p-1.5 rounded-lg bg-black/60 text-slate-500 hover:text-white hover:bg-white/10 transition-all"
-                                                        title="Imprimir cifra"
-                                                    >
-                                                        <Printer className="w-3 h-3" />
-                                                    </button>
-                                                    <button
-                                                        onClick={(e) => { e.stopPropagation(); handleDeleteSongFromQueue(idx); }}
-                                                        className="p-1.5 rounded-lg bg-black/60 text-red-900 hover:text-red-400 hover:bg-red-500/10 transition-all"
-                                                        title="Remover da fila"
-                                                    >
-                                                        <Trash2 className="w-3 h-3" />
-                                                    </button>
-                                                </div>
+                                                <button onClick={() => { setShowPlaylistManager(!showPlaylistManager); setSaveMode('new'); }} className={`p-1.5 rounded-md transition-all ${showPlaylistManager ? 'bg-[#B87333] text-white' : 'text-slate-600 hover:text-slate-400'}`} title="Salvar Setlist">
+                                                    <Save className="w-3.5 h-3.5" />
+                                                </button>
                                             )}
                                         </div>
-                                    ))}
-                                </div>
+
+                                        {/* ——— SAVE MODAL (Feature 3) ——— */}
+                                        {!isSidebarCollapsed && showPlaylistManager && (
+                                            <div className="bg-[#B87333]/10 border border-[#B87333]/30 p-4 rounded-2xl animate-in slide-in-from-top-4 duration-300 space-y-3">
+                                                {/* Mode Tabs */}
+                                                <div className="flex space-x-1 bg-black/40 p-1 rounded-xl">
+                                                    <button onClick={() => setSaveMode('new')} className={`flex-1 py-1.5 text-[9px] font-black uppercase rounded-lg transition-all ${saveMode === 'new' ? 'bg-[#B87333] text-white' : 'text-slate-500 hover:text-white'}`}>✨ Nova</button>
+                                                    <button onClick={() => setSaveMode('append')} className={`flex-1 py-1.5 text-[9px] font-black uppercase rounded-lg transition-all ${saveMode === 'append' ? 'bg-[#B87333] text-white' : 'text-slate-500 hover:text-white'}`}>➕ Adicionar em...</button>
+                                                </div>
+
+                                                {saveMode === 'new' ? (
+                                                    <div className="flex space-x-2">
+                                                        <input type="text" placeholder="Nome da Setlist..." value={playlistNameInput} onChange={e => setPlaylistNameInput(e.target.value)}
+                                                            onKeyDown={e => { if (e.key === 'Enter' && playlistNameInput.trim()) { const newList = { id: Date.now().toString(), name: playlistNameInput, songs: songs.map(s => ({ ...s })) }; const next = [...savedPlaylists, newList]; setSavedPlaylists(next); localStorage.setItem('iron_chords_playlists', JSON.stringify(next)); setActivePlaylistName(playlistNameInput); setPlaylistNameInput(''); setShowPlaylistManager(false); } }}
+                                                            className="flex-1 bg-black/40 border border-[#B87333]/20 rounded-lg px-3 py-2 text-[10px] font-bold text-white focus:outline-none focus:ring-1 focus:ring-[#B87333]/40" />
+                                                        <button onClick={() => {
+                                                            if (!playlistNameInput.trim()) return;
+                                                            const newList = { id: Date.now().toString(), name: playlistNameInput, songs: songs.map(s => ({ ...s })) };
+                                                            const next = [...savedPlaylists, newList];
+                                                            setSavedPlaylists(next);
+                                                            localStorage.setItem('iron_chords_playlists', JSON.stringify(next));
+                                                            setActivePlaylistName(playlistNameInput);
+                                                            setPlaylistNameInput('');
+                                                            setShowPlaylistManager(false);
+                                                        }} className="bg-[#B87333] text-white p-2 rounded-lg hover:bg-[#8B4513] transition-all shrink-0">
+                                                            <Plus className="w-4 h-4" />
+                                                        </button>
+                                                    </div>
+                                                ) : (
+                                                    <div className="space-y-1.5 max-h-[150px] overflow-y-auto">
+                                                        {savedPlaylists.length === 0 ? (
+                                                            <p className="text-[9px] text-slate-600 italic text-center py-2">Nenhuma setlist salva</p>
+                                                        ) : savedPlaylists.map(pl => (
+                                                            <button key={pl.id} onClick={() => {
+                                                                const merged = [...pl.songs, ...songs.filter(s => !pl.songs.some(ps => ps.song_name === s.song_name))];
+                                                                const updated = savedPlaylists.map(p => p.id === pl.id ? { ...p, songs: merged } : p);
+                                                                setSavedPlaylists(updated);
+                                                                localStorage.setItem('iron_chords_playlists', JSON.stringify(updated));
+                                                                setShowPlaylistManager(false);
+                                                            }} className="w-full text-left px-3 py-2 rounded-lg bg-white/5 hover:bg-[#B87333]/20 border border-white/5 hover:border-[#B87333]/30 text-[10px] font-bold text-slate-400 hover:text-white uppercase italic transition-all flex items-center justify-between group">
+                                                                <span className="truncate">{pl.name}</span>
+                                                                <Plus className="w-3 h-3 opacity-0 group-hover:opacity-100 shrink-0 ml-1" />
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+
+                                        {/* ——— SONG LIST (with trash + print) ——— */}
+                                        <div className={`flex-1 overflow-y-auto space-y-2 scrollbar-thin scrollbar-thumb-[#B87333]/20 ${isSidebarCollapsed ? 'pr-0' : 'pr-1'}`}>
+                                            {songs.map((s, idx) => (
+                                                <div key={idx} className="relative group/song">
+                                                    <button
+                                                        draggable={!isSidebarCollapsed}
+                                                        onDragStart={() => (dragItem.current = idx)}
+                                                        onDragEnter={() => { dragOverItem.current = idx; setDragOverIdx(idx); }}
+                                                        onDragEnd={handleSort}
+                                                        onDragOver={(e) => e.preventDefault()}
+                                                        onTouchStart={(e) => { if (isSidebarCollapsed) return; dragItem.current = idx; e.target.style.opacity = '0.5'; }}
+                                                        onTouchMove={(e) => {
+                                                            if (isSidebarCollapsed || dragItem.current === null) return;
+                                                            e.preventDefault();
+                                                            const touchIndex = e.touches[0];
+                                                            const hoverElement = document.elementFromPoint(touchIndex.clientX, touchIndex.clientY);
+                                                            if (hoverElement) {
+                                                                const targetButton = hoverElement.closest('[data-drag-index]');
+                                                                if (targetButton) {
+                                                                    const targetIdx = parseInt(targetButton.getAttribute('data-drag-index'), 10);
+                                                                    if (!isNaN(targetIdx) && targetIdx !== dragOverItem.current) { dragOverItem.current = targetIdx; setDragOverIdx(targetIdx); }
+                                                                }
+                                                            }
+                                                        }}
+                                                        onTouchEnd={(e) => {
+                                                            if (isSidebarCollapsed) return;
+                                                            e.target.style.opacity = '1';
+                                                            if (dragItem.current !== null && dragOverItem.current !== null) handleSort();
+                                                            else { dragItem.current = null; dragOverItem.current = null; setDragOverIdx(null); }
+                                                        }}
+                                                        onClick={() => { setSelectedManualIndex(idx); setCurrentLineIndex(0); currentLineIndexRef.current = 0; }}
+                                                        className={`w-full ${isSidebarCollapsed ? 'p-2 justify-center' : 'p-3'} rounded-2xl border transition-all text-left flex items-center ${isSidebarCollapsed ? 'space-x-0' : 'space-x-3'} relative overflow-hidden ${selectedManualIndex === idx ? 'bg-[#B87333] border-[#B87333] shadow-lg shadow-[#B87333]/20' : 'bg-white/5 border-white/5 hover:border-[#B87333]/30'} ${dragOverIdx === idx ? (dragItem.current !== null && dragOverItem.current !== null && dragItem.current < dragOverItem.current ? 'border-b-4 border-b-orange-500' : 'border-t-4 border-t-orange-500') : ''} ${!isSidebarCollapsed ? 'cursor-grab active:cursor-grabbing touch-none' : ''}`}
+                                                        title={isSidebarCollapsed ? `${idx + 1}. ${s.song_name}` : "Clique para tocar • Arraste para reordenar"}
+                                                        data-drag-index={idx}
+                                                    >
+                                                        <div className={`w-7 h-7 rounded-xl flex items-center justify-center font-black text-xs shrink-0 transition-all ${selectedManualIndex === idx ? 'bg-white text-[#B87333]' : 'bg-black/60 text-slate-700 group-hover/song:text-white'}`}>{idx + 1}</div>
+                                                        {!isSidebarCollapsed && (
+                                                            <div className="flex-1 min-w-0">
+                                                                <p className={`text-[11px] font-black uppercase italic truncate tracking-tight ${selectedManualIndex === idx ? 'text-white' : 'text-slate-400 group-hover/song:text-slate-200'}`}>{s.song_name}</p>
+                                                                <p className={`text-[9px] font-bold uppercase truncate ${selectedManualIndex === idx ? 'text-white/60' : 'text-slate-600'}`}>{s.artist_name}</p>
+                                                            </div>
+                                                        )}
+                                                    </button>
+                                                    {/* Trash + Print action buttons */}
+                                                    {!isSidebarCollapsed && (
+                                                        <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center space-x-0.5 opacity-0 group-hover/song:opacity-100 transition-all">
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); setSelectedManualIndex(idx); setTimeout(() => window.print(), 50); }}
+                                                                className="p-1.5 rounded-lg bg-black/60 text-slate-500 hover:text-white hover:bg-white/10 transition-all"
+                                                                title="Imprimir cifra"
+                                                            >
+                                                                <Printer className="w-3 h-3" />
+                                                            </button>
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); handleDeleteSongFromQueue(idx); }}
+                                                                className="p-1.5 rounded-lg bg-black/60 text-red-900 hover:text-red-400 hover:bg-red-500/10 transition-all"
+                                                                title="Remover da fila"
+                                                            >
+                                                                <Trash2 className="w-3 h-3" />
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
                                     </div>
                                 )}
 
@@ -3212,7 +3215,7 @@ export default function App() {
                                                             <span className="text-[9px] font-bold text-slate-500 bg-black/40 px-2 py-1 rounded-md">{pl.songs?.length || 0}</span>
                                                         </div>
                                                         <div className="flex space-x-2">
-                                                            <button onClick={() => { setSongs(pl.songs.map(s => ({...s}))); setActivePlaylistName(pl.name); setPlayerSidebarTab('fila'); }} className="flex-1 py-2 bg-[#B87333]/20 hover:bg-[#B87333] text-[#B87333] hover:text-white rounded-lg text-[9px] font-black uppercase tracking-widest transition-all">Carregar</button>
+                                                            <button onClick={() => { setSongs(pl.songs.map(s => ({ ...s }))); setActivePlaylistName(pl.name); setPlayerSidebarTab('fila'); }} className="flex-1 py-2 bg-[#B87333]/20 hover:bg-[#B87333] text-[#B87333] hover:text-white rounded-lg text-[9px] font-black uppercase tracking-widest transition-all">Carregar</button>
                                                             <button onClick={() => {
                                                                 setEditingList(pl);
                                                                 setEditListName(pl.name);
@@ -3223,6 +3226,14 @@ export default function App() {
                                                 ));
                                             })()}
                                         </div>
+                                        {/* Batch Upload Button */}
+                                        <button
+                                            onClick={() => setBatchModalOpen(true)}
+                                            className="w-full py-3 bg-[#B87333]/10 hover:bg-[#B87333] border border-[#B87333]/20 hover:border-[#B87333] text-[#B87333] hover:text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center space-x-2 shrink-0"
+                                        >
+                                            <UploadCloud className="w-3.5 h-3.5" />
+                                            <span>Forja em Lote</span>
+                                        </button>
                                     </div>
                                 )}
                             </div>
@@ -3370,7 +3381,7 @@ export default function App() {
                 ) : (
                     <div className="selection-branch-root flex flex-col min-h-[600px] h-full">
                         <div className="no-print">
-                            
+
                         </div>
                         <div className="flex-1 overflow-y-auto w-full max-w-6xl mx-auto px-4 pb-20">
 
@@ -4249,484 +4260,484 @@ export default function App() {
 
 
                                                     {/* Delete Confirmation Modal */}
-            {
-                deleteModalOpen && (
-                    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-[#070709]/90 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-300">
-                        <div className="bg-[#16161D] border border-white/10 p-8 rounded-[32px] shadow-2xl w-full max-w-md flex flex-col">
-                            <div className="flex items-center justify-between mb-8">
-                                <div className="flex items-center space-x-4">
-                                    <div className="w-1.5 h-6 bg-red-600 rounded-full shadow-[0_0_15px_rgba(220,38,38,0.4)]"></div>
-                                    <h3 className="text-xl font-black text-white uppercase italic tracking-tighter">Confirmar Exclusão</h3>
-                                </div>
-                                <button onClick={() => setDeleteModalOpen(false)} className="p-2 bg-white/5 hover:bg-white/10 rounded-xl transition-all border border-white/5"><X className="w-5 h-5 text-slate-400" /></button>
-                            </div>
-                            <div className="space-y-6">
-                                <p className="text-sm font-bold text-slate-400 uppercase tracking-widest leading-relaxed">
-                                    Você tem certeza que deseja excluir permanentemente {deleteTarget.type === 'acervo' ? 'a música' : 'a lista'} <span className="text-white">"{deleteTarget.name}"</span>?
-                                </p>
-                                <p className="text-[10px] text-red-500/80 italic uppercase">Esta ação não poderá ser desfeita.</p>
+                                                    null
 
-                                <div className="flex items-center space-x-4 mt-6">
-                                    <button onClick={() => setDeleteModalOpen(false)} className="flex-1 py-4 bg-white/5 hover:bg-white/10 text-white font-black uppercase tracking-widest rounded-xl transition-all border border-white/5">Cancelar</button>
-                                    <button onClick={confirmDelete} className="flex-1 py-4 bg-red-600 hover:bg-red-700 text-white font-black uppercase tracking-widest rounded-xl transition-all shadow-xl shadow-red-900/20 flex items-center justify-center space-x-2">
-                                        <Trash2 className="w-4 h-4" />
-                                        <span>Excluir</span>
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                )
-            }
 
-            {/* Save List Modal */}
-            {
-                saveListModalOpen && (() => {
-                    const allPlaylists = JSON.parse(localStorage.getItem('iron_chords_playlists') || '[]');
-                    const hasExisting = allPlaylists.length > 0;
-                    return (
-                        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-[#070709]/90 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-300">
-                            <div className="bg-[#16161D] border border-white/10 p-8 rounded-[32px] shadow-2xl w-full max-w-md flex flex-col">
-                                <div className="flex items-center justify-between mb-6">
-                                    <div className="flex items-center space-x-3">
-                                        <div className="w-1.5 h-6 bg-[#B87333] rounded-full shadow-[0_0_15px_rgba(184,115,51,0.4)]"></div>
-                                        <h3 className="text-xl font-black text-white uppercase italic tracking-tighter">Salvar Forja</h3>
-                                    </div>
-                                    <button onClick={() => { setSaveListModalOpen(false); setSaveListName(''); setSelectedListsToAddTo([]); }} className="p-2 bg-white/5 hover:bg-white/10 rounded-xl transition-all border border-white/5"><X className="w-5 h-5 text-slate-400" /></button>
-                                </div>
 
-                                <div className="flex bg-black/40 p-1.5 rounded-2xl border border-white/5 mb-6">
-                                    <button onClick={() => setSaveListMode('new')} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${saveListMode === 'new' ? 'bg-[#B87333] text-white shadow-lg' : 'text-slate-500 hover:text-white'}`}>+ Nova Lista</button>
-                                    <button onClick={() => setSaveListMode('existing')} disabled={!hasExisting} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-30 disabled:cursor-not-allowed ${saveListMode === 'existing' ? 'bg-[#B87333] text-white shadow-lg' : 'text-slate-500 hover:text-white'}`}>Adicionar à Existente</button>
-                                </div>
 
-                                {saveListMode === 'new' && (
-                                    <div className="space-y-4">
-                                        <div>
-                                            <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Nome da Nova Lista</label>
-                                            <input type="text" autoFocus placeholder="Ex: Missa de Domingo..." value={saveListName} onChange={e => setSaveListName(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-4 text-white font-bold outline-none focus:border-[#B87333]/50 transition-all placeholder:text-slate-700" onKeyDown={e => e.key === 'Enter' && handleSaveList()} />
-                                        </div>
-                                        <button onClick={handleSaveList} disabled={!saveListName.trim()} className="w-full py-4 bg-[#B87333] hover:bg-[#8B4513] text-white font-black uppercase tracking-widest rounded-xl transition-all shadow-xl shadow-[#B87333]/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2">
-                                            <Save className="w-4 h-4" /><span>Criar e Salvar Lista</span>
-                                        </button>
-                                    </div>
-                                )}
 
-                                {saveListMode === 'existing' && (
-                                    <div className="space-y-4">
-                                        <label className="block text-[10px] font-black uppercase text-slate-500 mb-1 tracking-widest ml-1">Selecione uma ou mais listas</label>
-                                        <div className="max-h-64 overflow-y-auto space-y-2 pr-1 scrollbar-thin scrollbar-thumb-white/10">
-                                            {allPlaylists.map(pl => (
-                                                <label key={pl.id} className={`flex items-center space-x-4 p-4 rounded-2xl border cursor-pointer transition-all ${selectedListsToAddTo.includes(pl.id) ? 'bg-[#B87333]/15 border-[#B87333]/40' : 'bg-black/30 border-white/5 hover:border-white/15'}`}>
-                                                    <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 transition-all ${selectedListsToAddTo.includes(pl.id) ? 'bg-[#B87333] border-[#B87333]' : 'border-white/20'}`}>
-                                                        {selectedListsToAddTo.includes(pl.id) && <Check className="w-3 h-3 text-white" />}
-                                                    </div>
-                                                    <input type="checkbox" className="hidden" checked={selectedListsToAddTo.includes(pl.id)} onChange={e => {
-                                                        if (e.target.checked) setSelectedListsToAddTo(prev => [...prev, pl.id]);
-                                                        else setSelectedListsToAddTo(prev => prev.filter(id => id !== pl.id));
-                                                    }} />
-                                                    <div className="flex-1 min-w-0">
-                                                        <p className="font-black text-white text-sm uppercase italic tracking-tight truncate">{pl.name}</p>
-                                                        <p className="text-[10px] text-slate-500 font-bold mt-0.5">{pl.songs?.length || 0} músicas</p>
-                                                    </div>
-                                                </label>
-                                            ))}
-                                        </div>
-                                        <button onClick={handleAddToExistingLists} disabled={selectedListsToAddTo.length === 0} className="w-full py-4 bg-[#B87333] hover:bg-[#8B4513] text-white font-black uppercase tracking-widest rounded-xl transition-all shadow-xl shadow-[#B87333]/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2">
-                                            <FolderHeart className="w-4 h-4" /><span>{selectedListsToAddTo.length > 0 ? `Adicionar às ${selectedListsToAddTo.length} Lista(s)` : 'Selecione as Listas'}</span>
-                                        </button>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    );
-                })()
-            }
 
-            {/* Save Success Animation */}
-            {
-                showSaveSuccess && (
-                    <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/40 backdrop-blur-sm animate-in fade-in duration-300 pointer-events-none">
-                        <div className="bg-green-500/10 border border-green-500/20 p-10 rounded-[40px] shadow-[0_0_50px_rgba(34,197,94,0.3)] flex flex-col items-center animate-in zoom-in-50 duration-500 spring-gentle">
-                            <div className="w-24 h-24 bg-green-500/20 rounded-full flex items-center justify-center relative mb-6">
-                                <div className="absolute inset-0 bg-green-500/20 rounded-full animate-ping"></div>
-                                <CheckCircle className="w-12 h-12 text-green-400 drop-shadow-[0_0_15px_rgba(34,197,94,0.8)]" />
-                            </div>
-                            <h2 className="text-3xl font-black text-white uppercase italic tracking-tighter drop-shadow-md">Lista Forjada</h2>
-                            <p className="text-green-400/80 font-bold uppercase tracking-[0.2em] text-xs mt-2">Salva com Sucesso no Acervo Local</p>
-                        </div>
-                    </div>
-                )
-            }
 
-            {/* Save Conflict Notification */}
-            {
-                showSaveConflict && (
-                    <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/40 backdrop-blur-sm animate-in fade-in duration-300 pointer-events-none">
-                        <div className="bg-yellow-500/10 border border-yellow-500/20 p-10 rounded-[40px] shadow-[0_0_50px_rgba(234,179,8,0.3)] flex flex-col items-center animate-in zoom-in-50 duration-500 spring-gentle">
-                            <div className="w-24 h-24 bg-yellow-500/20 rounded-full flex items-center justify-center relative mb-6">
-                                <div className="absolute inset-0 bg-yellow-500/20 rounded-full animate-pulse"></div>
-                                <AlertCircle className="w-12 h-12 text-yellow-400 drop-shadow-[0_0_15px_rgba(234,179,8,0.8)]" />
-                            </div>
-                            <h2 className="text-3xl font-black text-white uppercase italic tracking-tighter drop-shadow-md">Atenção</h2>
-                            <p className="text-yellow-400/80 font-bold uppercase tracking-[0.2em] text-xs mt-2">A música já está salva no acervo</p>
-                        </div>
-                    </div>
-                )}
 
-            {/* Edit Acervo Modal */}
-            {
-                editingChord && (
-                    <div className="fixed inset-0 z-[250] flex items-center justify-center bg-[#070709]/90 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-300 p-4">
-                        <div className="bg-[#16161D] border border-[#B87333]/30 p-8 rounded-[32px] shadow-[0_0_50px_rgba(0,0,0,0.8)] w-full max-w-4xl flex flex-col max-h-[90vh]">
-                            <div className="flex items-center justify-between mb-8 shrink-0">
-                                <div className="flex items-center space-x-4">
-                                    <div className="w-1.5 h-6 bg-[#B87333] rounded-full shadow-[0_0_15px_rgba(184,115,51,0.4)]"></div>
-                                    <h3 className="text-2xl font-black text-white uppercase italic tracking-tighter">Editar Cifra</h3>
-                                </div>
-                                <button onClick={() => setEditingChord(null)} className="p-2 bg-white/5 hover:bg-white/10 rounded-xl transition-all border border-white/5"><X className="w-5 h-5 text-slate-400" /></button>
-                            </div>
-                            <div className="overflow-y-auto pr-4 space-y-6 scrollbar-thin scrollbar-thumb-white/10">
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    <div>
-                                        <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Música</label>
-                                        <input type="text" value={editFormData.song_name} onChange={e => setEditFormData({ ...editFormData, song_name: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-4 text-white font-bold outline-none focus:border-[#B87333]/50 transition-all" />
-                                    </div>
-                                    <div>
-                                        <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Artista</label>
-                                        <input type="text" value={editFormData.artist_name} onChange={e => setEditFormData({ ...editFormData, artist_name: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-4 text-white font-bold outline-none focus:border-[#B87333]/50 transition-all" />
-                                    </div>
-                                </div>
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                    <div>
-                                        <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Tom Original</label>
-                                        <div className="flex items-center space-x-2">
-                                            <select
-                                                value={editFormData.song_key}
-                                                onChange={e => {
-                                                    const oldKey = editFormData.song_key;
-                                                    const newKey = e.target.value;
-                                                    const NOTES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
-                                                    const oldIdx = NOTES.indexOf(oldKey);
-                                                    const newIdx = NOTES.indexOf(newKey);
-                                                    if (oldIdx !== -1 && newIdx !== -1) {
-                                                        const diff = newIdx - oldIdx;
-                                                        handleEditTranspose(diff);
-                                                    } else {
-                                                        setEditFormData({ ...editFormData, song_key: newKey });
-                                                    }
-                                                }}
-                                                className="flex-1 bg-black/40 border border-white/10 rounded-xl px-4 py-4 text-white font-bold outline-none focus:border-[#B87333]/50 transition-all"
-                                            >
-                                                {["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"].map(k => <option key={k} value={k} className="bg-[#1A1A1A]">{k}</option>)}
-                                            </select>
-                                            <div className="flex flex-col space-y-1">
-                                                <button onClick={() => handleEditTranspose(1)} className="p-2 bg-white/5 hover:bg-white/10 rounded-lg border border-white/5 text-slate-400 hover:text-white transition-all" title="Subir Semitom"><ChevronUp className="w-4 h-4" /></button>
-                                                <button onClick={() => handleEditTranspose(-1)} className="p-2 bg-white/5 hover:bg-white/10 rounded-lg border border-white/5 text-slate-400 hover:text-white transition-all" title="Baixar Semitom"><ChevronDown className="w-4 h-4" /></button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Capo</label>
-                                        <div className="flex items-center space-x-3">
-                                            <select value={editFormData.capo} onChange={e => setEditFormData({ ...editFormData, capo: parseInt(e.target.value) })} className="flex-1 bg-black/40 border border-white/10 rounded-xl px-4 py-4 text-white font-bold outline-none focus:border-[#B87333]/50 transition-all">
-                                                <option value={0} className="bg-[#1A1A1A]">Sem Capo</option>
-                                                {[...Array(12)].map((_, i) => <option key={i + 1} value={i + 1} className="bg-[#1A1A1A]">Casa {i + 1}</option>)}
-                                            </select>
-                                            {editFormData.capo > 0 && (
-                                                <div className="px-4 py-2 bg-[#B87333]/10 border border-[#B87333]/30 rounded-xl">
-                                                    <span className="text-[8px] font-black text-[#B87333] uppercase block leading-none mb-1">Tom Resultante</span>
-                                                    <span className="text-sm font-black text-white italic">{getSoundingKey({ song_key: editFormData.song_key, capo: editFormData.capo })}</span>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Tablaturas</label>
-                                        <button
-                                            onClick={() => setEditFormData(prev => ({ ...prev, include_tabs: !prev.include_tabs }))}
-                                            className={`w-full py-4 rounded-xl transition-all border flex items-center justify-center space-x-3 font-bold uppercase tracking-widest text-[10px] ${editFormData.include_tabs ? 'bg-[#B87333]/20 border-[#B87333] text-[#B87333]' : 'bg-black/40 border-white/5 text-slate-600 hover:text-slate-400'}`}
-                                        >
-                                            {editFormData.include_tabs ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                                            <span>{editFormData.include_tabs ? "Ocultar Tabs" : "Mostrar Tabs"}</span>
-                                        </button>
-                                    </div>
-                                </div>
-                                <div>
-                                    <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Cifra</label>
-                                    <div className="relative group/editor">
-                                        <textarea
-                                            value={editFormData.include_tabs ? editFormData.content : getFilteredContent(editFormData.content)}
-                                            onChange={e => {
-                                                if (editFormData.include_tabs) {
-                                                    setEditFormData({ ...editFormData, content: e.target.value });
-                                                }
-                                            }}
-                                            readOnly={!editFormData.include_tabs}
-                                            className={`w-full bg-black/60 border rounded-2xl px-6 py-6 text-white outline-none font-mono text-xs leading-relaxed min-h-[400px] transition-all scrollbar-thin shadow-inner ${!editFormData.include_tabs ? 'border-white/5 cursor-not-allowed opacity-80' : 'border-white/10 hover:border-white/20 focus:border-[#B87333]/50'}`}
-                                            spellCheck="false"
-                                        />
-                                        {!editFormData.include_tabs && (
-                                            <div className="absolute inset-0 flex items-center justify-center bg-black/20 backdrop-blur-[1px] opacity-0 group-hover/editor:opacity-100 transition-opacity pointer-events-none">
-                                                <div className="bg-black/80 border border-[#B87333]/50 px-4 py-2 rounded-xl flex items-center space-x-2">
-                                                    <Eye className="w-4 h-4 text-[#B87333]" />
-                                                    <span className="text-[10px] font-bold text-white uppercase italic">Ative as Tabs para Editar</span>
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="mt-8 shrink-0">
-                                <button onClick={handleEditSave} className="w-full py-5 bg-[#B87333] hover:bg-[#8B4513] text-white font-black uppercase tracking-[0.2em] rounded-xl transition-all shadow-xl shadow-[#B87333]/20 flex items-center justify-center space-x-3 group">
-                                    <Save className="w-5 h-5 group-hover:scale-110 transition-transform" />
-                                    <span>Salvar Alterações no Acervo</span>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                )
-            }
 
-            {/* DEDICATED PRINT SHEET (Hidden by default, shown via CSS @media print) */}
-            {
-                createPortal(
-                    <div id="dedicated-print-sheet" className="hidden print:block fixed inset-0 bg-white text-black z-[99999] overflow-y-auto">
-                        {(() => {
-                            const songToPrint = activeTab === 'player' ? currentSong : manualPreviewSong;
-                            if (!songToPrint) return null;
 
-                            return (
-                                <div className="w-full max-w-5xl mx-auto px-12 py-8 print:px-4 print:py-4">
-                                    {/* Logo */}
-                                    <div className="flex justify-between items-start mb-10 print:mb-8 pb-4 border-b-2 border-[#ea580c] print:border-[#ea580c]">
-                                        <h1 className="text-5xl print:text-5xl font-black tracking-tighter leading-none text-black">
-                                            {songToPrint.song_name}
-                                        </h1>
-                                        <div className="flex items-center space-x-2 opacity-50">
-                                            <Flame className="w-8 h-8 print:w-6 print:h-6 text-black" />
-                                            <span className="text-2xl print:text-xl font-black italic tracking-tighter uppercase leading-none">IRON<span className="text-[#ea580c]">CHORDS</span></span>
-                                        </div>
-                                    </div>
 
-                                    {/* Metadata */}
-                                    <div className="mb-8 print:mb-8 font-sans">
-                                        <p className="text-3xl print:text-2xl font-bold uppercase text-[#ea580c] mb-6">{songToPrint.artist_name}</p>
-                                        <div className="flex items-center space-x-6">
-                                            <div className="flex items-center space-x-2">
-                                                <span className="text-lg print:text-base font-bold text-gray-800">Tom:</span>
-                                                <span className="text-lg print:text-base font-bold text-[#ea580c]">{getSoundingKey(songToPrint)}</span>
-                                            </div>
-                                            {songToPrint.capo > 0 && (
-                                                <div className="flex items-center space-x-2">
-                                                    <span className="text-lg print:text-base font-bold text-gray-800">Capotraste:</span>
-                                                    <span className="text-lg print:text-base font-bold text-[#ea580c]">{songToPrint.capo}ª Casa</span>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
 
-                                    {/* Chords Content */}
-                                    {(() => {
-                                        const cleanContent = (songToPrint.include_tabs ?? includeTabs) === false
-                                            ? removeTablatureBlocks(songToPrint.content || "")
-                                            : songToPrint.content || "";
-                                        const rawLines = cleanContent.split('\n');
-                                        const blocks = [];
-                                        let currentBlock = [];
 
-                                        for (let i = 0; i < rawLines.length; i++) {
-                                            const line = rawLines[i].replace(/\r/g, '');
-                                            const trimmed = line.trim();
 
-                                            // 1. Remove lixos visuais contextuais (standalone lines that might have survived)
-                                            const isTabLine = line.includes('|-') || line.includes('-|') || /^[eBGDAE]\|/.test(trimmed);
-                                            const isGuitarNote = /guitarra|dedilhado|batida|solo|riff|ritmo|frase|passagem/i.test(line) && (line.includes('(') || line.includes('['));
-                                            const isRhythmArrow = line.includes('↓') || line.includes('↑');
 
-                                            const effectivelyIncludeTabs = songToPrint.include_tabs ?? includeTabs;
-                                            if (!effectivelyIncludeTabs && (isTabLine || isGuitarNote || isRhythmArrow)) continue;
 
-                                            const isChordLine = !!(line && trimmed.length > 0 && (line.match(CHORD_TOKEN_RE) || []).length > 0 && line.replace(CHORD_TOKEN_RE, '').replace(/[\s|()\-xX0-9:]/g, '').length < Math.max(2, trimmed.length * 0.25));
 
-                                            // 3. Agrupar linhas em blocos
-                                            if (trimmed.length === 0) {
-                                                // Se for uma linha em branco, só quebra o bloco se o bloco atual tiver letras (texto verbal) ou se já tiveros 2 linhas em branco seguidas.
-                                                // Em outras palavras: se estamos num bloco PÚRO de cifras instrumentais (Intro/Solo), ignoramos linhas em branco singulares para que as cifras grudem no mesmo bloco e ativem o "Lado a Lado" (Grid).
-                                                if (currentBlock.length > 0) {
-                                                    const hasLyrics = currentBlock.some(l => !l.isChordLine && !l.text.trim().startsWith('['));
 
-                                                    // Verifica a próxima linha válida olhando para frente no rawLines
-                                                    let nextValidLineIsChord = false;
-                                                    for (let j = i + 1; j < rawLines.length; j++) {
-                                                        const nextL = rawLines[j].trim();
-                                                        if (nextL.length > 0) {
-                                                            const nextLIsChord = !!(nextL && (nextL.match(CHORD_TOKEN_RE) || []).length > 0 && nextL.replace(CHORD_TOKEN_RE, '').replace(/[\s|()\-xX0-9:]/g, '').length < Math.max(2, nextL.length * 0.25));
-                                                            nextValidLineIsChord = nextLIsChord;
-                                                            break;
-                                                        }
+
+
+
+
+
+
+
+
+
+
+
+                                                    {/* Save List Modal */}
+                                                    null
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                                    {/* Save Success Animation */}
+                                                    {
+                                                        showSaveSuccess && (
+                                                            <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/40 backdrop-blur-sm animate-in fade-in duration-300 pointer-events-none">
+                                                                <div className="bg-green-500/10 border border-green-500/20 p-10 rounded-[40px] shadow-[0_0_50px_rgba(34,197,94,0.3)] flex flex-col items-center animate-in zoom-in-50 duration-500 spring-gentle">
+                                                                    <div className="w-24 h-24 bg-green-500/20 rounded-full flex items-center justify-center relative mb-6">
+                                                                        <div className="absolute inset-0 bg-green-500/20 rounded-full animate-ping"></div>
+                                                                        <CheckCircle className="w-12 h-12 text-green-400 drop-shadow-[0_0_15px_rgba(34,197,94,0.8)]" />
+                                                                    </div>
+                                                                    <h2 className="text-3xl font-black text-white uppercase italic tracking-tighter drop-shadow-md">Lista Forjada</h2>
+                                                                    <p className="text-green-400/80 font-bold uppercase tracking-[0.2em] text-xs mt-2">Salva com Sucesso no Acervo Local</p>
+                                                                </div>
+                                                            </div>
+                                                        )
                                                     }
 
-                                                    // Se não tem vocais E a próxima linha de conteúdo útil também é só Acorde, engolimos essa linha em branco e continuamos agrupando os acordes!
-                                                    if (!hasLyrics && nextValidLineIsChord) {
-                                                        continue; // ignora a quebra de linha em branco
+                                                    {/* Save Conflict Notification */}
+                                                    {
+                                                        showSaveConflict && (
+                                                            <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/40 backdrop-blur-sm animate-in fade-in duration-300 pointer-events-none">
+                                                                <div className="bg-yellow-500/10 border border-yellow-500/20 p-10 rounded-[40px] shadow-[0_0_50px_rgba(234,179,8,0.3)] flex flex-col items-center animate-in zoom-in-50 duration-500 spring-gentle">
+                                                                    <div className="w-24 h-24 bg-yellow-500/20 rounded-full flex items-center justify-center relative mb-6">
+                                                                        <div className="absolute inset-0 bg-yellow-500/20 rounded-full animate-pulse"></div>
+                                                                        <AlertCircle className="w-12 h-12 text-yellow-400 drop-shadow-[0_0_15px_rgba(234,179,8,0.8)]" />
+                                                                    </div>
+                                                                    <h2 className="text-3xl font-black text-white uppercase italic tracking-tighter drop-shadow-md">Atenção</h2>
+                                                                    <p className="text-yellow-400/80 font-bold uppercase tracking-[0.2em] text-xs mt-2">A música já está salva no acervo</p>
+                                                                </div>
+                                                            </div>
+                                                        )}
+
+                                                    {/* Edit Acervo Modal */}
+                                                    {
+                                                        editingChord && (
+                                                            <div className="fixed inset-0 z-[250] flex items-center justify-center bg-[#070709]/90 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-300 p-4">
+                                                                <div className="bg-[#16161D] border border-[#B87333]/30 p-8 rounded-[32px] shadow-[0_0_50px_rgba(0,0,0,0.8)] w-full max-w-4xl flex flex-col max-h-[90vh]">
+                                                                    <div className="flex items-center justify-between mb-8 shrink-0">
+                                                                        <div className="flex items-center space-x-4">
+                                                                            <div className="w-1.5 h-6 bg-[#B87333] rounded-full shadow-[0_0_15px_rgba(184,115,51,0.4)]"></div>
+                                                                            <h3 className="text-2xl font-black text-white uppercase italic tracking-tighter">Editar Cifra</h3>
+                                                                        </div>
+                                                                        <button onClick={() => setEditingChord(null)} className="p-2 bg-white/5 hover:bg-white/10 rounded-xl transition-all border border-white/5"><X className="w-5 h-5 text-slate-400" /></button>
+                                                                    </div>
+                                                                    <div className="overflow-y-auto pr-4 space-y-6 scrollbar-thin scrollbar-thumb-white/10">
+                                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                                            <div>
+                                                                                <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Música</label>
+                                                                                <input type="text" value={editFormData.song_name} onChange={e => setEditFormData({ ...editFormData, song_name: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-4 text-white font-bold outline-none focus:border-[#B87333]/50 transition-all" />
+                                                                            </div>
+                                                                            <div>
+                                                                                <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Artista</label>
+                                                                                <input type="text" value={editFormData.artist_name} onChange={e => setEditFormData({ ...editFormData, artist_name: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-4 text-white font-bold outline-none focus:border-[#B87333]/50 transition-all" />
+                                                                            </div>
+                                                                        </div>
+                                                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                                                            <div>
+                                                                                <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Tom Original</label>
+                                                                                <div className="flex items-center space-x-2">
+                                                                                    <select
+                                                                                        value={editFormData.song_key}
+                                                                                        onChange={e => {
+                                                                                            const oldKey = editFormData.song_key;
+                                                                                            const newKey = e.target.value;
+                                                                                            const NOTES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+                                                                                            const oldIdx = NOTES.indexOf(oldKey);
+                                                                                            const newIdx = NOTES.indexOf(newKey);
+                                                                                            if (oldIdx !== -1 && newIdx !== -1) {
+                                                                                                const diff = newIdx - oldIdx;
+                                                                                                handleEditTranspose(diff);
+                                                                                            } else {
+                                                                                                setEditFormData({ ...editFormData, song_key: newKey });
+                                                                                            }
+                                                                                        }}
+                                                                                        className="flex-1 bg-black/40 border border-white/10 rounded-xl px-4 py-4 text-white font-bold outline-none focus:border-[#B87333]/50 transition-all"
+                                                                                    >
+                                                                                        {["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"].map(k => <option key={k} value={k} className="bg-[#1A1A1A]">{k}</option>)}
+                                                                                    </select>
+                                                                                    <div className="flex flex-col space-y-1">
+                                                                                        <button onClick={() => handleEditTranspose(1)} className="p-2 bg-white/5 hover:bg-white/10 rounded-lg border border-white/5 text-slate-400 hover:text-white transition-all" title="Subir Semitom"><ChevronUp className="w-4 h-4" /></button>
+                                                                                        <button onClick={() => handleEditTranspose(-1)} className="p-2 bg-white/5 hover:bg-white/10 rounded-lg border border-white/5 text-slate-400 hover:text-white transition-all" title="Baixar Semitom"><ChevronDown className="w-4 h-4" /></button>
+                                                                                    </div>
+                                                                                </div>
+                                                                            </div>
+                                                                            <div>
+                                                                                <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Capo</label>
+                                                                                <div className="flex items-center space-x-3">
+                                                                                    <select value={editFormData.capo} onChange={e => setEditFormData({ ...editFormData, capo: parseInt(e.target.value) })} className="flex-1 bg-black/40 border border-white/10 rounded-xl px-4 py-4 text-white font-bold outline-none focus:border-[#B87333]/50 transition-all">
+                                                                                        <option value={0} className="bg-[#1A1A1A]">Sem Capo</option>
+                                                                                        {[...Array(12)].map((_, i) => <option key={i + 1} value={i + 1} className="bg-[#1A1A1A]">Casa {i + 1}</option>)}
+                                                                                    </select>
+                                                                                    {editFormData.capo > 0 && (
+                                                                                        <div className="px-4 py-2 bg-[#B87333]/10 border border-[#B87333]/30 rounded-xl">
+                                                                                            <span className="text-[8px] font-black text-[#B87333] uppercase block leading-none mb-1">Tom Resultante</span>
+                                                                                            <span className="text-sm font-black text-white italic">{getSoundingKey({ song_key: editFormData.song_key, capo: editFormData.capo })}</span>
+                                                                                        </div>
+                                                                                    )}
+                                                                                </div>
+                                                                            </div>
+                                                                            <div>
+                                                                                <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Tablaturas</label>
+                                                                                <button
+                                                                                    onClick={() => setEditFormData(prev => ({ ...prev, include_tabs: !prev.include_tabs }))}
+                                                                                    className={`w-full py-4 rounded-xl transition-all border flex items-center justify-center space-x-3 font-bold uppercase tracking-widest text-[10px] ${editFormData.include_tabs ? 'bg-[#B87333]/20 border-[#B87333] text-[#B87333]' : 'bg-black/40 border-white/5 text-slate-600 hover:text-slate-400'}`}
+                                                                                >
+                                                                                    {editFormData.include_tabs ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                                                                    <span>{editFormData.include_tabs ? "Ocultar Tabs" : "Mostrar Tabs"}</span>
+                                                                                </button>
+                                                                            </div>
+                                                                        </div>
+                                                                        <div>
+                                                                            <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Cifra</label>
+                                                                            <div className="relative group/editor">
+                                                                                <textarea
+                                                                                    value={editFormData.include_tabs ? editFormData.content : getFilteredContent(editFormData.content)}
+                                                                                    onChange={e => {
+                                                                                        if (editFormData.include_tabs) {
+                                                                                            setEditFormData({ ...editFormData, content: e.target.value });
+                                                                                        }
+                                                                                    }}
+                                                                                    readOnly={!editFormData.include_tabs}
+                                                                                    className={`w-full bg-black/60 border rounded-2xl px-6 py-6 text-white outline-none font-mono text-xs leading-relaxed min-h-[400px] transition-all scrollbar-thin shadow-inner ${!editFormData.include_tabs ? 'border-white/5 cursor-not-allowed opacity-80' : 'border-white/10 hover:border-white/20 focus:border-[#B87333]/50'}`}
+                                                                                    spellCheck="false"
+                                                                                />
+                                                                                {!editFormData.include_tabs && (
+                                                                                    <div className="absolute inset-0 flex items-center justify-center bg-black/20 backdrop-blur-[1px] opacity-0 group-hover/editor:opacity-100 transition-opacity pointer-events-none">
+                                                                                        <div className="bg-black/80 border border-[#B87333]/50 px-4 py-2 rounded-xl flex items-center space-x-2">
+                                                                                            <Eye className="w-4 h-4 text-[#B87333]" />
+                                                                                            <span className="text-[10px] font-bold text-white uppercase italic">Ative as Tabs para Editar</span>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className="mt-8 shrink-0">
+                                                                        <button onClick={handleEditSave} className="w-full py-5 bg-[#B87333] hover:bg-[#8B4513] text-white font-black uppercase tracking-[0.2em] rounded-xl transition-all shadow-xl shadow-[#B87333]/20 flex items-center justify-center space-x-3 group">
+                                                                            <Save className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                                                                            <span>Salvar Alterações no Acervo</span>
+                                                                        </button>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        )
                                                     }
 
-                                                    blocks.push(currentBlock);
-                                                    currentBlock = [];
-                                                }
-                                            } else {
-                                                currentBlock.push({ text: line, isChordLine });
-                                            }
-                                        }
-                                        if (currentBlock.length > 0) blocks.push(currentBlock);
+                                                    {/* DEDICATED PRINT SHEET (Hidden by default, shown via CSS @media print) */}
+                                                    {
+                                                        createPortal(
+                                                            <div id="dedicated-print-sheet" className="hidden print:block fixed inset-0 bg-white text-black z-[99999] overflow-y-auto">
+                                                                {(() => {
+                                                                    const songToPrint = activeTab === 'player' ? currentSong : manualPreviewSong;
+                                                                    if (!songToPrint) return null;
 
-                                        // 4. Colapsar acordes repetidos consecutivos no mesmo bloco
-                                        const collapsedBlocks = blocks.map(block => {
-                                            const newBlock = [];
-                                            let lastNormChord = null;
-                                            let originalChordText = null;
-                                            let chordCount = 0;
+                                                                    return (
+                                                                        <div className="w-full max-w-5xl mx-auto px-12 py-8 print:px-4 print:py-4">
+                                                                            {/* Logo */}
+                                                                            <div className="flex justify-between items-start mb-10 print:mb-8 pb-4 border-b-2 border-[#ea580c] print:border-[#ea580c]">
+                                                                                <h1 className="text-5xl print:text-5xl font-black tracking-tighter leading-none text-black">
+                                                                                    {songToPrint.song_name}
+                                                                                </h1>
+                                                                                <div className="flex items-center space-x-2 opacity-50">
+                                                                                    <Flame className="w-8 h-8 print:w-6 print:h-6 text-black" />
+                                                                                    <span className="text-2xl print:text-xl font-black italic tracking-tighter uppercase leading-none">IRON<span className="text-[#ea580c]">CHORDS</span></span>
+                                                                                </div>
+                                                                            </div>
 
-                                            const commitChord = () => {
-                                                if (chordCount === 1) {
-                                                    newBlock.push({ text: originalChordText, isChordLine: true });
-                                                } else if (chordCount > 1) {
-                                                    newBlock.push({ text: `${originalChordText.trim()} (x${chordCount})`, isChordLine: true });
-                                                }
-                                                lastNormChord = null;
-                                                originalChordText = null;
-                                                chordCount = 0;
-                                            };
+                                                                            {/* Metadata */}
+                                                                            <div className="mb-8 print:mb-8 font-sans">
+                                                                                <p className="text-3xl print:text-2xl font-bold uppercase text-[#ea580c] mb-6">{songToPrint.artist_name}</p>
+                                                                                <div className="flex items-center space-x-6">
+                                                                                    <div className="flex items-center space-x-2">
+                                                                                        <span className="text-lg print:text-base font-bold text-gray-800">Tom:</span>
+                                                                                        <span className="text-lg print:text-base font-bold text-[#ea580c]">{getSoundingKey(songToPrint)}</span>
+                                                                                    </div>
+                                                                                    {songToPrint.capo > 0 && (
+                                                                                        <div className="flex items-center space-x-2">
+                                                                                            <span className="text-lg print:text-base font-bold text-gray-800">Capotraste:</span>
+                                                                                            <span className="text-lg print:text-base font-bold text-[#ea580c]">{songToPrint.capo}ª Casa</span>
+                                                                                        </div>
+                                                                                    )}
+                                                                                </div>
+                                                                            </div>
 
-                                            for (const lineObj of block) {
-                                                if (lineObj.isChordLine) {
-                                                    const normChord = lineObj.text.trim().replace(/\s+/g, ' ');
-                                                    if (normChord === lastNormChord) {
-                                                        chordCount++;
-                                                    } else {
-                                                        commitChord();
-                                                        lastNormChord = normChord;
-                                                        originalChordText = lineObj.text;
-                                                        chordCount = 1;
+                                                                            {/* Chords Content */}
+                                                                            {(() => {
+                                                                                const cleanContent = (songToPrint.include_tabs ?? includeTabs) === false
+                                                                                    ? removeTablatureBlocks(songToPrint.content || "")
+                                                                                    : songToPrint.content || "";
+                                                                                const rawLines = cleanContent.split('\n');
+                                                                                const blocks = [];
+                                                                                let currentBlock = [];
+
+                                                                                for (let i = 0; i < rawLines.length; i++) {
+                                                                                    const line = rawLines[i].replace(/\r/g, '');
+                                                                                    const trimmed = line.trim();
+
+                                                                                    // 1. Remove lixos visuais contextuais (standalone lines that might have survived)
+                                                                                    const isTabLine = line.includes('|-') || line.includes('-|') || /^[eBGDAE]\|/.test(trimmed);
+                                                                                    const isGuitarNote = /guitarra|dedilhado|batida|solo|riff|ritmo|frase|passagem/i.test(line) && (line.includes('(') || line.includes('['));
+                                                                                    const isRhythmArrow = line.includes('↓') || line.includes('↑');
+
+                                                                                    const effectivelyIncludeTabs = songToPrint.include_tabs ?? includeTabs;
+                                                                                    if (!effectivelyIncludeTabs && (isTabLine || isGuitarNote || isRhythmArrow)) continue;
+
+                                                                                    const isChordLine = !!(line && trimmed.length > 0 && (line.match(CHORD_TOKEN_RE) || []).length > 0 && line.replace(CHORD_TOKEN_RE, '').replace(/[\s|()\-xX0-9:]/g, '').length < Math.max(2, trimmed.length * 0.25));
+
+                                                                                    // 3. Agrupar linhas em blocos
+                                                                                    if (trimmed.length === 0) {
+                                                                                        // Se for uma linha em branco, só quebra o bloco se o bloco atual tiver letras (texto verbal) ou se já tiveros 2 linhas em branco seguidas.
+                                                                                        // Em outras palavras: se estamos num bloco PÚRO de cifras instrumentais (Intro/Solo), ignoramos linhas em branco singulares para que as cifras grudem no mesmo bloco e ativem o "Lado a Lado" (Grid).
+                                                                                        if (currentBlock.length > 0) {
+                                                                                            const hasLyrics = currentBlock.some(l => !l.isChordLine && !l.text.trim().startsWith('['));
+
+                                                                                            // Verifica a próxima linha válida olhando para frente no rawLines
+                                                                                            let nextValidLineIsChord = false;
+                                                                                            for (let j = i + 1; j < rawLines.length; j++) {
+                                                                                                const nextL = rawLines[j].trim();
+                                                                                                if (nextL.length > 0) {
+                                                                                                    const nextLIsChord = !!(nextL && (nextL.match(CHORD_TOKEN_RE) || []).length > 0 && nextL.replace(CHORD_TOKEN_RE, '').replace(/[\s|()\-xX0-9:]/g, '').length < Math.max(2, nextL.length * 0.25));
+                                                                                                    nextValidLineIsChord = nextLIsChord;
+                                                                                                    break;
+                                                                                                }
+                                                                                            }
+
+                                                                                            // Se não tem vocais E a próxima linha de conteúdo útil também é só Acorde, engolimos essa linha em branco e continuamos agrupando os acordes!
+                                                                                            if (!hasLyrics && nextValidLineIsChord) {
+                                                                                                continue; // ignora a quebra de linha em branco
+                                                                                            }
+
+                                                                                            blocks.push(currentBlock);
+                                                                                            currentBlock = [];
+                                                                                        }
+                                                                                    } else {
+                                                                                        currentBlock.push({ text: line, isChordLine });
+                                                                                    }
+                                                                                }
+                                                                                if (currentBlock.length > 0) blocks.push(currentBlock);
+
+                                                                                // 4. Colapsar acordes repetidos consecutivos no mesmo bloco
+                                                                                const collapsedBlocks = blocks.map(block => {
+                                                                                    const newBlock = [];
+                                                                                    let lastNormChord = null;
+                                                                                    let originalChordText = null;
+                                                                                    let chordCount = 0;
+
+                                                                                    const commitChord = () => {
+                                                                                        if (chordCount === 1) {
+                                                                                            newBlock.push({ text: originalChordText, isChordLine: true });
+                                                                                        } else if (chordCount > 1) {
+                                                                                            newBlock.push({ text: `${originalChordText.trim()} (x${chordCount})`, isChordLine: true });
+                                                                                        }
+                                                                                        lastNormChord = null;
+                                                                                        originalChordText = null;
+                                                                                        chordCount = 0;
+                                                                                    };
+
+                                                                                    for (const lineObj of block) {
+                                                                                        if (lineObj.isChordLine) {
+                                                                                            const normChord = lineObj.text.trim().replace(/\s+/g, ' ');
+                                                                                            if (normChord === lastNormChord) {
+                                                                                                chordCount++;
+                                                                                            } else {
+                                                                                                commitChord();
+                                                                                                lastNormChord = normChord;
+                                                                                                originalChordText = lineObj.text;
+                                                                                                chordCount = 1;
+                                                                                            }
+                                                                                        } else {
+                                                                                            commitChord();
+                                                                                            newBlock.push(lineObj);
+                                                                                        }
+                                                                                    }
+                                                                                    commitChord();
+                                                                                    return newBlock;
+                                                                                });
+
+                                                                                // Determina se deve usar 2 colunas com base no número total de linhas a serem renderizadas
+                                                                                const totalLines = collapsedBlocks.reduce((acc, b) => acc + b.length, 0);
+                                                                                // Limite flexível para ativar as colunas, previne quebra bizarra em músicas médias
+                                                                                const useColumns = totalLines > 65;
+
+                                                                                return (
+                                                                                    <div className={`mt-8 print:mt-6 font-sans ${useColumns ? 'print:columns-2 print:gap-16' : ''}`}>
+                                                                                        {collapsedBlocks.map((block, bIdx) => {
+                                                                                            const textCount = block.filter(l => !l.isChordLine).length;
+                                                                                            // Verifica se é um bloco estritamente instrumental para aplicar a compressão de acordes
+                                                                                            const isInstrumentalBlock = block.length >= 2 && (textCount === 0 || (textCount === 1 && block[0].text.includes('[') && block[0].text.length < 25));
+
+                                                                                            return (
+                                                                                                <div key={bIdx} className="break-inside-avoid print:break-inside-avoid mb-8 print:mb-6 flex flex-col space-y-0">
+                                                                                                    {block.map((lineObj, lIdx) => {
+                                                                                                        // Identifica se a linha é um título de sessão (ex: [Refrão], [Intro])
+                                                                                                        const isSectionTitle = lineObj.text.trim().startsWith('[') && lineObj.text.trim().endsWith(']');
+
+                                                                                                        // Na ausência de frases (letras), se for uma cifra com espaçamentos manuais longos,
+                                                                                                        // comprimi-los e jogar para a esquerda (justificado lado a lado).
+                                                                                                        const displayText = (isInstrumentalBlock && lineObj.isChordLine && !isSectionTitle)
+                                                                                                            ? lineObj.text.trim().replace(/\s+/g, '   ')
+                                                                                                            : lineObj.text;
+
+                                                                                                        return (
+                                                                                                            <pre
+                                                                                                                key={lIdx}
+                                                                                                                className={`whitespace-pre-wrap ${lineObj.isChordLine ? 'font-mono text-[#ea580c] print:text-[#ea580c] font-bold print:leading-snug' : isSectionTitle ? 'font-sans font-bold text-gray-900 mt-2 mb-1 print:text-[15px]' : 'font-sans text-gray-900 print:leading-normal print:text-[15px]'}`}
+                                                                                                                style={{
+                                                                                                                    fontSize: lineObj.isChordLine ? '14px' : '15px',
+                                                                                                                    marginTop: lineObj.isChordLine && lIdx > 0 && !block[lIdx - 1].isChordLine && !isSectionTitle ? '0.25rem' : '0'
+                                                                                                                }}
+                                                                                                            >
+                                                                                                                {displayText}
+                                                                                                            </pre>
+                                                                                                        );
+                                                                                                    })}
+                                                                                                </div>
+                                                                                            );
+                                                                                        })}
+                                                                                    </div>
+                                                                                );
+                                                                            })()}
+
+                                                                        </div>
+                                                                    );
+                                                                })()}
+                                                            </div>,
+                                                            document.body
+                                                        )
                                                     }
-                                                } else {
-                                                    commitChord();
-                                                    newBlock.push(lineObj);
-                                                }
-                                            }
-                                            commitChord();
-                                            return newBlock;
-                                        });
 
-                                        // Determina se deve usar 2 colunas com base no número total de linhas a serem renderizadas
-                                        const totalLines = collapsedBlocks.reduce((acc, b) => acc + b.length, 0);
-                                        // Limite flexível para ativar as colunas, previne quebra bizarra em músicas médias
-                                        const useColumns = totalLines > 65;
+                                                    {/* Rename List Modal */}
+                                                    null
 
-                                        return (
-                                            <div className={`mt-8 print:mt-6 font-sans ${useColumns ? 'print:columns-2 print:gap-16' : ''}`}>
-                                                {collapsedBlocks.map((block, bIdx) => {
-                                                    const textCount = block.filter(l => !l.isChordLine).length;
-                                                    // Verifica se é um bloco estritamente instrumental para aplicar a compressão de acordes
-                                                    const isInstrumentalBlock = block.length >= 2 && (textCount === 0 || (textCount === 1 && block[0].text.includes('[') && block[0].text.length < 25));
 
-                                                    return (
-                                                        <div key={bIdx} className="break-inside-avoid print:break-inside-avoid mb-8 print:mb-6 flex flex-col space-y-0">
-                                                            {block.map((lineObj, lIdx) => {
-                                                                // Identifica se a linha é um título de sessão (ex: [Refrão], [Intro])
-                                                                const isSectionTitle = lineObj.text.trim().startsWith('[') && lineObj.text.trim().endsWith(']');
 
-                                                                // Na ausência de frases (letras), se for uma cifra com espaçamentos manuais longos,
-                                                                // comprimi-los e jogar para a esquerda (justificado lado a lado).
-                                                                const displayText = (isInstrumentalBlock && lineObj.isChordLine && !isSectionTitle)
-                                                                    ? lineObj.text.trim().replace(/\s+/g, '   ')
-                                                                    : lineObj.text;
 
-                                                                return (
-                                                                    <pre
-                                                                        key={lIdx}
-                                                                        className={`whitespace-pre-wrap ${lineObj.isChordLine ? 'font-mono text-[#ea580c] print:text-[#ea580c] font-bold print:leading-snug' : isSectionTitle ? 'font-sans font-bold text-gray-900 mt-2 mb-1 print:text-[15px]' : 'font-sans text-gray-900 print:leading-normal print:text-[15px]'}`}
-                                                                        style={{
-                                                                            fontSize: lineObj.isChordLine ? '14px' : '15px',
-                                                                            marginTop: lineObj.isChordLine && lIdx > 0 && !block[lIdx - 1].isChordLine && !isSectionTitle ? '0.25rem' : '0'
-                                                                        }}
-                                                                    >
-                                                                        {displayText}
-                                                                    </pre>
-                                                                );
-                                                            })}
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
-                                        );
-                                    })()}
 
-                                </div>
-                            );
-                        })()}
-                    </div>,
-                    document.body
-                )
-            }
 
-            {/* Rename List Modal */}
-            {editingList && (
-                <div className="fixed inset-0 z-[250] flex items-center justify-center bg-[#070709]/90 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-300 p-4">
-                    <div className="bg-[#16161D] border border-[#B87333]/30 rounded-[32px] shadow-[0_0_50px_rgba(0,0,0,0.8)] w-full max-w-lg flex flex-col">
-                        <div className="flex items-center justify-between p-8 border-b border-white/5">
-                            <div className="flex items-center space-x-4">
-                                <div className="w-1.5 h-6 bg-[#B87333] rounded-full"></div>
-                                <h3 className="text-xl font-black text-white uppercase italic tracking-tighter">Renomear Lista</h3>
-                            </div>
-                            <button onClick={() => setEditingList(null)} className="p-2 bg-white/5 hover:bg-white/10 rounded-xl border border-white/5 transition-all">
-                                <X className="w-5 h-5 text-slate-400" />
-                            </button>
-                        </div>
-                        <div className="p-8 space-y-6">
-                            <div>
-                                <label className="block text-[10px] font-black uppercase text-slate-500 mb-3 tracking-widest ml-1">Novo Nome da Lista</label>
-                                <input
-                                    type="text"
-                                    value={editListName}
-                                    onChange={e => setEditListName(e.target.value)}
-                                    className="w-full bg-black/40 border border-white/10 rounded-2xl px-6 py-4 text-white font-bold text-lg outline-none focus:border-[#B87333]/50 transition-all placeholder:text-slate-700"
-                                    placeholder="Ex: Repertório Show Sábado..."
-                                    autoFocus
-                                    onKeyDown={e => {
-                                        if (e.key === 'Enter' && editListName.trim()) {
-                                            const all = Array.isArray(savedPlaylists) ? savedPlaylists : JSON.parse(localStorage.getItem('iron_chords_playlists') || '[]');
-                                            const updated = all.map(pl => pl.id === editingList.id ? { ...pl, name: editListName } : pl);
-                                            localStorage.setItem('iron_chords_playlists', JSON.stringify(updated));
-                                            setSavedPlaylists(updated);
-                                            setEditingList(null);
-                                            setShowSaveSuccess(true);
-                                            setTimeout(() => setShowSaveSuccess(false), 2000);
-                                        }
-                                    }}
-                                />
-                            </div>
-                            <button
-                                onClick={() => {
-                                    if (!editListName.trim()) return;
-                                    const all = Array.isArray(savedPlaylists) ? savedPlaylists : JSON.parse(localStorage.getItem('iron_chords_playlists') || '[]');
-                                    const updated = all.map(pl => pl.id === editingList.id ? { ...pl, name: editListName } : pl);
-                                    localStorage.setItem('iron_chords_playlists', JSON.stringify(updated));
-                                    setSavedPlaylists(updated);
-                                    setEditingList(null);
-                                    setShowSaveSuccess(true);
-                                    setTimeout(() => setShowSaveSuccess(false), 2000);
-                                }}
-                                className="w-full py-4 bg-[#B87333] hover:bg-[#A86323] text-white font-black uppercase tracking-widest rounded-2xl transition-all shadow-xl shadow-[#B87333]/20 flex items-center justify-center space-x-3"
-                            >
-                                <Save className="w-5 h-5" />
-                                <span>Salvar Novo Nome</span>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
                                                 </div>
                                             ) : (
                                                 <div className="flex flex-col items-center justify-center py-10 space-y-8 animate-in fade-in duration-500 relative">
@@ -5323,7 +5334,276 @@ export default function App() {
                 )
             }
 
-            
+
+
+            {/* Extracted Root Modals */}
+            {/* Delete Confirmation Modal */}
+            {
+                deleteModalOpen && (
+                    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-[#070709]/90 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-300">
+                        <div className="bg-[#16161D] border border-white/10 p-8 rounded-[32px] shadow-2xl w-full max-w-md flex flex-col">
+                            <div className="flex items-center justify-between mb-8">
+                                <div className="flex items-center space-x-4">
+                                    <div className="w-1.5 h-6 bg-red-600 rounded-full shadow-[0_0_15px_rgba(220,38,38,0.4)]"></div>
+                                    <h3 className="text-xl font-black text-white uppercase italic tracking-tighter">Confirmar Exclusão</h3>
+                                </div>
+                                <button onClick={() => setDeleteModalOpen(false)} className="p-2 bg-white/5 hover:bg-white/10 rounded-xl transition-all border border-white/5"><X className="w-5 h-5 text-slate-400" /></button>
+                            </div>
+                            <div className="space-y-6">
+                                <p className="text-sm font-bold text-slate-400 uppercase tracking-widest leading-relaxed">
+                                    Você tem certeza que deseja excluir permanentemente {deleteTarget.type === 'acervo' ? 'a música' : 'a lista'} <span className="text-white">"{deleteTarget.name}"</span>?
+                                </p>
+                                <p className="text-[10px] text-red-500/80 italic uppercase">Esta ação não poderá ser desfeita.</p>
+
+                                <div className="flex items-center space-x-4 mt-6">
+                                    <button onClick={() => setDeleteModalOpen(false)} className="flex-1 py-4 bg-white/5 hover:bg-white/10 text-white font-black uppercase tracking-widest rounded-xl transition-all border border-white/5">Cancelar</button>
+                                    <button onClick={confirmDelete} className="flex-1 py-4 bg-red-600 hover:bg-red-700 text-white font-black uppercase tracking-widest rounded-xl transition-all shadow-xl shadow-red-900/20 flex items-center justify-center space-x-2">
+                                        <Trash2 className="w-4 h-4" />
+                                        <span>Excluir</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )
+            }
+
+            {/* Save List Modal */}
+            {
+                saveListModalOpen && (() => {
+                    const allPlaylists = JSON.parse(localStorage.getItem('iron_chords_playlists') || '[]');
+                    const hasExisting = allPlaylists.length > 0;
+                    return (
+                        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-[#070709]/90 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-300">
+                            <div className="bg-[#16161D] border border-white/10 p-8 rounded-[32px] shadow-2xl w-full max-w-md flex flex-col">
+                                <div className="flex items-center justify-between mb-6">
+                                    <div className="flex items-center space-x-3">
+                                        <div className="w-1.5 h-6 bg-[#B87333] rounded-full shadow-[0_0_15px_rgba(184,115,51,0.4)]"></div>
+                                        <h3 className="text-xl font-black text-white uppercase italic tracking-tighter">Salvar Forja</h3>
+                                    </div>
+                                    <button onClick={() => { setSaveListModalOpen(false); setSaveListName(''); setSelectedListsToAddTo([]); }} className="p-2 bg-white/5 hover:bg-white/10 rounded-xl transition-all border border-white/5"><X className="w-5 h-5 text-slate-400" /></button>
+                                </div>
+
+                                <div className="flex bg-black/40 p-1.5 rounded-2xl border border-white/5 mb-6">
+                                    <button onClick={() => setSaveListMode('new')} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${saveListMode === 'new' ? 'bg-[#B87333] text-white shadow-lg' : 'text-slate-500 hover:text-white'}`}>+ Nova Lista</button>
+                                    <button onClick={() => setSaveListMode('existing')} disabled={!hasExisting} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-30 disabled:cursor-not-allowed ${saveListMode === 'existing' ? 'bg-[#B87333] text-white shadow-lg' : 'text-slate-500 hover:text-white'}`}>Adicionar à Existente</button>
+                                </div>
+
+                                {saveListMode === 'new' && (
+                                    <div className="space-y-4">
+                                        <div>
+                                            <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Nome da Nova Lista</label>
+                                            <input type="text" autoFocus placeholder="Ex: Missa de Domingo..." value={saveListName} onChange={e => setSaveListName(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-4 text-white font-bold outline-none focus:border-[#B87333]/50 transition-all placeholder:text-slate-700" onKeyDown={e => e.key === 'Enter' && handleSaveList()} />
+                                        </div>
+                                        <button onClick={handleSaveList} disabled={!saveListName.trim()} className="w-full py-4 bg-[#B87333] hover:bg-[#8B4513] text-white font-black uppercase tracking-widest rounded-xl transition-all shadow-xl shadow-[#B87333]/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2">
+                                            <Save className="w-4 h-4" /><span>Criar e Salvar Lista</span>
+                                        </button>
+                                    </div>
+                                )}
+
+                                {saveListMode === 'existing' && (
+                                    <div className="space-y-4">
+                                        <label className="block text-[10px] font-black uppercase text-slate-500 mb-1 tracking-widest ml-1">Selecione uma ou mais listas</label>
+                                        <div className="max-h-64 overflow-y-auto space-y-2 pr-1 scrollbar-thin scrollbar-thumb-white/10">
+                                            {allPlaylists.map(pl => (
+                                                <label key={pl.id} className={`flex items-center space-x-4 p-4 rounded-2xl border cursor-pointer transition-all ${selectedListsToAddTo.includes(pl.id) ? 'bg-[#B87333]/15 border-[#B87333]/40' : 'bg-black/30 border-white/5 hover:border-white/15'}`}>
+                                                    <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 transition-all ${selectedListsToAddTo.includes(pl.id) ? 'bg-[#B87333] border-[#B87333]' : 'border-white/20'}`}>
+                                                        {selectedListsToAddTo.includes(pl.id) && <Check className="w-3 h-3 text-white" />}
+                                                    </div>
+                                                    <input type="checkbox" className="hidden" checked={selectedListsToAddTo.includes(pl.id)} onChange={e => {
+                                                        if (e.target.checked) setSelectedListsToAddTo(prev => [...prev, pl.id]);
+                                                        else setSelectedListsToAddTo(prev => prev.filter(id => id !== pl.id));
+                                                    }} />
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="font-black text-white text-sm uppercase italic tracking-tight truncate">{pl.name}</p>
+                                                        <p className="text-[10px] text-slate-500 font-bold mt-0.5">{pl.songs?.length || 0} músicas</p>
+                                                    </div>
+                                                </label>
+                                            ))}
+                                        </div>
+                                        <button onClick={handleAddToExistingLists} disabled={selectedListsToAddTo.length === 0} className="w-full py-4 bg-[#B87333] hover:bg-[#8B4513] text-white font-black uppercase tracking-widest rounded-xl transition-all shadow-xl shadow-[#B87333]/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2">
+                                            <FolderHeart className="w-4 h-4" /><span>{selectedListsToAddTo.length > 0 ? `Adicionar às ${selectedListsToAddTo.length} Lista(s)` : 'Selecione as Listas'}</span>
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    );
+                })()
+            }
+
+            {/* Rename List Modal */}
+            {editingList && (
+                <div className="fixed inset-0 z-[250] flex items-center justify-center bg-[#070709]/90 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-300 p-4">
+                    <div className="bg-[#16161D] border border-[#B87333]/30 rounded-[32px] shadow-[0_0_50px_rgba(0,0,0,0.8)] w-full max-w-lg flex flex-col">
+                        <div className="flex items-center justify-between p-8 border-b border-white/5">
+                            <div className="flex items-center space-x-4">
+                                <div className="w-1.5 h-6 bg-[#B87333] rounded-full"></div>
+                                <h3 className="text-xl font-black text-white uppercase italic tracking-tighter">Renomear Lista</h3>
+                            </div>
+                            <button onClick={() => setEditingList(null)} className="p-2 bg-white/5 hover:bg-white/10 rounded-xl border border-white/5 transition-all">
+                                <X className="w-5 h-5 text-slate-400" />
+                            </button>
+                        </div>
+                        <div className="p-8 space-y-6">
+                            <div>
+                                <label className="block text-[10px] font-black uppercase text-slate-500 mb-3 tracking-widest ml-1">Novo Nome da Lista</label>
+                                <input
+                                    type="text"
+                                    value={editListName}
+                                    onChange={e => setEditListName(e.target.value)}
+                                    className="w-full bg-black/40 border border-white/10 rounded-2xl px-6 py-4 text-white font-bold text-lg outline-none focus:border-[#B87333]/50 transition-all placeholder:text-slate-700"
+                                    placeholder="Ex: Repertório Show Sábado..."
+                                    autoFocus
+                                    onKeyDown={e => {
+                                        if (e.key === 'Enter' && editListName.trim()) {
+                                            const all = Array.isArray(savedPlaylists) ? savedPlaylists : JSON.parse(localStorage.getItem('iron_chords_playlists') || '[]');
+                                            const updated = all.map(pl => pl.id === editingList.id ? { ...pl, name: editListName } : pl);
+                                            localStorage.setItem('iron_chords_playlists', JSON.stringify(updated));
+                                            setSavedPlaylists(updated);
+                                            setEditingList(null);
+                                            setShowSaveSuccess(true);
+                                            setTimeout(() => setShowSaveSuccess(false), 2000);
+                                        }
+                                    }}
+                                />
+                            </div>
+                            <button
+                                onClick={() => {
+                                    if (!editListName.trim()) return;
+                                    const all = Array.isArray(savedPlaylists) ? savedPlaylists : JSON.parse(localStorage.getItem('iron_chords_playlists') || '[]');
+                                    const updated = all.map(pl => pl.id === editingList.id ? { ...pl, name: editListName } : pl);
+                                    localStorage.setItem('iron_chords_playlists', JSON.stringify(updated));
+                                    setSavedPlaylists(updated);
+                                    setEditingList(null);
+                                    setShowSaveSuccess(true);
+                                    setTimeout(() => setShowSaveSuccess(false), 2000);
+                                }}
+                                className="w-full py-4 bg-[#B87333] hover:bg-[#A86323] text-white font-black uppercase tracking-widest rounded-2xl transition-all shadow-xl shadow-[#B87333]/20 flex items-center justify-center space-x-3"
+                            >
+                                <Save className="w-5 h-5" />
+                                <span>Salvar Novo Nome</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Batch Upload Modal */}
+            {batchModalOpen && (
+                <div className="fixed inset-0 z-[300] flex items-center justify-center bg-[#070709]/95 backdrop-blur-2xl animate-in fade-in zoom-in-95 duration-300 p-4">
+                    <div className="bg-[#16161D] border border-white/10 rounded-[40px] shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
+                        {/* Header */}
+                        <div className="flex items-center justify-between p-8 pb-6 border-b border-white/5 shrink-0">
+                            <div className="flex items-center space-x-4">
+                                <div className="w-2 h-10 bg-[#B87333] rounded-full shadow-[0_0_15px_rgba(184,115,51,0.4)]"></div>
+                                <div>
+                                    <h2 className="text-2xl font-black text-white uppercase italic tracking-tighter">Forja em Lote</h2>
+                                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em] mt-0.5">Importe múltiplos arquivos de cifras (PDF, XLSX, CSV)</p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => { setBatchModalOpen(false); setBatchResults([]); setShowMappingUI(false); setShowBatchReview(false); setBatchError(''); }}
+                                className="p-3 bg-white/5 hover:bg-white/10 rounded-2xl transition-all border border-white/5"
+                            >
+                                <X className="w-6 h-6 text-slate-400" />
+                            </button>
+                        </div>
+                        {/* Body */}
+                        <div className="flex-1 overflow-y-auto p-8 space-y-6 custom-scrollbar">
+                            {batchError && (
+                                <div className="w-full bg-red-900/20 border-l-4 border-red-500 p-4 rounded-r-2xl animate-in slide-in-from-top-4 flex items-start space-x-3">
+                                    <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+                                    <p className="text-xs font-bold text-red-400">{batchError}</p>
+                                </div>
+                            )}
+
+                            {!showMappingUI && !showBatchReview ? (
+                                <div
+                                    onClick={() => !batchLoading && fileInputRef.current?.click()}
+                                    className={`w-full border-2 border-dashed rounded-[40px] p-20 flex flex-col items-center justify-center transition-all group ${batchLoading ? 'border-[#B87333]/50 opacity-80 cursor-not-allowed' : 'border-white/10 hover:border-[#B87333]/50 cursor-pointer'}`}
+                                >
+                                    <div className={`w-20 h-20 ${batchLoading ? 'bg-black/60 border-[#B87333]/50 relative overflow-hidden' : 'bg-[#B87333]/10 border-[#B87333]/20 group-hover:scale-110'} rounded-3xl flex items-center justify-center mb-6 border transition-all duration-500`}>
+                                        {batchLoading ? (
+                                            <>
+                                                <UploadCloud className="w-8 h-8 text-[#B87333]/30" />
+                                                <div className="absolute inset-0 bg-[linear-gradient(transparent_50%,rgba(0,0,0,0.8)_50%)] bg-[length:100%_4px] opacity-20"></div>
+                                                <div className="absolute left-0 w-full h-[3px] bg-white shadow-[0_0_20px_2px_rgba(184,115,51,1)] animate-scan-metal"></div>
+                                            </>
+                                        ) : <UploadCloud className="w-10 h-10 text-[#B87333]" />}
+                                    </div>
+                                    <h3 className="text-xl font-black text-white uppercase tracking-widest">{batchLoading ? 'Processando Arquivo...' : 'Clique ou arraste para importar'}</h3>
+                                    <p className="text-xs text-slate-500 uppercase font-bold mt-3">PDF, XLSX ou CSV</p>
+                                    <input type="file" ref={fileInputRef} onChange={handleBatchFileSelect} className="hidden" />
+                                </div>
+                            ) : showMappingUI && !showBatchReview ? (
+                                <div className="w-full bg-black/40 p-8 rounded-[32px] border border-white/5 space-y-6 relative">
+                                    <button onClick={() => setShowMappingUI(false)} className="absolute top-6 right-6 p-2 bg-white/5 hover:bg-red-900/40 text-slate-500 hover:text-red-500 rounded-xl transition-all border border-white/5"><X className="w-5 h-5" /></button>
+                                    <h4 className="text-xs font-black text-[#B87333] uppercase tracking-widest text-center">Mapeamento de Colunas</h4>
+                                    <p className="text-[10px] text-slate-500 text-center uppercase tracking-widest">Colunas disponíveis: {batchHeaders.join(', ')}</p>
+                                    {[{ label: 'Nome da Música', key: 'song_name' }, { label: 'Artista', key: 'artist_name' }, { label: 'Tom (Key)', key: 'key' }].map(field => (
+                                        <div key={field.key}>
+                                            <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest">{field.label}</label>
+                                            <select value={batchMapping[field.key]} onChange={e => setBatchMapping(prev => ({ ...prev, [field.key]: e.target.value }))} className="w-full bg-black/60 border border-white/10 rounded-xl px-4 py-3 text-white font-bold outline-none">
+                                                <option value="">— Selecionar —</option>
+                                                {batchHeaders.map(h => <option key={h} value={h}>{h}</option>)}
+                                            </select>
+                                        </div>
+                                    ))}
+                                    <button
+                                        onClick={() => {
+                                            if (!batchMapping.song_name) { setBatchError('Selecione ao menos a coluna de nome da música.'); return; }
+                                            const mapped = batchRawData.map((row, i) => ({ id: i, song_name: row[batchMapping.song_name] || '', artist_name: row[batchMapping.artist_name] || '', song_key: row[batchMapping.key] || 'C', content: '', capo: 0, include_tabs: true, status: 'pending' }));
+                                            setBatchResults(mapped);
+                                            setShowMappingUI(false);
+                                            setShowBatchReview(true);
+                                        }}
+                                        disabled={!batchMapping.song_name}
+                                        className="w-full py-4 bg-[#B87333] hover:bg-[#8B4513] text-white font-black uppercase tracking-widest rounded-xl transition-all disabled:opacity-40"
+                                    >Confirmar Mapeamento</button>
+                                </div>
+                            ) : showBatchReview ? (
+                                <div className="space-y-4">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <h4 className="text-sm font-black text-white uppercase tracking-widest">Revisão — {batchResults.length} músicas</h4>
+                                        <button
+                                            onClick={async () => {
+                                                let saved = 0;
+                                                for (const song of batchResults) {
+                                                    if (song.status === 'saved') continue;
+                                                    try { await saveOneChordToAcervo(song, true); saved++; } catch (e) { }
+                                                }
+                                                setBatchModalOpen(false);
+                                                setShowBatchReview(false);
+                                                setBatchResults([]);
+                                                setShowSaveSuccess(true);
+                                                setTimeout(() => setShowSaveSuccess(false), 2000);
+                                            }}
+                                            className="px-6 py-3 bg-[#B87333] hover:bg-[#8B4513] text-white font-black uppercase tracking-widest rounded-xl text-[10px] transition-all flex items-center space-x-2"
+                                        >
+                                            <Save className="w-4 h-4" /><span>Salvar Tudo no Acervo</span>
+                                        </button>
+                                    </div>
+                                    <div className="space-y-2 max-h-[50vh] overflow-y-auto pr-2 custom-scrollbar">
+                                        {batchResults.map((song, idx) => (
+                                            <div key={idx} className="flex items-center justify-between bg-black/40 border border-white/5 rounded-2xl px-5 py-3">
+                                                <div>
+                                                    <p className="text-sm font-bold text-white uppercase">{song.song_name}</p>
+                                                    <p className="text-[10px] text-slate-500 uppercase">{song.artist_name} | Tom: {song.song_key}</p>
+                                                </div>
+                                                <span className={`text-[9px] font-black uppercase px-3 py-1 rounded-full ${song.status === 'saved' ? 'bg-green-500/20 text-green-400' : 'bg-white/5 text-slate-500'}`}>
+                                                    {song.status === 'saved' ? 'Salvo' : 'Pendente'}
+                                                </span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            ) : null}
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Share and Import Modals */}
             <ShareModal
                 isOpen={shareModalOpen}
