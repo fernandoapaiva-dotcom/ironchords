@@ -769,7 +769,9 @@ def get_metadata(song_name: str, artist_name: str):
 async def generate_book(
     songs_data: str = Form(...),
     export_format: str = Form("docx"),
-    cover_image: Optional[UploadFile] = File(None)
+    cover_image: Optional[UploadFile] = File(None),
+    include_toc: str = Form("true"),
+    include_dictionary: str = Form("true")
 ):
     try:
         raw_songs = json.loads(songs_data)
@@ -801,7 +803,13 @@ async def generate_book(
             cover_path = temp_cover.name
             
         docx_filename = "Livreto.docx"
-        file_path = generate_docx(prepared_songs, docx_filename, cover_path)
+        file_path = generate_docx(
+            prepared_songs, 
+            docx_filename, 
+            cover_path,
+            include_toc=(include_toc == "true"),
+            include_dictionary=(include_dictionary == "true")
+        )
         
         # --- NOVO: Força a atualização do sumário no DOCX via Word COM ---
         pdf_path = None

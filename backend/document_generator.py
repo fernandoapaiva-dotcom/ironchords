@@ -157,7 +157,7 @@ def is_valid_chord(word: str) -> bool:
     has_root = any(c in "ABCDEFG" for c in word)
     return has_root and all(c in musical_atoms for c in c_word)
 
-def generate_docx(songs: list, output_filename: str = "Livreto.docx", cover_image_path: Optional[str] = None) -> str:
+def generate_docx(songs: list, output_filename: str = "Livreto.docx", cover_image_path: Optional[str] = None, include_toc: bool = True, include_dictionary: bool = True) -> str:
     doc = Document()
     for section in doc.sections:
         section.top_margin = Cm(0.7)
@@ -169,9 +169,15 @@ def generate_docx(songs: list, output_filename: str = "Livreto.docx", cover_imag
     if cover_image_path and os.path.exists(cover_image_path):
         p_img = doc.add_paragraph()
         p_img.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        p_img.add_run().add_picture(cover_image_path, width=Cm(12))
-        h0 = doc.add_heading('Caminho das Cifras', 0)
+        # V32: Make cover image larger (premium identity)
+        p_img.add_run().add_picture(cover_image_path, width=Cm(16))
+        # Small spacer
+        p_img.paragraph_format.space_after = Pt(24)
+        
+        h0 = doc.add_heading('CAMINHO DAS CIFRAS', 0)
         h0.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        h0.runs[0].font.name = 'Courier New'
+        h0.runs[0].font.color.rgb = (0, 0, 0) # Black instead of default blue heading
     else:
         h0 = doc.add_heading('Caminho das Cifras', 0)
         h0.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -187,9 +193,10 @@ def generate_docx(songs: list, output_filename: str = "Livreto.docx", cover_imag
     doc.add_paragraph('Livreto Gerado Automaticamente').alignment = WD_ALIGN_PARAGRAPH.CENTER
     doc.add_page_break()
     
-    doc.add_heading('Sumário', level=1)
-    add_toc(doc)
-    doc.add_page_break()
+    if include_toc:
+        doc.add_heading('Sumário', level=1)
+        add_toc(doc)
+        doc.add_page_break()
     
     songs_sorted = sorted(songs, key=lambda x: str(x['song_name']).lower())
     temp_dir = tempfile.mkdtemp()
@@ -213,7 +220,7 @@ def generate_docx(songs: list, output_filename: str = "Livreto.docx", cover_imag
                 for m in CHORD_REGEX.findall(l):
                     if is_valid_chord(m): unique_chords.add(m)
             
-            show_diag = song.get('show_chords', True)
+            show_diag = song.get('show_chords', True) and include_dictionary
             num_chords = len(unique_chords)
             
             # 1. FIXED DICTIONARY SPACE

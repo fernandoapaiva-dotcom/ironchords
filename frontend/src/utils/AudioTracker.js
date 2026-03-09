@@ -114,35 +114,11 @@ export class AudioTracker {
     }
 
     setVocabulary(words) {
-        // Sanitize and limit to 200 most relevant words to avoid engine crash
-        const sanitized = (words || [])
-            .map(w => w.replace(/[^a-zA-Z0-9áéíóúâêîôûàèìòùãõçÁÉÍÓÚÂÊÎÔÛÀÈÌÒÙÃÕÇ]/g, ''))
-            .filter(w => w.length >= 2)
-            .slice(0, 200);
-
-        this.vocabulary = sanitized;
-
-        if (this.recognition && sanitized.length > 0) {
-            try {
-                const SpeechGrammarList = window.SpeechGrammarList || window.webkitSpeechGrammarList;
-                if (SpeechGrammarList) {
-                    const grammarList = new SpeechGrammarList();
-                    const grammar = `#JSGF V1.0; grammar songLyrics; public <word> = ${sanitized.join(' | ')};`;
-                    console.log("[AudioTracker] JSGF Grammar Generated:", grammar.substring(0, 100) + "...");
-                    grammarList.addFromString(grammar, 1);
-                    this.recognition.grammars = grammarList;
-                    console.log(`[AudioTracker] Injected ${sanitized.length} words into Grammar.`);
-
-                    if (this.isMicActive) {
-                        console.log("[AudioTracker] Restarting recognition to apply new song vocabulary...");
-                        this.stopSpeechRecognition();
-                        setTimeout(() => this.startSpeechRecognition(), 150);
-                    }
-                }
-            } catch (e) {
-                console.warn("[AudioTracker] Failed to set Grammar:", e);
-            }
-        }
+        // Disabled: Injecting JSGF grammar forces the engine to run restrictively
+        // and breaks fast, real-time interimResults in many browsers (causing lag).
+        // It's better to let the natural language model run fast and handle misspellings
+        // dynamically via PhoneticMatcher in App.jsx.
+        this.vocabulary = [];
     }
 
     stopSpeechRecognition() {
@@ -164,19 +140,11 @@ export class AudioTracker {
         this.recognition.interimResults = true;
         this.recognition.lang = 'pt-BR';
 
-        if (this.vocabulary && this.vocabulary.length > 0) {
-            const SpeechGrammarList = window.SpeechGrammarList || window.webkitSpeechGrammarList;
-            if (SpeechGrammarList) {
-                const grammarList = new SpeechGrammarList();
-                const grammar = `#JSGF V1.0; grammar songLyrics; public <word> = ${this.vocabulary.join(' | ')};`;
-                grammarList.addFromString(grammar, 1);
-                this.recognition.grammars = grammarList;
-            }
-        }
+        // Grammar injection removed to prioritize real-time language model speed
 
         this.recognition.onstart = () => {
             console.log("[AudioTracker] Speech Recognition officially STARTED");
-            if (this.onSpeechResult) this.onSpeechResult("[SISTEMA: Motor de voz iniciado]", false);
+            // Don't fire the onSpeechResult callback for system messages – it clutters the UI
         };
 
         this.recognition.onresult = (event) => {
@@ -194,6 +162,8 @@ export class AudioTracker {
 
         this.recognition.onerror = (e) => {
             console.warn("[AudioTracker] SpeechRec Error:", e.error);
+            // 'aborted' = intentional stop, 'no-speech' = silence timeout (onend will restart)
+            if (e.error === 'aborted' || e.error === 'no-speech') return;
             if (this.onSpeechResult) this.onSpeechResult(`[ERRO VOZ: ${e.error}]`, false);
             if (e.error === 'network') {
                 this.stopSpeechRecognition();
