@@ -2855,13 +2855,21 @@ export default function App() {
                         <div className={`bg-black/60 border-b border-white/5 backdrop-blur-2xl shrink-0 no-print w-full z-[200] transition-all duration-300 ${isImmersiveMode && !showImmersiveControls ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
                             <div className="flex items-center px-3 py-2 gap-2 overflow-x-auto scrollbar-none">
 
-                                {/* Back + song info */}
-                                <button onClick={() => { resetSearchSession(); setIsFullScreenPlayer(false); setActiveTab('manual'); setMainNav('escolha'); setIsImmersiveMode(false); }} className="p-2 bg-white/5 hover:bg-white/10 rounded-xl transition-all border border-white/5 text-slate-400 hover:text-white shrink-0" title="Voltar (Limpar Sessão)">
-                                    <ArrowLeft className="w-4 h-4" />
-                                </button>
-                                <div className="flex flex-col min-w-0 shrink-0 max-w-[130px]">
-                                    <h2 className="text-[11px] font-black text-white uppercase italic tracking-tighter leading-none truncate">{currentSong?.song_name || '—'}</h2>
-                                    <p className="text-[8px] font-bold text-[#B87333] uppercase truncate opacity-60">{activePlaylistName}</p>
+                                {/* Logo + Back + info */}
+                                <div className="flex flex-col items-start shrink-0 mr-2">
+                                    <div className="flex items-center space-x-3 mb-2.5 px-1">
+                                        <Flame className="w-8 h-8 text-[#B87333]" />
+                                        <span className="text-[32px] font-black text-white italic uppercase tracking-tighter leading-none">IRON<span className="text-[#B87333]">CHORDS</span></span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <button onClick={() => { resetSearchSession(); setIsFullScreenPlayer(false); setActiveTab('manual'); setMainNav('escolha'); setIsImmersiveMode(false); }} className="p-2 bg-white/5 hover:bg-white/10 rounded-xl transition-all border border-white/5 text-slate-400 hover:text-white shrink-0" title="Voltar (Limpar Sessão)">
+                                            <ArrowLeft className="w-4 h-4" />
+                                        </button>
+                                        <div className="flex flex-col min-w-0 shrink-0 max-w-[130px]">
+                                            <h2 className="text-[11px] font-black text-white uppercase italic tracking-tighter leading-none truncate">{currentSong?.song_name || '—'}</h2>
+                                            <p className="text-[8px] font-bold text-[#B87333] uppercase truncate opacity-60">{activePlaylistName}</p>
+                                        </div>
+                                    </div>
                                 </div>
 
                                 <div className="w-px h-8 bg-white/10 shrink-0" />
@@ -4805,7 +4813,7 @@ export default function App() {
                                         </div>
                                     </div>
                                 );
-                            })() }
+                            })()}
 
 
 
