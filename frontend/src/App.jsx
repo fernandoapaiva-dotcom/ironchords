@@ -1302,6 +1302,8 @@ export default function App() {
                         setDetectedPitch(pitch);
                     },
                     (text, isFinal) => {
+                        // Ignore internal system/error messages from AudioTracker
+                        if (text && (text.startsWith('[SISTEMA:') || text.startsWith('[ERRO VOZ:'))) return;
                         setTranscriptRaw(text);
                         lastVoiceTimeRef.current = Date.now();
                         if (syncLineByTextRef.current) syncLineByTextRef.current(text, isFinal);
@@ -1520,6 +1522,8 @@ export default function App() {
         // Resume if we hear a voice match
         if (isPausedBySilence) setIsPausedBySilence(false);
         if (!text || text.trim().length === 0) return;
+        // Skip system/error messages passed through the speech callback
+        if (text.startsWith('[SISTEMA:') || text.startsWith('[ERRO VOZ:')) return;
 
         const currentSongData = songs[songIdx];
         const lines = (currentSongData.content || "").split('\n');
