@@ -195,9 +195,13 @@ export class AudioTracker {
         this.recognition.onerror = (e) => {
             console.warn("[AudioTracker] SpeechRec Error:", e.error);
             if (this.onSpeechResult) this.onSpeechResult(`[ERRO VOZ: ${e.error}]`, false);
-            if (e.error === 'network') {
+
+            // Auto-recover from common dropouts
+            if (e.error === 'network' || e.error === 'aborted' || e.error === 'no-speech') {
                 this.stopSpeechRecognition();
-                setTimeout(() => this.startSpeechRecognition(), 2000);
+                if (this.isMicActive) {
+                    setTimeout(() => this.startSpeechRecognition(), 1000);
+                }
             }
         };
 

@@ -1514,7 +1514,7 @@ export default function App() {
     });
 
     const syncLineByText = (text, isFinal) => {
-        const songIdx = (activeTab === 'presentation') ? presenterSongIndex : ((isFullScreenPlayer || activeTab === 'player' || mainNav === 'player') ? selectedManualIndex : null);
+        const songIdx = (activeTab === 'presentation') ? presenterSongIndex : ((isFullScreenPlayer || isManualFullscreen || activeTab === 'player' || mainNav === 'player') ? selectedManualIndex : null);
         if (songIdx === null || !songs[songIdx]) return;
 
         // Resume if we hear a voice match
