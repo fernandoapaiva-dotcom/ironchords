@@ -883,8 +883,8 @@ export default function App() {
     };
 
     const handleSaveList = async () => {
-        const songsToSave = activeTab === 'batch' && showBatchReview
-            ? batchResults.filter(r => r.status === 'success')
+        const songsToSave = batchModalOpen && showBatchReview
+            ? batchResults.filter(r => r.status === 'success' || r.status === 'saved' || r.status === 'pending')
             : songs;
 
         if (!saveListName.trim() || songsToSave.length === 0) return;
@@ -921,6 +921,11 @@ export default function App() {
         setSaveListName('');
         setSavedPlaylists(JSON.parse(localStorage.getItem('iron_chords_playlists') || '[]'));
         setShowSaveSuccess(true);
+        if (batchModalOpen) {
+            setBatchModalOpen(false);
+            setShowBatchReview(false);
+            setBatchResults([]);
+        }
         setTimeout(() => setShowSaveSuccess(false), 2000);
 
         if (conflictsFound.length > 0) {
@@ -930,8 +935,8 @@ export default function App() {
     };
 
     const handleAddToExistingLists = () => {
-        const songsToSave = activeTab === 'batch' && showBatchReview
-            ? batchResults.filter(r => r.status === 'success')
+        const songsToSave = batchModalOpen && showBatchReview
+            ? batchResults.filter(r => r.status === 'success' || r.status === 'saved' || r.status === 'pending')
             : songs;
         if (selectedListsToAddTo.length === 0 || songsToSave.length === 0) return;
 
@@ -968,6 +973,11 @@ export default function App() {
         setSaveListModalOpen(false);
         setSelectedListsToAddTo([]);
         setShowSaveSuccess(true);
+        if (batchModalOpen) {
+            setBatchModalOpen(false);
+            setShowBatchReview(false);
+            setBatchResults([]);
+        }
         setTimeout(() => setShowSaveSuccess(false), 2000);
     };
 
@@ -5567,21 +5577,12 @@ export default function App() {
                                     <div className="flex items-center justify-between mb-2">
                                         <h4 className="text-sm font-black text-white uppercase tracking-widest">Revisão — {batchResults.length} músicas</h4>
                                         <button
-                                            onClick={async () => {
-                                                let saved = 0;
-                                                for (const song of batchResults) {
-                                                    if (song.status === 'saved') continue;
-                                                    try { await saveOneChordToAcervo(song, true); saved++; } catch (e) { }
-                                                }
-                                                setBatchModalOpen(false);
-                                                setShowBatchReview(false);
-                                                setBatchResults([]);
-                                                setShowSaveSuccess(true);
-                                                setTimeout(() => setShowSaveSuccess(false), 2000);
+                                            onClick={() => {
+                                                setSaveListModalOpen(true);
                                             }}
                                             className="px-6 py-3 bg-[#B87333] hover:bg-[#8B4513] text-white font-black uppercase tracking-widest rounded-xl text-[10px] transition-all flex items-center space-x-2"
                                         >
-                                            <Save className="w-4 h-4" /><span>Salvar Tudo no Acervo</span>
+                                            <Save className="w-4 h-4" /><span>Salvar na Lista</span>
                                         </button>
                                     </div>
                                     <div className="space-y-2 max-h-[50vh] overflow-y-auto pr-2 custom-scrollbar">
