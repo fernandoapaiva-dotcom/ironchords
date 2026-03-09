@@ -1302,10 +1302,9 @@ export default function App() {
                         setDetectedPitch(pitch);
                     },
                     (text, isFinal) => {
-                        const isSystemMsg = text && (text.startsWith('[SISTEMA:') || text.startsWith('[ERRO VOZ:'));
-                        if (!isSystemMsg) setTranscriptRaw(text);
+                        setTranscriptRaw(text);
                         lastVoiceTimeRef.current = Date.now();
-                        if (!isSystemMsg && syncLineByTextRef.current) syncLineByTextRef.current(text, isFinal);
+                        if (syncLineByTextRef.current) syncLineByTextRef.current(text, isFinal);
                     },
                     (state) => setFsmState(state),
                     (status) => setConnectionStatus(status)
@@ -3095,7 +3094,7 @@ export default function App() {
 
                                 {/* IA Sync */}
                                 <div className="relative shrink-0">
-                                    {micEnabled && isDynamicSpeedActive && transcriptRaw && (
+                                    {micEnabled && isDynamicSpeedActive && transcriptRaw && !transcriptRaw.startsWith('[') && (
                                         <div className="absolute bottom-[calc(100%+6px)] left-1/2 -translate-x-1/2 z-50 pointer-events-none">
                                             <div className="bg-blue-600/90 text-white px-2 py-1 rounded-lg whitespace-nowrap flex items-center gap-1.5 text-[8px] font-bold">
                                                 <div className="w-1 h-1 bg-white rounded-full animate-pulse" />
@@ -4659,11 +4658,10 @@ export default function App() {
                                 )
                             }
 
-
                             {/* Export Livreto Modal */}
                             {
                                 showExportModal && (
-                                    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-[#070709]/90 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-300 p-4">
+                                    <div className="fixed inset-0 z-[500] flex items-center justify-center bg-[#070709]/90 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-300 p-4">
                                         <div className="bg-[#16161D] border border-white/10 rounded-[32px] shadow-2xl w-full max-w-5xl flex flex-col max-h-[90vh]">
                                             <div className="flex items-center justify-between p-8 border-b border-white/5 shrink-0">
                                                 <div className="flex items-center space-x-4">
@@ -4675,7 +4673,7 @@ export default function App() {
                                                 </button>
                                             </div>
                                             <div className="flex-1 overflow-y-auto p-4 scrollbar-thin scrollbar-thumb-white/10">
-                                                {/* STEP 4: CONFIGURAÇÕES DA FORJA */}
+                                                {/* STEP 1: CONFIGURAÇÕES DA FORJA */}
                                                 {exportStep === 1 && (
                                                     <div className="flex-1 animate-in fade-in slide-in-from-right-8 duration-700">
                                                         <div className="bg-[#16161D]/80 backdrop-blur-xl border border-white/5 rounded-[40px] p-8 shadow-2xl">
@@ -4683,7 +4681,6 @@ export default function App() {
                                                                 <div className="w-2 h-10 bg-[#B87333] rounded-full shadow-[0_0_15px_rgba(184,115,51,0.4)]"></div>
                                                                 <h2 className="text-2xl font-black text-white uppercase italic tracking-tighter">Engrenagens da Forja</h2>
                                                             </div>
-
                                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
                                                                 <div className="space-y-8">
                                                                     <div className="bg-black/40 border border-white/5 rounded-[32px] p-8">
@@ -4714,7 +4711,6 @@ export default function App() {
                                                                         </div>
                                                                     </div>
                                                                 </div>
-
                                                                 <div className="space-y-8">
                                                                     <div className="bg-black/40 border border-white/5 rounded-[32px] p-8">
                                                                         <div className="flex items-center space-x-3 mb-6">
@@ -4756,7 +4752,7 @@ export default function App() {
                                                     </div>
                                                 )}
 
-                                                {/* STEP 5: FINALIZAÇÃO */}
+                                                {/* STEP 2: FINALIZAÇÃO */}
                                                 {exportStep === 2 && (
                                                     <div className="flex-1 animate-in fade-in slide-in-from-right-8 duration-700">
                                                         <div className="bg-[#16161D]/80 backdrop-blur-xl border border-white/5 rounded-[40px] p-12 shadow-2xl flex flex-col items-center justify-center text-center">
@@ -4768,7 +4764,6 @@ export default function App() {
                                                                         </div>
                                                                         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 bg-[#B87333]/5 rounded-full blur-3xl animate-pulse"></div>
                                                                     </div>
-
                                                                     <div className="space-y-4">
                                                                         <h2 className="text-3xl font-black text-white uppercase italic tracking-tighter">A Forja está Pronta</h2>
                                                                         <p className="text-sm text-slate-500 font-medium leading-relaxed uppercase tracking-widest">
@@ -4776,7 +4771,6 @@ export default function App() {
                                                                             Clique abaixo para iniciar a geração do seu material exclusivo.
                                                                         </p>
                                                                     </div>
-
                                                                     <button
                                                                         disabled={songs.length === 0 || isGenerating}
                                                                         onClick={handleGenerateDocument}
@@ -4803,7 +4797,6 @@ export default function App() {
                                                                         </div>
                                                                         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 bg-green-500/5 rounded-full blur-3xl"></div>
                                                                     </div>
-
                                                                     <div className="space-y-4">
                                                                         <h2 className="text-3xl font-black text-white uppercase italic tracking-tighter">Missão Cumprida</h2>
                                                                         <p className="text-sm text-slate-500 font-medium leading-relaxed uppercase tracking-widest">
@@ -4811,7 +4804,6 @@ export default function App() {
                                                                             Utilize o acesso abaixo para resgatar sua peça.
                                                                         </p>
                                                                     </div>
-
                                                                     <div className="grid grid-cols-1 gap-4">
                                                                         <a
                                                                             href={downloadUrl}
@@ -4822,7 +4814,7 @@ export default function App() {
                                                                             RECOLHER PEÇA
                                                                         </a>
                                                                         <button
-                                                                            onClick={() => { setDownloadUrl(null); setCurrentStep(1); setSongs([]); }}
+                                                                            onClick={() => { setDownloadUrl(null); setExportStep(1); setSongs([]); setShowExportModal(false); }}
                                                                             className="w-full py-4 bg-white/5 hover:bg-white/10 text-slate-500 hover:text-white font-black uppercase tracking-widest rounded-2xl text-[10px] italic transition-all border border-white/5"
                                                                         >
                                                                             Iniciar Nova Forja
@@ -4833,8 +4825,6 @@ export default function App() {
                                                         </div>
                                                     </div>
                                                 )}
-
-
                                             </div>
                                             {exportStep === 1 && (
                                                 <div className="p-8 border-t border-white/5 flex justify-end">
@@ -4851,631 +4841,628 @@ export default function App() {
                                     </div>
                                 )
                             }
-                        </div >
-                    </div >
-                )
-                }
-            </main >
 
-            {/* Conflict Resolution Modal */}
-            {
-                conflictData && (
-                    <div className="fixed inset-0 z-[400] flex items-center justify-center bg-[#070709]/95 backdrop-blur-2xl animate-in fade-in zoom-in-95 duration-300 p-4">
-                        <div className="bg-[#16161D] border border-blue-500/30 p-10 rounded-[40px] shadow-[0_0_80px_rgba(59,130,246,0.15)] w-full max-w-2xl flex flex-col relative overflow-hidden">
-                            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-blue-500 to-transparent opacity-50"></div>
-                            <div className="flex items-center justify-between mb-10">
-                                <div className="flex items-center space-x-5">
-                                    <div className="w-12 h-12 bg-blue-500/10 rounded-2xl flex items-center justify-center border border-blue-500/20">
-                                        <AlertCircle className="w-6 h-6 text-blue-500" />
-                                    </div>
-                                    <div>
-                                        <h3 className="text-2xl font-black text-white uppercase italic tracking-tighter">Conflito de Forja</h3>
-                                        <p className="text-[10px] font-bold text-blue-400 uppercase tracking-[0.2em] mt-1">Uma peça com este nome já existe no acervo</p>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-8 mb-10">
-                                <div className="bg-white/5 border border-white/10 p-6 rounded-3xl relative">
-                                    <span className="absolute -top-3 left-6 px-3 py-1 bg-[#16161D] border border-white/10 rounded-full text-[8px] font-black text-slate-500 uppercase tracking-widest">No Acervo</span>
-                                    <h4 className="text-lg font-black text-white uppercase italic truncate">{conflictData.existingSong?.song_name}</h4>
-                                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1 truncate">{conflictData.existingSong?.artist_name}</p>
-                                    <div className="mt-4 pt-4 border-t border-white/5 flex items-center justify-between">
-                                        <span className="text-[10px] font-black text-blue-400 italic bg-blue-500/10 px-3 py-1 rounded-lg border border-blue-500/20">{conflictData.existingSong?.song_key}</span>
-                                        <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest">{conflictData.existingSong?.content?.split('\n').length} linhas</span>
-                                    </div>
-                                </div>
-
-                                <div className="bg-blue-600/5 border border-blue-500/30 p-6 rounded-3xl relative">
-                                    <span className="absolute -top-3 left-6 px-3 py-1 bg-blue-600 border border-blue-500 text-[8px] font-black text-white uppercase tracking-widest">Nova Versão</span>
-                                    <h4 className="text-lg font-black text-white uppercase italic truncate">{conflictData.newSong?.song_name}</h4>
-                                    <p className="text-[10px] font-bold text-blue-400/60 uppercase tracking-widest mt-1 truncate">{conflictData.newSong?.artist_name}</p>
-                                    <div className="mt-4 pt-4 border-t border-blue-500/10 flex items-center justify-between">
-                                        <span className="text-[10px] font-black text-blue-400 italic bg-blue-500/10 px-3 py-1 rounded-lg border border-blue-500/20">{conflictData.newSong?.song_key}</span>
-                                        <span className="text-[10px] font-black text-blue-400/60 uppercase tracking-widest">{conflictData.newSong?.content?.split('\n').length} linhas</span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="flex flex-col space-y-4">
-                                <button
-                                    onClick={() => conflictData.onConfirm('replace')}
-                                    className="w-full py-5 bg-blue-600 hover:bg-blue-500 text-white font-black uppercase tracking-[0.2em] rounded-2xl transition-all shadow-xl shadow-blue-900/20 flex items-center justify-center space-x-3 group"
-                                >
-                                    <RefreshCw className="w-5 h-5 group-hover:rotate-180 transition-transform duration-700" />
-                                    <span>Substituir Versão Existente</span>
-                                </button>
-                                <button
-                                    onClick={() => conflictData.onConfirm('skip')}
-                                    className="py-4 bg-white/5 hover:bg-white/10 text-slate-400 font-bold uppercase tracking-widest text-[10px] rounded-xl border border-white/5 transition-all w-full"
-                                >
-                                    Manter Peça do Acervo / Pular
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                )
-            }
-
-
-
-            {/* Extracted Root Modals */}
-            {/* Delete Confirmation Modal */}
-            {
-                deleteModalOpen && (
-                    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-[#070709]/90 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-300">
-                        <div className="bg-[#16161D] border border-white/10 p-8 rounded-[32px] shadow-2xl w-full max-w-md flex flex-col">
-                            <div className="flex items-center justify-between mb-8">
-                                <div className="flex items-center space-x-4">
-                                    <div className="w-1.5 h-6 bg-red-600 rounded-full shadow-[0_0_15px_rgba(220,38,38,0.4)]"></div>
-                                    <h3 className="text-xl font-black text-white uppercase italic tracking-tighter">Confirmar Exclusão</h3>
-                                </div>
-                                <button onClick={() => setDeleteModalOpen(false)} className="p-2 bg-white/5 hover:bg-white/10 rounded-xl transition-all border border-white/5"><X className="w-5 h-5 text-slate-400" /></button>
-                            </div>
-                            <div className="space-y-6">
-                                <p className="text-sm font-bold text-slate-400 uppercase tracking-widest leading-relaxed">
-                                    Você tem certeza que deseja excluir permanentemente {deleteTarget.type === 'acervo' ? 'a música' : 'a lista'} <span className="text-white">"{deleteTarget.name}"</span>?
-                                </p>
-                                <p className="text-[10px] text-red-500/80 italic uppercase">Esta ação não poderá ser desfeita.</p>
-
-                                <div className="flex items-center space-x-4 mt-6">
-                                    <button onClick={() => setDeleteModalOpen(false)} className="flex-1 py-4 bg-white/5 hover:bg-white/10 text-white font-black uppercase tracking-widest rounded-xl transition-all border border-white/5">Cancelar</button>
-                                    <button onClick={confirmDelete} className="flex-1 py-4 bg-red-600 hover:bg-red-700 text-white font-black uppercase tracking-widest rounded-xl transition-all shadow-xl shadow-red-900/20 flex items-center justify-center space-x-2">
-                                        <Trash2 className="w-4 h-4" />
-                                        <span>Excluir</span>
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                )
-            }
-
-            {/* Save List Modal */}
-            {
-                saveListModalOpen && (() => {
-                    const allPlaylists = JSON.parse(localStorage.getItem('iron_chords_playlists') || '[]');
-                    const hasExisting = allPlaylists.length > 0;
-                    return (
-                        <div className="fixed inset-0 z-[400] flex items-center justify-center bg-[#070709]/95 backdrop-blur-2xl animate-in fade-in zoom-in-95 duration-300">
-                            <div className="bg-[#16161D] border border-white/10 p-8 rounded-[32px] shadow-2xl w-full max-w-md flex flex-col">
-                                <div className="flex items-center justify-between mb-6">
-                                    <div className="flex items-center space-x-3">
-                                        <div className="w-1.5 h-6 bg-[#B87333] rounded-full shadow-[0_0_15px_rgba(184,115,51,0.4)]"></div>
-                                        <h3 className="text-xl font-black text-white uppercase italic tracking-tighter">Salvar Forja</h3>
-                                    </div>
-                                    <button onClick={() => { setSaveListModalOpen(false); setSaveListName(''); setSelectedListsToAddTo([]); }} className="p-2 bg-white/5 hover:bg-white/10 rounded-xl transition-all border border-white/5"><X className="w-5 h-5 text-slate-400" /></button>
-                                </div>
-
-                                <div className="flex bg-black/40 p-1.5 rounded-2xl border border-white/5 mb-6">
-                                    <button onClick={() => setSaveListMode('new')} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${saveListMode === 'new' ? 'bg-[#B87333] text-white shadow-lg' : 'text-slate-500 hover:text-white'}`}>+ Nova Lista</button>
-                                    <button onClick={() => setSaveListMode('existing')} disabled={!hasExisting} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-30 disabled:cursor-not-allowed ${saveListMode === 'existing' ? 'bg-[#B87333] text-white shadow-lg' : 'text-slate-500 hover:text-white'}`}>Adicionar à Existente</button>
-                                </div>
-
-                                {saveListMode === 'new' && (
-                                    <div className="space-y-4">
-                                        <div>
-                                            <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Nome da Nova Lista</label>
-                                            <input type="text" autoFocus placeholder="Ex: Missa de Domingo..." value={saveListName} onChange={e => setSaveListName(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-4 text-white font-bold outline-none focus:border-[#B87333]/50 transition-all placeholder:text-slate-700" onKeyDown={e => e.key === 'Enter' && handleSaveList()} />
-                                        </div>
-                                        <button onClick={handleSaveList} disabled={!saveListName.trim()} className="w-full py-4 bg-[#B87333] hover:bg-[#8B4513] text-white font-black uppercase tracking-widest rounded-xl transition-all shadow-xl shadow-[#B87333]/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2">
-                                            <Save className="w-4 h-4" /><span>Criar e Salvar Lista</span>
-                                        </button>
-                                    </div>
-                                )}
-
-                                {saveListMode === 'existing' && (
-                                    <div className="space-y-4">
-                                        <label className="block text-[10px] font-black uppercase text-slate-500 mb-1 tracking-widest ml-1">Selecione uma ou mais listas</label>
-                                        <div className="max-h-64 overflow-y-auto space-y-2 pr-1 scrollbar-thin scrollbar-thumb-white/10">
-                                            {allPlaylists.map(pl => (
-                                                <label key={pl.id} className={`flex items-center space-x-4 p-4 rounded-2xl border cursor-pointer transition-all ${selectedListsToAddTo.includes(pl.id) ? 'bg-[#B87333]/15 border-[#B87333]/40' : 'bg-black/30 border-white/5 hover:border-white/15'}`}>
-                                                    <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 transition-all ${selectedListsToAddTo.includes(pl.id) ? 'bg-[#B87333] border-[#B87333]' : 'border-white/20'}`}>
-                                                        {selectedListsToAddTo.includes(pl.id) && <Check className="w-3 h-3 text-white" />}
+                            {/* Conflict Resolution Modal */}
+                            {
+                                conflictData && (
+                                    <div className="fixed inset-0 z-[400] flex items-center justify-center bg-[#070709]/95 backdrop-blur-2xl animate-in fade-in zoom-in-95 duration-300 p-4">
+                                        <div className="bg-[#16161D] border border-blue-500/30 p-10 rounded-[40px] shadow-[0_0_80px_rgba(59,130,246,0.15)] w-full max-w-2xl flex flex-col relative overflow-hidden">
+                                            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-blue-500 to-transparent opacity-50"></div>
+                                            <div className="flex items-center justify-between mb-10">
+                                                <div className="flex items-center space-x-5">
+                                                    <div className="w-12 h-12 bg-blue-500/10 rounded-2xl flex items-center justify-center border border-blue-500/20">
+                                                        <AlertCircle className="w-6 h-6 text-blue-500" />
                                                     </div>
-                                                    <input type="checkbox" className="hidden" checked={selectedListsToAddTo.includes(pl.id)} onChange={e => {
-                                                        if (e.target.checked) setSelectedListsToAddTo(prev => [...prev, pl.id]);
-                                                        else setSelectedListsToAddTo(prev => prev.filter(id => id !== pl.id));
-                                                    }} />
-                                                    <div className="flex-1 min-w-0">
-                                                        <p className="font-black text-white text-sm uppercase italic tracking-tight truncate">{pl.name}</p>
-                                                        <p className="text-[10px] text-slate-500 font-bold mt-0.5">{pl.songs?.length || 0} músicas</p>
-                                                    </div>
-                                                </label>
-                                            ))}
-                                        </div>
-                                        <button onClick={handleAddToExistingLists} disabled={selectedListsToAddTo.length === 0} className="w-full py-4 bg-[#B87333] hover:bg-[#8B4513] text-white font-black uppercase tracking-widest rounded-xl transition-all shadow-xl shadow-[#B87333]/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2">
-                                            <FolderHeart className="w-4 h-4" /><span>{selectedListsToAddTo.length > 0 ? `Adicionar às ${selectedListsToAddTo.length} Lista(s)` : 'Selecione as Listas'}</span>
-                                        </button>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    );
-                })()
-            }
-
-            {/* Rename List Modal */}
-            {
-                editingList && (
-                    <div className="fixed inset-0 z-[250] flex items-center justify-center bg-[#070709]/90 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-300 p-4">
-                        <div className="bg-[#16161D] border border-[#B87333]/30 rounded-[32px] shadow-[0_0_50px_rgba(0,0,0,0.8)] w-full max-w-lg flex flex-col">
-                            <div className="flex items-center justify-between p-8 border-b border-white/5">
-                                <div className="flex items-center space-x-4">
-                                    <div className="w-1.5 h-6 bg-[#B87333] rounded-full"></div>
-                                    <h3 className="text-xl font-black text-white uppercase italic tracking-tighter">Renomear Lista</h3>
-                                </div>
-                                <button onClick={() => setEditingList(null)} className="p-2 bg-white/5 hover:bg-white/10 rounded-xl border border-white/5 transition-all">
-                                    <X className="w-5 h-5 text-slate-400" />
-                                </button>
-                            </div>
-                            <div className="p-8 space-y-6">
-                                <div>
-                                    <label className="block text-[10px] font-black uppercase text-slate-500 mb-3 tracking-widest ml-1">Novo Nome da Lista</label>
-                                    <input
-                                        type="text"
-                                        value={editListName}
-                                        onChange={e => setEditListName(e.target.value)}
-                                        className="w-full bg-black/40 border border-white/10 rounded-2xl px-6 py-4 text-white font-bold text-lg outline-none focus:border-[#B87333]/50 transition-all placeholder:text-slate-700"
-                                        placeholder="Ex: Repertório Show Sábado..."
-                                        autoFocus
-                                        onKeyDown={e => {
-                                            if (e.key === 'Enter' && editListName.trim()) {
-                                                const all = Array.isArray(savedPlaylists) ? savedPlaylists : JSON.parse(localStorage.getItem('iron_chords_playlists') || '[]');
-                                                const updated = all.map(pl => pl.id === editingList.id ? { ...pl, name: editListName } : pl);
-                                                localStorage.setItem('iron_chords_playlists', JSON.stringify(updated));
-                                                setSavedPlaylists(updated);
-                                                setEditingList(null);
-                                                setShowSaveSuccess(true);
-                                                setTimeout(() => setShowSaveSuccess(false), 2000);
-                                            }
-                                        }}
-                                    />
-                                </div>
-                                <button
-                                    onClick={() => {
-                                        if (!editListName.trim()) return;
-                                        const all = Array.isArray(savedPlaylists) ? savedPlaylists : JSON.parse(localStorage.getItem('iron_chords_playlists') || '[]');
-                                        const updated = all.map(pl => pl.id === editingList.id ? { ...pl, name: editListName } : pl);
-                                        localStorage.setItem('iron_chords_playlists', JSON.stringify(updated));
-                                        setSavedPlaylists(updated);
-                                        setEditingList(null);
-                                        setShowSaveSuccess(true);
-                                        setTimeout(() => setShowSaveSuccess(false), 2000);
-                                    }}
-                                    className="w-full py-4 bg-[#B87333] hover:bg-[#A86323] text-white font-black uppercase tracking-widest rounded-2xl transition-all shadow-xl shadow-[#B87333]/20 flex items-center justify-center space-x-3"
-                                >
-                                    <Save className="w-5 h-5" />
-                                    <span>Salvar Novo Nome</span>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                )
-            }
-
-
-            {/* Batch Upload Modal */}
-            {
-                batchModalOpen && (
-                    <div className="fixed inset-0 z-[300] flex items-center justify-center bg-[#070709]/95 backdrop-blur-2xl animate-in fade-in zoom-in-95 duration-300 p-4">
-                        <div className="bg-[#16161D] border border-white/10 rounded-[40px] shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
-                            {/* Header */}
-                            <div className="flex items-center justify-between p-8 pb-6 border-b border-white/5 shrink-0">
-                                <div className="flex items-center space-x-4">
-                                    <div className="w-2 h-10 bg-[#B87333] rounded-full shadow-[0_0_15px_rgba(184,115,51,0.4)]"></div>
-                                    <div>
-                                        <h2 className="text-2xl font-black text-white uppercase italic tracking-tighter">Forja em Lote</h2>
-                                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em] mt-0.5">Importe múltiplos arquivos de cifras (PDF, XLSX, CSV)</p>
-                                    </div>
-                                </div>
-                                <button
-                                    onClick={() => { setBatchModalOpen(false); setBatchResults([]); setShowMappingUI(false); setShowBatchReview(false); setBatchError(''); batchSuggestionsCacheRef.current = {}; }}
-                                    className="p-3 bg-white/5 hover:bg-white/10 rounded-2xl transition-all border border-white/5"
-                                >
-                                    <X className="w-6 h-6 text-slate-400" />
-                                </button>
-                            </div>
-                            {/* Body */}
-                            <div className="flex-1 overflow-y-auto p-8 space-y-6 custom-scrollbar">
-                                {batchError && (
-                                    <div className="w-full bg-red-900/20 border-l-4 border-red-500 p-4 rounded-r-2xl animate-in slide-in-from-top-4 flex items-start space-x-3">
-                                        <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
-                                        <p className="text-xs font-bold text-red-400">{batchError}</p>
-                                    </div>
-                                )}
-
-                                {!showMappingUI && !showBatchReview ? (
-                                    <div
-                                        onClick={() => !batchLoading && fileInputRef.current?.click()}
-                                        className={`w-full border-2 border-dashed rounded-[40px] p-20 flex flex-col items-center justify-center transition-all group ${batchLoading ? 'border-[#B87333]/50 opacity-80 cursor-not-allowed' : 'border-white/10 hover:border-[#B87333]/50 cursor-pointer'}`}
-                                    >
-                                        <div className={`w-20 h-20 ${batchLoading ? 'bg-black/60 border-[#B87333]/50 relative overflow-hidden' : 'bg-[#B87333]/10 border-[#B87333]/20 group-hover:scale-110'} rounded-3xl flex items-center justify-center mb-6 border transition-all duration-500`}>
-                                            {batchLoading ? (
-                                                <>
-                                                    <UploadCloud className="w-8 h-8 text-[#B87333]/30" />
-                                                    <div className="absolute inset-0 bg-[linear-gradient(transparent_50%,rgba(0,0,0,0.8)_50%)] bg-[length:100%_4px] opacity-20"></div>
-                                                    <div className="absolute left-0 w-full h-[3px] bg-white shadow-[0_0_20px_2px_rgba(184,115,51,1)] animate-scan-metal"></div>
-                                                </>
-                                            ) : <UploadCloud className="w-10 h-10 text-[#B87333]" />}
-                                        </div>
-                                        <h3 className="text-xl font-black text-white uppercase tracking-widest">{batchLoading ? 'Processando Arquivo...' : 'Clique ou arraste para importar'}</h3>
-                                        <p className="text-xs text-slate-500 uppercase font-bold mt-3">PDF, XLSX ou CSV</p>
-                                        <input type="file" ref={fileInputRef} onChange={handleBatchFileSelect} className="hidden" />
-                                    </div>
-                                ) : showMappingUI && !showBatchReview ? (
-                                    <div className="w-full bg-black/40 p-8 rounded-[32px] border border-white/5 space-y-6 relative">
-                                        <button onClick={() => setShowMappingUI(false)} className="absolute top-6 right-6 p-2 bg-white/5 hover:bg-red-900/40 text-slate-500 hover:text-red-500 rounded-xl transition-all border border-white/5"><X className="w-5 h-5" /></button>
-                                        <h4 className="text-xs font-black text-[#B87333] uppercase tracking-widest text-center">Mapeamento de Colunas</h4>
-                                        <p className="text-[10px] text-slate-500 text-center uppercase tracking-widest">Colunas disponíveis: {batchHeaders.join(', ')}</p>
-                                        {[{ label: 'Nome da Música', key: 'song_name' }, { label: 'Artista', key: 'artist_name' }, { label: 'Tom (Key)', key: 'key' }].map(field => (
-                                            <div key={field.key}>
-                                                <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest">{field.label}</label>
-                                                <select value={batchMapping[field.key]} onChange={e => setBatchMapping(prev => ({ ...prev, [field.key]: e.target.value }))} className="w-full bg-black/60 border border-white/10 rounded-xl px-4 py-3 text-white font-bold outline-none">
-                                                    <option value="">— Selecionar —</option>
-                                                    {batchHeaders.map(h => <option key={h} value={h}>{h}</option>)}
-                                                </select>
-                                            </div>
-                                        ))}
-                                        <button
-                                            onClick={handleBatchProcess}
-                                            disabled={batchLoading || !batchMapping.song_name}
-                                            className="w-full py-4 bg-[#B87333] hover:bg-[#8B4513] text-white font-black uppercase tracking-widest rounded-xl transition-all disabled:opacity-40 flex justify-center items-center"
-                                        >
-                                            {batchLoading ? <RefreshCw className="w-5 h-5 animate-spin" /> : 'Processar Lote'}
-                                        </button>
-                                    </div>
-                                ) : showBatchReview ? (
-                                    <div className="space-y-6">
-                                        <div className="flex items-center justify-between border-b border-white/10 pb-4">
-                                            <h4 className="text-xl font-black text-white uppercase italic tracking-tighter">Revisão do Lote</h4>
-                                            <div className="flex items-center space-x-4">
-                                                <button onClick={() => {
-                                                    setSongs([...songs, ...batchResults.filter(r => r.status === 'success').map(r => ({
-                                                        ...r,
-                                                        _orig_key: r.original_key || r.requested_key || 'C',
-                                                        _orig_content: r.content || ''
-                                                    }))]);
-                                                    setShowBatchReview(false);
-                                                    setBatchResults([]);
-                                                    setBatchModalOpen(false);
-                                                }} className="px-6 py-3 bg-[#B87333] text-white font-black uppercase text-[10px] italic rounded-xl shadow-lg shadow-[#B87333]/20 hover:bg-[#8B4513] transition-all flex items-center">
-                                                    <Zap className="w-3 h-3 mr-2 inline" /> Integrar à Forja ({batchResults.filter(r => r.status === 'success').length})
-                                                </button>
-                                                <button onClick={() => setSaveListModalOpen(true)} className="px-6 py-3 bg-white/5 hover:bg-[#B87333] text-[#B87333] hover:text-white border border-[#B87333]/30 rounded-xl font-black uppercase text-[10px] italic transition-all shadow-lg flex items-center space-x-2">
-                                                    <Save className="w-3 h-3" />
-                                                    <span>Salvar Lista</span>
-                                                </button>
-                                            </div>
-                                        </div>
-
-                                        <div className="grid grid-cols-1 gap-4 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
-                                            {batchResults.map((item, idx) => (
-                                                <div key={idx} className={`p-5 rounded-[24px] border ${item.status === 'success' ? 'bg-black/40 border-[#B87333]/30' : 'bg-red-900/10 border-red-500/30'} flex flex-col justify-between transition-all relative overflow-hidden`}>
-                                                    {item.status === 'success' && <div className="absolute top-0 right-0 w-16 h-16 bg-[#B87333]/5 rounded-bl-[40px] -mr-4 -mt-4 pointer-events-none"></div>}
-                                                    <div className="flex items-start justify-between relative z-10 w-full flex-wrap gap-4">
-                                                        <div className="flex items-center space-x-4 flex-1 min-w-[300px]">
-                                                            <div className={`w-12 h-12 rounded-xl flex shrink-0 items-center justify-center border ${item.status === 'success' ? 'bg-[#B87333]/10 border-[#B87333]/20' : 'bg-red-500/10 border-red-500/20'}`}>
-                                                                {item.status === 'success' ? <CheckCircle className="w-6 h-6 text-[#B87333]" /> : <AlertCircle className="w-6 h-6 text-red-500" />}
-                                                            </div>
-                                                            <div className="min-w-0 flex-1">
-                                                                {item.status === 'success' ? (
-                                                                    <button
-                                                                        onClick={() => setBatchFixData({ idx, song_name: item.song_name, artist_name: item.artist_name, song_key: item.sounding_key || item.requested_key, content: item.content, capo: item.capo || 0, include_tabs: item.include_tabs || false })}
-                                                                        className="text-left w-full hover:underline decoration-[#B87333] decoration-2 underline-offset-4 outline-none group"
-                                                                        title="Clique para analisar a cifra"
-                                                                    >
-                                                                        <h5 className="font-black text-white uppercase italic tracking-tighter text-lg truncate group-hover:text-[#B87333] transition-colors">{item.song_name}</h5>
-                                                                    </button>
-                                                                ) : (
-                                                                    <h5 className="font-black text-slate-400 uppercase italic tracking-tighter text-lg truncate">{item.song_name}</h5>
-                                                                )}
-                                                                <div className="flex items-center space-x-3 mt-1">
-                                                                    {item.needs_artist || !item.artist_name ? (
-                                                                        <div className="flex items-center space-x-2">
-                                                                            <input
-                                                                                type="text"
-                                                                                placeholder="Pendente: Digite o Artista..."
-                                                                                className="bg-black/60 border border-[#B87333]/50 rounded-lg px-3 py-1 text-[10px] font-bold text-white outline-none w-56 placeholder:text-red-500/50 focus:border-[#B87333] shadow-[0_0_10px_rgba(184,115,51,0.1)] transition-all"
-                                                                                value={item.artist_name || ''}
-                                                                                onChange={(e) => {
-                                                                                    const next = [...batchResults];
-                                                                                    next[idx].artist_name = e.target.value;
-                                                                                    setBatchResults(next);
-                                                                                }}
-                                                                                onKeyDown={(e) => {
-                                                                                    if (e.key === 'Enter') handleTryBatchSuggestion(idx, { song: item.song_name, artist: item.artist_name });
-                                                                                }}
-                                                                            />
-                                                                            <button
-                                                                                onClick={() => handleTryBatchSuggestion(idx, { song: item.song_name, artist: item.artist_name })}
-                                                                                className="p-1.5 bg-[#B87333]/20 text-[#B87333] hover:bg-[#B87333] hover:text-white rounded-lg transition-all border border-[#B87333]/30"
-                                                                                title="Pesquisar este artista"
-                                                                            >
-                                                                                <Search size={12} />
-                                                                            </button>
-                                                                        </div>
-                                                                    ) : (
-                                                                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest truncate">{item.artist_name}</p>
-                                                                    )}
-                                                                    {item.in_acervo && <span className="text-[8px] font-black bg-blue-600/20 text-blue-400 px-2 py-0.5 rounded border border-blue-600/30 uppercase whitespace-nowrap" title="Detectado no Acervo Local">Acervo</span>}
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                        <div className="flex items-center gap-4 shrink-0">
-                                                            {item.status === 'success' ? (
-                                                                <div className="flex items-center space-x-4">
-                                                                    <div className="flex items-center space-x-1.5 bg-black/60 p-2 rounded-xl border border-white/5">
-                                                                        <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest mr-2">Tom</span>
-                                                                        <button onClick={() => transposeBatchSong(idx, -1)} className="p-1 hover:text-[#B87333] transition-all"><ChevronDown className="w-3.5 h-3.5" /></button>
-                                                                        <span className="font-mono font-black text-xs w-8 text-center text-white">{item.sounding_key || item.requested_key}</span>
-                                                                        <button onClick={() => transposeBatchSong(idx, 1)} className="p-1 hover:text-[#B87333] transition-all"><ChevronUp className="w-3.5 h-3.5" /></button>
-                                                                    </div>
-                                                                    <div className="flex items-center space-x-3 bg-black/60 px-3 py-1.5 rounded-xl border border-white/5">
-                                                                        <span className="text-[9px] font-black text-[#B87333] uppercase">Capo</span>
-                                                                        <select value={item.capo || 0} onChange={(e) => {
-                                                                            const next = [...batchResults];
-                                                                            next[idx].capo = Number(e.target.value);
-                                                                            setBatchResults(next);
-                                                                        }} className="bg-transparent text-white text-xs outline-none cursor-pointer">
-                                                                            {[...Array(13)].map((_, c) => <option key={c} value={c} className="bg-[#1A1A1A]">{c === 0 ? '0' : c}</option>)}
-                                                                        </select>
-                                                                    </div>
-                                                                    <button onClick={() => {
-                                                                        const next = [...batchResults];
-                                                                        next[idx].include_tabs = !next[idx].include_tabs;
-                                                                        setBatchResults(next);
-                                                                    }} className={`p-2 rounded-xl transition-all border ${item.include_tabs ? 'bg-[#B87333]/20 border-[#B87333]/50 text-[#B87333]' : 'bg-white/5 border-white/10 text-slate-500'}`} title="Tablaturas">
-                                                                        <FileText className="w-4 h-4" />
-                                                                    </button>
-                                                                    {(item.original_key && item.sounding_key !== item.original_key) && (
-                                                                        <button onClick={() => resetBatchSong(idx)} className="p-2 bg-white/5 hover:bg-orange-500/20 text-slate-500 hover:text-orange-500 rounded-xl transition-all border border-white/10" title="Restaurar Original">
-                                                                            <RefreshCw className="w-4 h-4" />
-                                                                        </button>
-                                                                    )}
-                                                                    <button onClick={() => {
-                                                                        const next = [...batchResults];
-                                                                        next.splice(idx, 1);
-                                                                        setBatchResults(next);
-                                                                    }} className="p-2 bg-white/5 hover:bg-red-900/40 text-slate-500 hover:text-red-500 rounded-xl transition-all border border-white/10">
-                                                                        <Trash2 className="w-4 h-4" />
-                                                                    </button>
-                                                                </div>
-                                                            ) : (
-                                                                <div className="flex flex-col items-end space-y-2">
-                                                                    <div className="flex flex-wrap gap-2 justify-end max-w-sm">
-                                                                        {(item.suggestions || []).map((sug, i2) => {
-                                                                            const cacheKey = `${sug.song}||${sug.artist}`;
-                                                                            const isLoading = suggestionsLoadingKeys.has(cacheKey);
-                                                                            const cacheEntry = batchSuggestionsCacheRef.current[cacheKey];
-                                                                            const isCached = !!cacheEntry && !cacheEntry._failed;
-                                                                            const isFailed = cacheEntry?._failed === true;
-                                                                            return (
-                                                                                <button
-                                                                                    key={i2}
-                                                                                    onClick={() => handleTryBatchSuggestion(idx, sug)}
-                                                                                    disabled={isLoading}
-                                                                                    title={isFailed ? 'Não encontrada no CifraClub — clique para inserir manualmente' : isCached ? 'Pré-carregada — abre instantaneamente' : ''}
-                                                                                    className={`px-3 py-1 rounded-lg text-[10px] font-bold uppercase transition-all border flex items-center shadow-lg relative ${isLoading ? 'bg-[#B87333]/20 border-[#B87333]/30 text-[#B87333] cursor-wait' :
-                                                                                        isFailed ? 'bg-red-900/10 hover:bg-red-900/30 border-red-900/30 text-slate-500 hover:text-red-400 cursor-pointer' :
-                                                                                            'bg-white/5 hover:bg-[#B87333]/20 hover:border-[#B87333]/30 text-slate-300 hover:text-white border-white/10 cursor-pointer'
-                                                                                        }`}
-                                                                                >
-                                                                                    {isLoading
-                                                                                        ? <RefreshCw className="w-3 h-3 mr-1.5 text-[#B87333] animate-spin" />
-                                                                                        : <RefreshCw className={`w-3 h-3 mr-1.5 ${isFailed ? 'text-red-700' : 'text-[#B87333]'}`} />
-                                                                                    }
-                                                                                    {sug.song} - <span className="opacity-50 ml-1">{sug.artist}</span>
-                                                                                    {isCached && <span className="w-1.5 h-1.5 rounded-full bg-green-400 ml-1.5 shrink-0" title="Pré-carregado" />}
-                                                                                    {isFailed && <span className="w-1.5 h-1.5 rounded-full bg-red-600 ml-1.5 shrink-0" title="Não encontrada" />}
-                                                                                </button>
-                                                                            );
-                                                                        })}
-                                                                    </div>
-                                                                    <div className="flex items-center space-x-2">
-                                                                        <button onClick={() => setBatchFixData({ idx, song_name: item.song_name, artist_name: item.artist_name, song_key: item.requested_key || 'C', content: '', include_tabs: true, capo: 0 })} className="px-4 py-2 bg-[#B87333]/10 hover:bg-[#B87333] text-[#B87333] hover:text-white rounded-lg text-[10px] font-black uppercase transition-all border border-[#B87333]/30">
-                                                                            Forjar Manualmente
-                                                                        </button>
-                                                                        <button onClick={() => {
-                                                                            const next = [...batchResults];
-                                                                            next.splice(idx, 1);
-                                                                            setBatchResults(next);
-                                                                        }} className="p-2 bg-white/5 hover:bg-red-900/40 text-slate-500 hover:text-red-500 rounded-xl transition-all border border-white/10 relative group">
-                                                                            <Trash2 className="w-4 h-4" />
-                                                                            <span className="absolute -top-8 left-1/2 -translate-x-1/2 bg-black text-white text-[9px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">Descartar</span>
-                                                                        </button>
-                                                                    </div>
-                                                                </div>
-                                                            )}
-                                                        </div>
+                                                    <div>
+                                                        <h3 className="text-2xl font-black text-white uppercase italic tracking-tighter">Conflito de Forja</h3>
+                                                        <p className="text-[10px] font-bold text-blue-400 uppercase tracking-[0.2em] mt-1">Uma peça com este nome já existe no acervo</p>
                                                     </div>
                                                 </div>
-                                            ))}
+                                            </div>
+
+                                            <div className="grid grid-cols-2 gap-8 mb-10">
+                                                <div className="bg-white/5 border border-white/10 p-6 rounded-3xl relative">
+                                                    <span className="absolute -top-3 left-6 px-3 py-1 bg-[#16161D] border border-white/10 rounded-full text-[8px] font-black text-slate-500 uppercase tracking-widest">No Acervo</span>
+                                                    <h4 className="text-lg font-black text-white uppercase italic truncate">{conflictData.existingSong?.song_name}</h4>
+                                                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1 truncate">{conflictData.existingSong?.artist_name}</p>
+                                                    <div className="mt-4 pt-4 border-t border-white/5 flex items-center justify-between">
+                                                        <span className="text-[10px] font-black text-blue-400 italic bg-blue-500/10 px-3 py-1 rounded-lg border border-blue-500/20">{conflictData.existingSong?.song_key}</span>
+                                                        <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest">{conflictData.existingSong?.content?.split('\n').length} linhas</span>
+                                                    </div>
+                                                </div>
+
+                                                <div className="bg-blue-600/5 border border-blue-500/30 p-6 rounded-3xl relative">
+                                                    <span className="absolute -top-3 left-6 px-3 py-1 bg-blue-600 border border-blue-500 text-[8px] font-black text-white uppercase tracking-widest">Nova Versão</span>
+                                                    <h4 className="text-lg font-black text-white uppercase italic truncate">{conflictData.newSong?.song_name}</h4>
+                                                    <p className="text-[10px] font-bold text-blue-400/60 uppercase tracking-widest mt-1 truncate">{conflictData.newSong?.artist_name}</p>
+                                                    <div className="mt-4 pt-4 border-t border-blue-500/10 flex items-center justify-between">
+                                                        <span className="text-[10px] font-black text-blue-400 italic bg-blue-500/10 px-3 py-1 rounded-lg border border-blue-500/20">{conflictData.newSong?.song_key}</span>
+                                                        <span className="text-[10px] font-black text-blue-400/60 uppercase tracking-widest">{conflictData.newSong?.content?.split('\n').length} linhas</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="flex flex-col space-y-4">
+                                                <button
+                                                    onClick={() => conflictData.onConfirm('replace')}
+                                                    className="w-full py-5 bg-blue-600 hover:bg-blue-500 text-white font-black uppercase tracking-[0.2em] rounded-2xl transition-all shadow-xl shadow-blue-900/20 flex items-center justify-center space-x-3 group"
+                                                >
+                                                    <RefreshCw className="w-5 h-5 group-hover:rotate-180 transition-transform duration-700" />
+                                                    <span>Substituir Versão Existente</span>
+                                                </button>
+                                                <button
+                                                    onClick={() => conflictData.onConfirm('skip')}
+                                                    className="py-4 bg-white/5 hover:bg-white/10 text-slate-400 font-bold uppercase tracking-widest text-[10px] rounded-xl border border-white/5 transition-all w-full"
+                                                >
+                                                    Manter Peça do Acervo / Pular
+                                                </button>
+                                            </div>
                                         </div>
                                     </div>
-                                ) : null}
+                                )
+                            }
 
-                                {/* Batch Manual Fix Modal */}
-                                {batchFixData && (
-                                    <div className="fixed inset-0 z-[400] flex items-center justify-center bg-[#070709]/90 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-300">
-                                        <div className="bg-[#16161D] border border-white/10 p-8 rounded-[32px] shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
-                                            <div className="flex items-center justify-between mb-6 shrink-0">
+
+
+                            {/* Extracted Root Modals */}
+                            {/* Delete Confirmation Modal */}
+                            {
+                                deleteModalOpen && (
+                                    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-[#070709]/90 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-300">
+                                        <div className="bg-[#16161D] border border-white/10 p-8 rounded-[32px] shadow-2xl w-full max-w-md flex flex-col">
+                                            <div className="flex items-center justify-between mb-8">
                                                 <div className="flex items-center space-x-4">
-                                                    <div className="w-1.5 h-6 bg-red-500 rounded-full shadow-[0_0_15px_rgba(239,68,68,0.4)]"></div>
-                                                    <h3 className="text-xl font-black text-white uppercase italic tracking-tighter">Inserção Manual - Lote</h3>
+                                                    <div className="w-1.5 h-6 bg-red-600 rounded-full shadow-[0_0_15px_rgba(220,38,38,0.4)]"></div>
+                                                    <h3 className="text-xl font-black text-white uppercase italic tracking-tighter">Confirmar Exclusão</h3>
                                                 </div>
-                                                <button onClick={() => setBatchFixData(null)} className="p-2 bg-white/5 hover:bg-white/10 rounded-xl transition-all border border-white/5"><X className="w-5 h-5 text-slate-400" /></button>
+                                                <button onClick={() => setDeleteModalOpen(false)} className="p-2 bg-white/5 hover:bg-white/10 rounded-xl transition-all border border-white/5"><X className="w-5 h-5 text-slate-400" /></button>
                                             </div>
+                                            <div className="space-y-6">
+                                                <p className="text-sm font-bold text-slate-400 uppercase tracking-widest leading-relaxed">
+                                                    Você tem certeza que deseja excluir permanentemente {deleteTarget.type === 'acervo' ? 'a música' : 'a lista'} <span className="text-white">"{deleteTarget.name}"</span>?
+                                                </p>
+                                                <p className="text-[10px] text-red-500/80 italic uppercase">Esta ação não poderá ser desfeita.</p>
 
-                                            <div className="space-y-4 flex-1 overflow-y-auto pr-2 scrollbar-thin">
-
-                                                <div className="bg-black/20 p-4 rounded-2xl border border-white/5 flex flex-col space-y-3">
-                                                    <label className="block text-[10px] font-black uppercase text-[#B87333] tracking-widest ml-1">Importar via Link (Opcional)</label>
-                                                    <div className="flex items-center space-x-3">
-                                                        <input type="text" placeholder="Cole a URL do CifraClub aqui..." value={batchFixData.link || ''} onChange={e => setBatchFixData({ ...batchFixData, link: e.target.value })} className="flex-1 bg-black/60 border border-white/10 rounded-xl px-4 py-3 text-xs text-white font-mono outline-none focus:border-[#B87333]/50 transition-all" />
-                                                        <button
-                                                            disabled={!batchFixData.link || batchLinkLoading}
-                                                            onClick={async () => {
-                                                                setBatchLinkLoading(true);
-                                                                try {
-                                                                    const res = await fetch(`${API_BASE_URL}/api/music/scrape-link`, {
-                                                                        method: 'POST',
-                                                                        headers: { 'Content-Type': 'application/json' },
-                                                                        body: JSON.stringify({ url: batchFixData.link })
-                                                                    });
-                                                                    const data = await res.json();
-                                                                    if (res.ok) {
-                                                                        setBatchFixData(prev => ({
-                                                                            ...prev,
-                                                                            song_name: data.song_name,
-                                                                            artist_name: data.artist_name,
-                                                                            song_key: data.key || 'C',
-                                                                            content: data.content,
-                                                                            capo: data.capo || 0
-                                                                        }));
-                                                                    } else {
-                                                                        alert(data.detail || "Erro ao extrair cifra do link");
-                                                                    }
-                                                                } catch (err) { alert("Erro na requisição."); }
-                                                                finally { setBatchLinkLoading(false); }
-                                                            }}
-                                                            className={`px-6 py-3 font-black uppercase text-[10px] rounded-xl flex items-center transition-all shadow-lg ${(!batchFixData.link || batchLinkLoading) ? 'bg-white/5 text-slate-500 cursor-not-allowed shadow-none' : 'bg-[#B87333] text-white hover:bg-[#8B4513] shadow-[#B87333]/20'}`}>
-                                                            {batchLinkLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <><Zap className="w-3 h-3 mr-2" /> Extrair</>}
-                                                        </button>
-                                                    </div>
-                                                </div>
-
-                                                <div className="grid grid-cols-2 gap-4">
-                                                    <div>
-                                                        <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Artista</label>
-                                                        <input type="text" value={batchFixData.artist_name} onChange={e => setBatchFixData({ ...batchFixData, artist_name: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white font-bold outline-none" />
-                                                    </div>
-                                                    <div className="relative">
-                                                        <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Música</label>
-                                                        <input
-                                                            type="text"
-                                                            value={batchFixData.song_name}
-                                                            onChange={e => setBatchFixData({ ...batchFixData, song_name: e.target.value })}
-                                                            onFocus={() => setShowBatchFixSuggestions(true)}
-                                                            onBlur={() => setTimeout(() => setShowBatchFixSuggestions(false), 200)}
-                                                            className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white font-bold outline-none"
-                                                        />
-                                                        {showBatchFixSuggestions && batchFixSuggestions.length > 0 && (
-                                                            <div className="absolute z-[410] w-full mt-2 bg-[#12121A] border border-[#B87333]/40 rounded-2xl shadow-2xl max-h-64 overflow-y-auto scrollbar-thin">
-                                                                {batchFixSuggestions.map((sug, i) => (
-                                                                    <div
-                                                                        key={i}
-                                                                        onClick={() => {
-                                                                            setBatchFixData({
-                                                                                ...batchFixData,
-                                                                                song_name: sug.song,
-                                                                                artist_name: sug.artist
-                                                                            });
-                                                                            setShowBatchFixSuggestions(false);
-                                                                        }}
-                                                                        className="px-4 py-3 hover:bg-[#B87333]/20 cursor-pointer border-b border-white/5 last:border-0 transition-colors"
-                                                                    >
-                                                                        <p className="text-white font-black uppercase text-sm">{sug.song}</p>
-                                                                        <p className="text-[10px] font-bold text-slate-500 uppercase">{sug.artist}</p>
-                                                                    </div>
-                                                                ))}
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                                <div className="grid grid-cols-2 gap-4">
-                                                    <div>
-                                                        <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Tom Original da Cifra</label>
-                                                        <select value={batchFixData.song_key} onChange={e => setBatchFixData({ ...batchFixData, song_key: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white font-bold outline-none">
-                                                            {["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"].map(k => <option key={k} value={k} className="bg-[#1A1A1A]">{k}</option>)}
-                                                        </select>
-                                                    </div>
-                                                    <div>
-                                                        <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2 ml-1">Capo</label>
-                                                        <select value={batchFixData.capo} onChange={e => setBatchFixData({ ...batchFixData, capo: Number(e.target.value) })} className="w-full bg-black/60 border border-white/10 rounded-xl px-4 py-3 text-white outline-none cursor-pointer font-bold appearance-none">
-                                                            {[...Array(13)].map((_, i) => <option key={i} value={i} className="bg-[#1A1A1A]">{i === 0 ? 'Sem Capo' : `${i}ª Casa`}</option>)}
-                                                        </select>
-                                                    </div>
-                                                </div>
-                                                <div className="flex flex-col justify-center">
-                                                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2 ml-1">Tablaturas</label>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setBatchFixData(prev => ({ ...prev, include_tabs: !prev.include_tabs }))}
-                                                        className={`w-full py-3 rounded-xl border transition-all font-black uppercase text-[10px] tracking-widest ${batchFixData.include_tabs ? 'bg-[#B87333]/20 border-[#B87333] text-[#B87333]' : 'bg-black/60 border-white/10 text-slate-600'}`}
-                                                    >
-                                                        {batchFixData.include_tabs ? 'Ativadas' : 'Desativar'}
+                                                <div className="flex items-center space-x-4 mt-6">
+                                                    <button onClick={() => setDeleteModalOpen(false)} className="flex-1 py-4 bg-white/5 hover:bg-white/10 text-white font-black uppercase tracking-widest rounded-xl transition-all border border-white/5">Cancelar</button>
+                                                    <button onClick={confirmDelete} className="flex-1 py-4 bg-red-600 hover:bg-red-700 text-white font-black uppercase tracking-widest rounded-xl transition-all shadow-xl shadow-red-900/20 flex items-center justify-center space-x-2">
+                                                        <Trash2 className="w-4 h-4" />
+                                                        <span>Excluir</span>
                                                     </button>
                                                 </div>
-                                                <div className="flex-1 flex flex-col">
-                                                    <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Cifra Bruta</label>
-                                                    <textarea value={batchFixData.content} onChange={e => setBatchFixData({ ...batchFixData, content: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white outline-none font-mono text-xs leading-relaxed min-h-[250px] resize-none scrollbar-thin" placeholder="Cole a cifra estruturada aqui..."></textarea>
-                                                </div>
                                             </div>
-
-                                            <button onClick={async () => {
-                                                if (!batchFixData.content.trim()) return;
-                                                // Only update the local batch results state. No DB call here.
-                                                const next = [...batchResults];
-                                                next[batchFixData.idx] = {
-                                                    ...next[batchFixData.idx],
-                                                    song_name: batchFixData.song_name,
-                                                    artist_name: batchFixData.artist_name,
-                                                    requested_key: batchFixData.song_key,
-                                                    original_key: batchFixData.song_key,
-                                                    sounding_key: batchFixData.song_key,
-                                                    content: batchFixData.content,
-                                                    capo: batchFixData.capo,
-                                                    include_tabs: batchFixData.include_tabs,
-                                                    status: 'success'
-                                                };
-                                                setBatchResults(next);
-                                                setBatchFixData(null);
-                                            }} className="w-full mt-6 py-4 bg-[#B87333] hover:bg-[#8B4513] text-white font-black uppercase tracking-widest rounded-xl transition-all shadow-xl shadow-[#B87333]/20 shrink-0">
-                                                Salvar no Lote
-                                            </button>
                                         </div>
                                     </div>
-                                )}
+                                )
+                            }
 
-                            </div>
-                        </div>
-                    </div>
-                )
-            }
+                            {/* Save List Modal */}
+                            {
+                                saveListModalOpen && (() => {
+                                    const allPlaylists = JSON.parse(localStorage.getItem('iron_chords_playlists') || '[]');
+                                    const hasExisting = allPlaylists.length > 0;
+                                    return (
+                                        <div className="fixed inset-0 z-[400] flex items-center justify-center bg-[#070709]/95 backdrop-blur-2xl animate-in fade-in zoom-in-95 duration-300">
+                                            <div className="bg-[#16161D] border border-white/10 p-8 rounded-[32px] shadow-2xl w-full max-w-md flex flex-col">
+                                                <div className="flex items-center justify-between mb-6">
+                                                    <div className="flex items-center space-x-3">
+                                                        <div className="w-1.5 h-6 bg-[#B87333] rounded-full shadow-[0_0_15px_rgba(184,115,51,0.4)]"></div>
+                                                        <h3 className="text-xl font-black text-white uppercase italic tracking-tighter">Salvar Forja</h3>
+                                                    </div>
+                                                    <button onClick={() => { setSaveListModalOpen(false); setSaveListName(''); setSelectedListsToAddTo([]); }} className="p-2 bg-white/5 hover:bg-white/10 rounded-xl transition-all border border-white/5"><X className="w-5 h-5 text-slate-400" /></button>
+                                                </div>
 
-            {/* Share and Import Modals */}
-            <ShareModal
-                isOpen={shareModalOpen}
-                onClose={() => setShareModalOpen(false)}
-                listName={activePlaylistName || "Repertório"}
-                link={getShareLink()}
-            />
-            <ImportModal
-                data={importData}
-                onClose={() => setImportData(null)}
-                onImport={handleImportList}
-            />
-        </div >
-    );
+                                                <div className="flex bg-black/40 p-1.5 rounded-2xl border border-white/5 mb-6">
+                                                    <button onClick={() => setSaveListMode('new')} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${saveListMode === 'new' ? 'bg-[#B87333] text-white shadow-lg' : 'text-slate-500 hover:text-white'}`}>+ Nova Lista</button>
+                                                    <button onClick={() => setSaveListMode('existing')} disabled={!hasExisting} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-30 disabled:cursor-not-allowed ${saveListMode === 'existing' ? 'bg-[#B87333] text-white shadow-lg' : 'text-slate-500 hover:text-white'}`}>Adicionar à Existente</button>
+                                                </div>
+
+                                                {saveListMode === 'new' && (
+                                                    <div className="space-y-4">
+                                                        <div>
+                                                            <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Nome da Nova Lista</label>
+                                                            <input type="text" autoFocus placeholder="Ex: Missa de Domingo..." value={saveListName} onChange={e => setSaveListName(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-4 text-white font-bold outline-none focus:border-[#B87333]/50 transition-all placeholder:text-slate-700" onKeyDown={e => e.key === 'Enter' && handleSaveList()} />
+                                                        </div>
+                                                        <button onClick={handleSaveList} disabled={!saveListName.trim()} className="w-full py-4 bg-[#B87333] hover:bg-[#8B4513] text-white font-black uppercase tracking-widest rounded-xl transition-all shadow-xl shadow-[#B87333]/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2">
+                                                            <Save className="w-4 h-4" /><span>Criar e Salvar Lista</span>
+                                                        </button>
+                                                    </div>
+                                                )}
+
+                                                {saveListMode === 'existing' && (
+                                                    <div className="space-y-4">
+                                                        <label className="block text-[10px] font-black uppercase text-slate-500 mb-1 tracking-widest ml-1">Selecione uma ou mais listas</label>
+                                                        <div className="max-h-64 overflow-y-auto space-y-2 pr-1 scrollbar-thin scrollbar-thumb-white/10">
+                                                            {allPlaylists.map(pl => (
+                                                                <label key={pl.id} className={`flex items-center space-x-4 p-4 rounded-2xl border cursor-pointer transition-all ${selectedListsToAddTo.includes(pl.id) ? 'bg-[#B87333]/15 border-[#B87333]/40' : 'bg-black/30 border-white/5 hover:border-white/15'}`}>
+                                                                    <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 transition-all ${selectedListsToAddTo.includes(pl.id) ? 'bg-[#B87333] border-[#B87333]' : 'border-white/20'}`}>
+                                                                        {selectedListsToAddTo.includes(pl.id) && <Check className="w-3 h-3 text-white" />}
+                                                                    </div>
+                                                                    <input type="checkbox" className="hidden" checked={selectedListsToAddTo.includes(pl.id)} onChange={e => {
+                                                                        if (e.target.checked) setSelectedListsToAddTo(prev => [...prev, pl.id]);
+                                                                        else setSelectedListsToAddTo(prev => prev.filter(id => id !== pl.id));
+                                                                    }} />
+                                                                    <div className="flex-1 min-w-0">
+                                                                        <p className="font-black text-white text-sm uppercase italic tracking-tight truncate">{pl.name}</p>
+                                                                        <p className="text-[10px] text-slate-500 font-bold mt-0.5">{pl.songs?.length || 0} músicas</p>
+                                                                    </div>
+                                                                </label>
+                                                            ))}
+                                                        </div>
+                                                        <button onClick={handleAddToExistingLists} disabled={selectedListsToAddTo.length === 0} className="w-full py-4 bg-[#B87333] hover:bg-[#8B4513] text-white font-black uppercase tracking-widest rounded-xl transition-all shadow-xl shadow-[#B87333]/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2">
+                                                            <FolderHeart className="w-4 h-4" /><span>{selectedListsToAddTo.length > 0 ? `Adicionar às ${selectedListsToAddTo.length} Lista(s)` : 'Selecione as Listas'}</span>
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    );
+                                })()
+                            }
+
+                            {/* Rename List Modal */}
+                            {
+                                editingList && (
+                                    <div className="fixed inset-0 z-[250] flex items-center justify-center bg-[#070709]/90 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-300 p-4">
+                                        <div className="bg-[#16161D] border border-[#B87333]/30 rounded-[32px] shadow-[0_0_50px_rgba(0,0,0,0.8)] w-full max-w-lg flex flex-col">
+                                            <div className="flex items-center justify-between p-8 border-b border-white/5">
+                                                <div className="flex items-center space-x-4">
+                                                    <div className="w-1.5 h-6 bg-[#B87333] rounded-full"></div>
+                                                    <h3 className="text-xl font-black text-white uppercase italic tracking-tighter">Renomear Lista</h3>
+                                                </div>
+                                                <button onClick={() => setEditingList(null)} className="p-2 bg-white/5 hover:bg-white/10 rounded-xl border border-white/5 transition-all">
+                                                    <X className="w-5 h-5 text-slate-400" />
+                                                </button>
+                                            </div>
+                                            <div className="p-8 space-y-6">
+                                                <div>
+                                                    <label className="block text-[10px] font-black uppercase text-slate-500 mb-3 tracking-widest ml-1">Novo Nome da Lista</label>
+                                                    <input
+                                                        type="text"
+                                                        value={editListName}
+                                                        onChange={e => setEditListName(e.target.value)}
+                                                        className="w-full bg-black/40 border border-white/10 rounded-2xl px-6 py-4 text-white font-bold text-lg outline-none focus:border-[#B87333]/50 transition-all placeholder:text-slate-700"
+                                                        placeholder="Ex: Repertório Show Sábado..."
+                                                        autoFocus
+                                                        onKeyDown={e => {
+                                                            if (e.key === 'Enter' && editListName.trim()) {
+                                                                const all = Array.isArray(savedPlaylists) ? savedPlaylists : JSON.parse(localStorage.getItem('iron_chords_playlists') || '[]');
+                                                                const updated = all.map(pl => pl.id === editingList.id ? { ...pl, name: editListName } : pl);
+                                                                localStorage.setItem('iron_chords_playlists', JSON.stringify(updated));
+                                                                setSavedPlaylists(updated);
+                                                                setEditingList(null);
+                                                                setShowSaveSuccess(true);
+                                                                setTimeout(() => setShowSaveSuccess(false), 2000);
+                                                            }
+                                                        }}
+                                                    />
+                                                </div>
+                                                <button
+                                                    onClick={() => {
+                                                        if (!editListName.trim()) return;
+                                                        const all = Array.isArray(savedPlaylists) ? savedPlaylists : JSON.parse(localStorage.getItem('iron_chords_playlists') || '[]');
+                                                        const updated = all.map(pl => pl.id === editingList.id ? { ...pl, name: editListName } : pl);
+                                                        localStorage.setItem('iron_chords_playlists', JSON.stringify(updated));
+                                                        setSavedPlaylists(updated);
+                                                        setEditingList(null);
+                                                        setShowSaveSuccess(true);
+                                                        setTimeout(() => setShowSaveSuccess(false), 2000);
+                                                    }}
+                                                    className="w-full py-4 bg-[#B87333] hover:bg-[#A86323] text-white font-black uppercase tracking-widest rounded-2xl transition-all shadow-xl shadow-[#B87333]/20 flex items-center justify-center space-x-3"
+                                                >
+                                                    <Save className="w-5 h-5" />
+                                                    <span>Salvar Novo Nome</span>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )
+                            }
+
+
+                            {/* Batch Upload Modal */}
+                            {
+                                batchModalOpen && (
+                                    <div className="fixed inset-0 z-[300] flex items-center justify-center bg-[#070709]/95 backdrop-blur-2xl animate-in fade-in zoom-in-95 duration-300 p-4">
+                                        <div className="bg-[#16161D] border border-white/10 rounded-[40px] shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
+                                            {/* Header */}
+                                            <div className="flex items-center justify-between p-8 pb-6 border-b border-white/5 shrink-0">
+                                                <div className="flex items-center space-x-4">
+                                                    <div className="w-2 h-10 bg-[#B87333] rounded-full shadow-[0_0_15px_rgba(184,115,51,0.4)]"></div>
+                                                    <div>
+                                                        <h2 className="text-2xl font-black text-white uppercase italic tracking-tighter">Forja em Lote</h2>
+                                                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em] mt-0.5">Importe múltiplos arquivos de cifras (PDF, XLSX, CSV)</p>
+                                                    </div>
+                                                </div>
+                                                <button
+                                                    onClick={() => { setBatchModalOpen(false); setBatchResults([]); setShowMappingUI(false); setShowBatchReview(false); setBatchError(''); batchSuggestionsCacheRef.current = {}; }}
+                                                    className="p-3 bg-white/5 hover:bg-white/10 rounded-2xl transition-all border border-white/5"
+                                                >
+                                                    <X className="w-6 h-6 text-slate-400" />
+                                                </button>
+                                            </div>
+                                            {/* Body */}
+                                            <div className="flex-1 overflow-y-auto p-8 space-y-6 custom-scrollbar">
+                                                {batchError && (
+                                                    <div className="w-full bg-red-900/20 border-l-4 border-red-500 p-4 rounded-r-2xl animate-in slide-in-from-top-4 flex items-start space-x-3">
+                                                        <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+                                                        <p className="text-xs font-bold text-red-400">{batchError}</p>
+                                                    </div>
+                                                )}
+
+                                                {!showMappingUI && !showBatchReview ? (
+                                                    <div
+                                                        onClick={() => !batchLoading && fileInputRef.current?.click()}
+                                                        className={`w-full border-2 border-dashed rounded-[40px] p-20 flex flex-col items-center justify-center transition-all group ${batchLoading ? 'border-[#B87333]/50 opacity-80 cursor-not-allowed' : 'border-white/10 hover:border-[#B87333]/50 cursor-pointer'}`}
+                                                    >
+                                                        <div className={`w-20 h-20 ${batchLoading ? 'bg-black/60 border-[#B87333]/50 relative overflow-hidden' : 'bg-[#B87333]/10 border-[#B87333]/20 group-hover:scale-110'} rounded-3xl flex items-center justify-center mb-6 border transition-all duration-500`}>
+                                                            {batchLoading ? (
+                                                                <>
+                                                                    <UploadCloud className="w-8 h-8 text-[#B87333]/30" />
+                                                                    <div className="absolute inset-0 bg-[linear-gradient(transparent_50%,rgba(0,0,0,0.8)_50%)] bg-[length:100%_4px] opacity-20"></div>
+                                                                    <div className="absolute left-0 w-full h-[3px] bg-white shadow-[0_0_20px_2px_rgba(184,115,51,1)] animate-scan-metal"></div>
+                                                                </>
+                                                            ) : <UploadCloud className="w-10 h-10 text-[#B87333]" />}
+                                                        </div>
+                                                        <h3 className="text-xl font-black text-white uppercase tracking-widest">{batchLoading ? 'Processando Arquivo...' : 'Clique ou arraste para importar'}</h3>
+                                                        <p className="text-xs text-slate-500 uppercase font-bold mt-3">PDF, XLSX ou CSV</p>
+                                                        <input type="file" ref={fileInputRef} onChange={handleBatchFileSelect} className="hidden" />
+                                                    </div>
+                                                ) : showMappingUI && !showBatchReview ? (
+                                                    <div className="w-full bg-black/40 p-8 rounded-[32px] border border-white/5 space-y-6 relative">
+                                                        <button onClick={() => setShowMappingUI(false)} className="absolute top-6 right-6 p-2 bg-white/5 hover:bg-red-900/40 text-slate-500 hover:text-red-500 rounded-xl transition-all border border-white/5"><X className="w-5 h-5" /></button>
+                                                        <h4 className="text-xs font-black text-[#B87333] uppercase tracking-widest text-center">Mapeamento de Colunas</h4>
+                                                        <p className="text-[10px] text-slate-500 text-center uppercase tracking-widest">Colunas disponíveis: {batchHeaders.join(', ')}</p>
+                                                        {[{ label: 'Nome da Música', key: 'song_name' }, { label: 'Artista', key: 'artist_name' }, { label: 'Tom (Key)', key: 'key' }].map(field => (
+                                                            <div key={field.key}>
+                                                                <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest">{field.label}</label>
+                                                                <select value={batchMapping[field.key]} onChange={e => setBatchMapping(prev => ({ ...prev, [field.key]: e.target.value }))} className="w-full bg-black/60 border border-white/10 rounded-xl px-4 py-3 text-white font-bold outline-none">
+                                                                    <option value="">— Selecionar —</option>
+                                                                    {batchHeaders.map(h => <option key={h} value={h}>{h}</option>)}
+                                                                </select>
+                                                            </div>
+                                                        ))}
+                                                        <button
+                                                            onClick={handleBatchProcess}
+                                                            disabled={batchLoading || !batchMapping.song_name}
+                                                            className="w-full py-4 bg-[#B87333] hover:bg-[#8B4513] text-white font-black uppercase tracking-widest rounded-xl transition-all disabled:opacity-40 flex justify-center items-center"
+                                                        >
+                                                            {batchLoading ? <RefreshCw className="w-5 h-5 animate-spin" /> : 'Processar Lote'}
+                                                        </button>
+                                                    </div>
+                                                ) : showBatchReview ? (
+                                                    <div className="space-y-6">
+                                                        <div className="flex items-center justify-between border-b border-white/10 pb-4">
+                                                            <h4 className="text-xl font-black text-white uppercase italic tracking-tighter">Revisão do Lote</h4>
+                                                            <div className="flex items-center space-x-4">
+                                                                <button onClick={() => {
+                                                                    setSongs([...songs, ...batchResults.filter(r => r.status === 'success').map(r => ({
+                                                                        ...r,
+                                                                        _orig_key: r.original_key || r.requested_key || 'C',
+                                                                        _orig_content: r.content || ''
+                                                                    }))]);
+                                                                    setShowBatchReview(false);
+                                                                    setBatchResults([]);
+                                                                    setBatchModalOpen(false);
+                                                                }} className="px-6 py-3 bg-[#B87333] text-white font-black uppercase text-[10px] italic rounded-xl shadow-lg shadow-[#B87333]/20 hover:bg-[#8B4513] transition-all flex items-center">
+                                                                    <Zap className="w-3 h-3 mr-2 inline" /> Integrar à Forja ({batchResults.filter(r => r.status === 'success').length})
+                                                                </button>
+                                                                <button onClick={() => setSaveListModalOpen(true)} className="px-6 py-3 bg-white/5 hover:bg-[#B87333] text-[#B87333] hover:text-white border border-[#B87333]/30 rounded-xl font-black uppercase text-[10px] italic transition-all shadow-lg flex items-center space-x-2">
+                                                                    <Save className="w-3 h-3" />
+                                                                    <span>Salvar Lista</span>
+                                                                </button>
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="grid grid-cols-1 gap-4 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
+                                                            {batchResults.map((item, idx) => (
+                                                                <div key={idx} className={`p-5 rounded-[24px] border ${item.status === 'success' ? 'bg-black/40 border-[#B87333]/30' : 'bg-red-900/10 border-red-500/30'} flex flex-col justify-between transition-all relative overflow-hidden`}>
+                                                                    {item.status === 'success' && <div className="absolute top-0 right-0 w-16 h-16 bg-[#B87333]/5 rounded-bl-[40px] -mr-4 -mt-4 pointer-events-none"></div>}
+                                                                    <div className="flex items-start justify-between relative z-10 w-full flex-wrap gap-4">
+                                                                        <div className="flex items-center space-x-4 flex-1 min-w-[300px]">
+                                                                            <div className={`w-12 h-12 rounded-xl flex shrink-0 items-center justify-center border ${item.status === 'success' ? 'bg-[#B87333]/10 border-[#B87333]/20' : 'bg-red-500/10 border-red-500/20'}`}>
+                                                                                {item.status === 'success' ? <CheckCircle className="w-6 h-6 text-[#B87333]" /> : <AlertCircle className="w-6 h-6 text-red-500" />}
+                                                                            </div>
+                                                                            <div className="min-w-0 flex-1">
+                                                                                {item.status === 'success' ? (
+                                                                                    <button
+                                                                                        onClick={() => setBatchFixData({ idx, song_name: item.song_name, artist_name: item.artist_name, song_key: item.sounding_key || item.requested_key, content: item.content, capo: item.capo || 0, include_tabs: item.include_tabs || false })}
+                                                                                        className="text-left w-full hover:underline decoration-[#B87333] decoration-2 underline-offset-4 outline-none group"
+                                                                                        title="Clique para analisar a cifra"
+                                                                                    >
+                                                                                        <h5 className="font-black text-white uppercase italic tracking-tighter text-lg truncate group-hover:text-[#B87333] transition-colors">{item.song_name}</h5>
+                                                                                    </button>
+                                                                                ) : (
+                                                                                    <h5 className="font-black text-slate-400 uppercase italic tracking-tighter text-lg truncate">{item.song_name}</h5>
+                                                                                )}
+                                                                                <div className="flex items-center space-x-3 mt-1">
+                                                                                    {item.needs_artist || !item.artist_name ? (
+                                                                                        <div className="flex items-center space-x-2">
+                                                                                            <input
+                                                                                                type="text"
+                                                                                                placeholder="Pendente: Digite o Artista..."
+                                                                                                className="bg-black/60 border border-[#B87333]/50 rounded-lg px-3 py-1 text-[10px] font-bold text-white outline-none w-56 placeholder:text-red-500/50 focus:border-[#B87333] shadow-[0_0_10px_rgba(184,115,51,0.1)] transition-all"
+                                                                                                value={item.artist_name || ''}
+                                                                                                onChange={(e) => {
+                                                                                                    const next = [...batchResults];
+                                                                                                    next[idx].artist_name = e.target.value;
+                                                                                                    setBatchResults(next);
+                                                                                                }}
+                                                                                                onKeyDown={(e) => {
+                                                                                                    if (e.key === 'Enter') handleTryBatchSuggestion(idx, { song: item.song_name, artist: item.artist_name });
+                                                                                                }}
+                                                                                            />
+                                                                                            <button
+                                                                                                onClick={() => handleTryBatchSuggestion(idx, { song: item.song_name, artist: item.artist_name })}
+                                                                                                className="p-1.5 bg-[#B87333]/20 text-[#B87333] hover:bg-[#B87333] hover:text-white rounded-lg transition-all border border-[#B87333]/30"
+                                                                                                title="Pesquisar este artista"
+                                                                                            >
+                                                                                                <Search size={12} />
+                                                                                            </button>
+                                                                                        </div>
+                                                                                    ) : (
+                                                                                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest truncate">{item.artist_name}</p>
+                                                                                    )}
+                                                                                    {item.in_acervo && <span className="text-[8px] font-black bg-blue-600/20 text-blue-400 px-2 py-0.5 rounded border border-blue-600/30 uppercase whitespace-nowrap" title="Detectado no Acervo Local">Acervo</span>}
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                        <div className="flex items-center gap-4 shrink-0">
+                                                                            {item.status === 'success' ? (
+                                                                                <div className="flex items-center space-x-4">
+                                                                                    <div className="flex items-center space-x-1.5 bg-black/60 p-2 rounded-xl border border-white/5">
+                                                                                        <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest mr-2">Tom</span>
+                                                                                        <button onClick={() => transposeBatchSong(idx, -1)} className="p-1 hover:text-[#B87333] transition-all"><ChevronDown className="w-3.5 h-3.5" /></button>
+                                                                                        <span className="font-mono font-black text-xs w-8 text-center text-white">{item.sounding_key || item.requested_key}</span>
+                                                                                        <button onClick={() => transposeBatchSong(idx, 1)} className="p-1 hover:text-[#B87333] transition-all"><ChevronUp className="w-3.5 h-3.5" /></button>
+                                                                                    </div>
+                                                                                    <div className="flex items-center space-x-3 bg-black/60 px-3 py-1.5 rounded-xl border border-white/5">
+                                                                                        <span className="text-[9px] font-black text-[#B87333] uppercase">Capo</span>
+                                                                                        <select value={item.capo || 0} onChange={(e) => {
+                                                                                            const next = [...batchResults];
+                                                                                            next[idx].capo = Number(e.target.value);
+                                                                                            setBatchResults(next);
+                                                                                        }} className="bg-transparent text-white text-xs outline-none cursor-pointer">
+                                                                                            {[...Array(13)].map((_, c) => <option key={c} value={c} className="bg-[#1A1A1A]">{c === 0 ? '0' : c}</option>)}
+                                                                                        </select>
+                                                                                    </div>
+                                                                                    <button onClick={() => {
+                                                                                        const next = [...batchResults];
+                                                                                        next[idx].include_tabs = !next[idx].include_tabs;
+                                                                                        setBatchResults(next);
+                                                                                    }} className={`p-2 rounded-xl transition-all border ${item.include_tabs ? 'bg-[#B87333]/20 border-[#B87333]/50 text-[#B87333]' : 'bg-white/5 border-white/10 text-slate-500'}`} title="Tablaturas">
+                                                                                        <FileText className="w-4 h-4" />
+                                                                                    </button>
+                                                                                    {(item.original_key && item.sounding_key !== item.original_key) && (
+                                                                                        <button onClick={() => resetBatchSong(idx)} className="p-2 bg-white/5 hover:bg-orange-500/20 text-slate-500 hover:text-orange-500 rounded-xl transition-all border border-white/10" title="Restaurar Original">
+                                                                                            <RefreshCw className="w-4 h-4" />
+                                                                                        </button>
+                                                                                    )}
+                                                                                    <button onClick={() => {
+                                                                                        const next = [...batchResults];
+                                                                                        next.splice(idx, 1);
+                                                                                        setBatchResults(next);
+                                                                                    }} className="p-2 bg-white/5 hover:bg-red-900/40 text-slate-500 hover:text-red-500 rounded-xl transition-all border border-white/10">
+                                                                                        <Trash2 className="w-4 h-4" />
+                                                                                    </button>
+                                                                                </div>
+                                                                            ) : (
+                                                                                <div className="flex flex-col items-end space-y-2">
+                                                                                    <div className="flex flex-wrap gap-2 justify-end max-w-sm">
+                                                                                        {(item.suggestions || []).map((sug, i2) => {
+                                                                                            const cacheKey = `${sug.song}||${sug.artist}`;
+                                                                                            const isLoading = suggestionsLoadingKeys.has(cacheKey);
+                                                                                            const cacheEntry = batchSuggestionsCacheRef.current[cacheKey];
+                                                                                            const isCached = !!cacheEntry && !cacheEntry._failed;
+                                                                                            const isFailed = cacheEntry?._failed === true;
+                                                                                            return (
+                                                                                                <button
+                                                                                                    key={i2}
+                                                                                                    onClick={() => handleTryBatchSuggestion(idx, sug)}
+                                                                                                    disabled={isLoading}
+                                                                                                    title={isFailed ? 'Não encontrada no CifraClub — clique para inserir manualmente' : isCached ? 'Pré-carregada — abre instantaneamente' : ''}
+                                                                                                    className={`px-3 py-1 rounded-lg text-[10px] font-bold uppercase transition-all border flex items-center shadow-lg relative ${isLoading ? 'bg-[#B87333]/20 border-[#B87333]/30 text-[#B87333] cursor-wait' :
+                                                                                                        isFailed ? 'bg-red-900/10 hover:bg-red-900/30 border-red-900/30 text-slate-500 hover:text-red-400 cursor-pointer' :
+                                                                                                            'bg-white/5 hover:bg-[#B87333]/20 hover:border-[#B87333]/30 text-slate-300 hover:text-white border-white/10 cursor-pointer'
+                                                                                                        }`}
+                                                                                                >
+                                                                                                    {isLoading
+                                                                                                        ? <RefreshCw className="w-3 h-3 mr-1.5 text-[#B87333] animate-spin" />
+                                                                                                        : <RefreshCw className={`w-3 h-3 mr-1.5 ${isFailed ? 'text-red-700' : 'text-[#B87333]'}`} />
+                                                                                                    }
+                                                                                                    {sug.song} - <span className="opacity-50 ml-1">{sug.artist}</span>
+                                                                                                    {isCached && <span className="w-1.5 h-1.5 rounded-full bg-green-400 ml-1.5 shrink-0" title="Pré-carregado" />}
+                                                                                                    {isFailed && <span className="w-1.5 h-1.5 rounded-full bg-red-600 ml-1.5 shrink-0" title="Não encontrada" />}
+                                                                                                </button>
+                                                                                            );
+                                                                                        })}
+                                                                                    </div>
+                                                                                    <div className="flex items-center space-x-2">
+                                                                                        <button onClick={() => setBatchFixData({ idx, song_name: item.song_name, artist_name: item.artist_name, song_key: item.requested_key || 'C', content: '', include_tabs: true, capo: 0 })} className="px-4 py-2 bg-[#B87333]/10 hover:bg-[#B87333] text-[#B87333] hover:text-white rounded-lg text-[10px] font-black uppercase transition-all border border-[#B87333]/30">
+                                                                                            Forjar Manualmente
+                                                                                        </button>
+                                                                                        <button onClick={() => {
+                                                                                            const next = [...batchResults];
+                                                                                            next.splice(idx, 1);
+                                                                                            setBatchResults(next);
+                                                                                        }} className="p-2 bg-white/5 hover:bg-red-900/40 text-slate-500 hover:text-red-500 rounded-xl transition-all border border-white/10 relative group">
+                                                                                            <Trash2 className="w-4 h-4" />
+                                                                                            <span className="absolute -top-8 left-1/2 -translate-x-1/2 bg-black text-white text-[9px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">Descartar</span>
+                                                                                        </button>
+                                                                                    </div>
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                ) : null}
+
+                                                {/* Batch Manual Fix Modal */}
+                                                {batchFixData && (
+                                                    <div className="fixed inset-0 z-[400] flex items-center justify-center bg-[#070709]/90 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-300">
+                                                        <div className="bg-[#16161D] border border-white/10 p-8 rounded-[32px] shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+                                                            <div className="flex items-center justify-between mb-6 shrink-0">
+                                                                <div className="flex items-center space-x-4">
+                                                                    <div className="w-1.5 h-6 bg-red-500 rounded-full shadow-[0_0_15px_rgba(239,68,68,0.4)]"></div>
+                                                                    <h3 className="text-xl font-black text-white uppercase italic tracking-tighter">Inserção Manual - Lote</h3>
+                                                                </div>
+                                                                <button onClick={() => setBatchFixData(null)} className="p-2 bg-white/5 hover:bg-white/10 rounded-xl transition-all border border-white/5"><X className="w-5 h-5 text-slate-400" /></button>
+                                                            </div>
+
+                                                            <div className="space-y-4 flex-1 overflow-y-auto pr-2 scrollbar-thin">
+
+                                                                <div className="bg-black/20 p-4 rounded-2xl border border-white/5 flex flex-col space-y-3">
+                                                                    <label className="block text-[10px] font-black uppercase text-[#B87333] tracking-widest ml-1">Importar via Link (Opcional)</label>
+                                                                    <div className="flex items-center space-x-3">
+                                                                        <input type="text" placeholder="Cole a URL do CifraClub aqui..." value={batchFixData.link || ''} onChange={e => setBatchFixData({ ...batchFixData, link: e.target.value })} className="flex-1 bg-black/60 border border-white/10 rounded-xl px-4 py-3 text-xs text-white font-mono outline-none focus:border-[#B87333]/50 transition-all" />
+                                                                        <button
+                                                                            disabled={!batchFixData.link || batchLinkLoading}
+                                                                            onClick={async () => {
+                                                                                setBatchLinkLoading(true);
+                                                                                try {
+                                                                                    const res = await fetch(`${API_BASE_URL}/api/music/scrape-link`, {
+                                                                                        method: 'POST',
+                                                                                        headers: { 'Content-Type': 'application/json' },
+                                                                                        body: JSON.stringify({ url: batchFixData.link })
+                                                                                    });
+                                                                                    const data = await res.json();
+                                                                                    if (res.ok) {
+                                                                                        setBatchFixData(prev => ({
+                                                                                            ...prev,
+                                                                                            song_name: data.song_name,
+                                                                                            artist_name: data.artist_name,
+                                                                                            song_key: data.key || 'C',
+                                                                                            content: data.content,
+                                                                                            capo: data.capo || 0
+                                                                                        }));
+                                                                                    } else {
+                                                                                        alert(data.detail || "Erro ao extrair cifra do link");
+                                                                                    }
+                                                                                } catch (err) { alert("Erro na requisição."); }
+                                                                                finally { setBatchLinkLoading(false); }
+                                                                            }}
+                                                                            className={`px-6 py-3 font-black uppercase text-[10px] rounded-xl flex items-center transition-all shadow-lg ${(!batchFixData.link || batchLinkLoading) ? 'bg-white/5 text-slate-500 cursor-not-allowed shadow-none' : 'bg-[#B87333] text-white hover:bg-[#8B4513] shadow-[#B87333]/20'}`}>
+                                                                            {batchLinkLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <><Zap className="w-3 h-3 mr-2" /> Extrair</>}
+                                                                        </button>
+                                                                    </div>
+                                                                </div>
+
+                                                                <div className="grid grid-cols-2 gap-4">
+                                                                    <div>
+                                                                        <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Artista</label>
+                                                                        <input type="text" value={batchFixData.artist_name} onChange={e => setBatchFixData({ ...batchFixData, artist_name: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white font-bold outline-none" />
+                                                                    </div>
+                                                                    <div className="relative">
+                                                                        <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Música</label>
+                                                                        <input
+                                                                            type="text"
+                                                                            value={batchFixData.song_name}
+                                                                            onChange={e => setBatchFixData({ ...batchFixData, song_name: e.target.value })}
+                                                                            onFocus={() => setShowBatchFixSuggestions(true)}
+                                                                            onBlur={() => setTimeout(() => setShowBatchFixSuggestions(false), 200)}
+                                                                            className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white font-bold outline-none"
+                                                                        />
+                                                                        {showBatchFixSuggestions && batchFixSuggestions.length > 0 && (
+                                                                            <div className="absolute z-[410] w-full mt-2 bg-[#12121A] border border-[#B87333]/40 rounded-2xl shadow-2xl max-h-64 overflow-y-auto scrollbar-thin">
+                                                                                {batchFixSuggestions.map((sug, i) => (
+                                                                                    <div
+                                                                                        key={i}
+                                                                                        onClick={() => {
+                                                                                            setBatchFixData({
+                                                                                                ...batchFixData,
+                                                                                                song_name: sug.song,
+                                                                                                artist_name: sug.artist
+                                                                                            });
+                                                                                            setShowBatchFixSuggestions(false);
+                                                                                        }}
+                                                                                        className="px-4 py-3 hover:bg-[#B87333]/20 cursor-pointer border-b border-white/5 last:border-0 transition-colors"
+                                                                                    >
+                                                                                        <p className="text-white font-black uppercase text-sm">{sug.song}</p>
+                                                                                        <p className="text-[10px] font-bold text-slate-500 uppercase">{sug.artist}</p>
+                                                                                    </div>
+                                                                                ))}
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                                <div className="grid grid-cols-2 gap-4">
+                                                                    <div>
+                                                                        <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Tom Original da Cifra</label>
+                                                                        <select value={batchFixData.song_key} onChange={e => setBatchFixData({ ...batchFixData, song_key: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white font-bold outline-none">
+                                                                            {["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"].map(k => <option key={k} value={k} className="bg-[#1A1A1A]">{k}</option>)}
+                                                                        </select>
+                                                                    </div>
+                                                                    <div>
+                                                                        <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2 ml-1">Capo</label>
+                                                                        <select value={batchFixData.capo} onChange={e => setBatchFixData({ ...batchFixData, capo: Number(e.target.value) })} className="w-full bg-black/60 border border-white/10 rounded-xl px-4 py-3 text-white outline-none cursor-pointer font-bold appearance-none">
+                                                                            {[...Array(13)].map((_, i) => <option key={i} value={i} className="bg-[#1A1A1A]">{i === 0 ? 'Sem Capo' : `${i}ª Casa`}</option>)}
+                                                                        </select>
+                                                                    </div>
+                                                                </div>
+                                                                <div className="flex flex-col justify-center">
+                                                                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2 ml-1">Tablaturas</label>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => setBatchFixData(prev => ({ ...prev, include_tabs: !prev.include_tabs }))}
+                                                                        className={`w-full py-3 rounded-xl border transition-all font-black uppercase text-[10px] tracking-widest ${batchFixData.include_tabs ? 'bg-[#B87333]/20 border-[#B87333] text-[#B87333]' : 'bg-black/60 border-white/10 text-slate-600'}`}
+                                                                    >
+                                                                        {batchFixData.include_tabs ? 'Ativadas' : 'Desativar'}
+                                                                    </button>
+                                                                </div>
+                                                                <div className="flex-1 flex flex-col">
+                                                                    <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Cifra Bruta</label>
+                                                                    <textarea value={batchFixData.content} onChange={e => setBatchFixData({ ...batchFixData, content: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white outline-none font-mono text-xs leading-relaxed min-h-[250px] resize-none scrollbar-thin" placeholder="Cole a cifra estruturada aqui..."></textarea>
+                                                                </div>
+                                                            </div>
+
+                                                            <button onClick={async () => {
+                                                                if (!batchFixData.content.trim()) return;
+                                                                // Only update the local batch results state. No DB call here.
+                                                                const next = [...batchResults];
+                                                                next[batchFixData.idx] = {
+                                                                    ...next[batchFixData.idx],
+                                                                    song_name: batchFixData.song_name,
+                                                                    artist_name: batchFixData.artist_name,
+                                                                    requested_key: batchFixData.song_key,
+                                                                    original_key: batchFixData.song_key,
+                                                                    sounding_key: batchFixData.song_key,
+                                                                    content: batchFixData.content,
+                                                                    capo: batchFixData.capo,
+                                                                    include_tabs: batchFixData.include_tabs,
+                                                                    status: 'success'
+                                                                };
+                                                                setBatchResults(next);
+                                                                setBatchFixData(null);
+                                                            }} className="w-full mt-6 py-4 bg-[#B87333] hover:bg-[#8B4513] text-white font-black uppercase tracking-widest rounded-xl transition-all shadow-xl shadow-[#B87333]/20 shrink-0">
+                                                                Salvar no Lote
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                            </div>
+                                        </div>
+                                    </div>
+                                )
+                            }
+
+                            {/* Share and Import Modals */}
+                            <ShareModal
+                                isOpen={shareModalOpen}
+                                onClose={() => setShareModalOpen(false)}
+                                listName={activePlaylistName || "Repertório"}
+                                link={getShareLink()}
+                            />
+                            <ImportModal
+                                data={importData}
+                                onClose={() => setImportData(null)}
+                                onImport={handleImportList}
+                            />
+                        </div >
+                        );
 }
+
+                        export default App;
