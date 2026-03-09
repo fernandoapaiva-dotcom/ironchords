@@ -176,6 +176,7 @@ export class AudioTracker {
 
         this.recognition.onstart = () => {
             console.log("[AudioTracker] Speech Recognition officially STARTED");
+            if (this.onSpeechResult) this.onSpeechResult("[SISTEMA: Motor de voz iniciado]", false);
         };
 
         this.recognition.onresult = (event) => {
@@ -193,18 +194,11 @@ export class AudioTracker {
 
         this.recognition.onerror = (e) => {
             console.warn("[AudioTracker] SpeechRec Error:", e.error);
-
-            // Silently auto-recover from common transient errors — do NOT push them to the UI transcript
-            if (e.error === 'aborted' || e.error === 'no-speech' || e.error === 'network') {
-                this.stopSpeechRecognition();
-                if (this.isMicActive) {
-                    setTimeout(() => this.startSpeechRecognition(), 800);
-                }
-                return; // Do not propagate to UI
-            }
-
-            // Only report truly fatal errors (e.g. 'not-allowed' = microphone blocked)
             if (this.onSpeechResult) this.onSpeechResult(`[ERRO VOZ: ${e.error}]`, false);
+            if (e.error === 'network') {
+                this.stopSpeechRecognition();
+                setTimeout(() => this.startSpeechRecognition(), 2000);
+            }
         };
 
         this.recognition.onend = () => {
