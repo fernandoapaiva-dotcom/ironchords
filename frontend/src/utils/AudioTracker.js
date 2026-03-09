@@ -194,6 +194,9 @@ export class AudioTracker {
 
         this.recognition.onerror = (e) => {
             console.warn("[AudioTracker] SpeechRec Error:", e.error);
+            // 'aborted' and 'no-speech' are normal Chrome interrupts — onend will restart automatically
+            // Do NOT display them in the UI or it pollutes the transcript and confuses IA Sync
+            if (e.error === 'aborted' || e.error === 'no-speech') return;
             if (this.onSpeechResult) this.onSpeechResult(`[ERRO VOZ: ${e.error}]`, false);
             if (e.error === 'network') {
                 this.stopSpeechRecognition();
