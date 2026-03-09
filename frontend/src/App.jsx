@@ -719,6 +719,7 @@ const ImportModal = ({ data, onImport, onClose }) => {
 
 export default function App() {
     const [activeTab, setActiveTab] = useState('manual');
+    const [listasSubTab, setListasSubTab] = useState('salvas');
     const [songs, setSongs] = useState([]);
     const [selectedManualIndex, setSelectedManualIndex] = useState(null);
     const [isFullScreenPlayer, setIsFullScreenPlayer] = useState(false);
@@ -3334,7 +3335,6 @@ export default function App() {
                                             </div>
                                             <div className="flex p-1.5 space-x-1.5 bg-black/60 rounded-2xl border border-white/5">
                                                 <button onClick={() => setActiveTab('manual')} className={`px-6 py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all duration-500 ${activeTab === 'manual' ? 'bg-[#B87333] text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}><Plus className="w-3 h-3 mr-2 inline" /> Manual</button>
-                                                <button onClick={() => setActiveTab('batch')} className={`px-6 py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all duration-500 ${activeTab === 'batch' ? 'bg-[#B87333] text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}><UploadCloud className="w-3 h-3 mr-2 inline" /> Lote</button>
                                                 <button onClick={() => setActiveTab('acervo')} className={`px-6 py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all duration-500 ${activeTab === 'acervo' ? 'bg-[#B87333] text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}><Database className="w-3 h-3 mr-2 inline" /> Acervo</button>
                                             </div>
                                         </div>
@@ -3905,10 +3905,572 @@ export default function App() {
                                                             </div>
                                                         </div>
                                                     )}
+
+
+
                                                 </div>
                                             )}
 
-                                            {activeTab === 'batch' && (
+                                            {activeTab === 'acervo' && (
+                                                <div className="space-y-6 animate-in fade-in duration-500">
+                                                    {/* Search and Bulk Actions */}
+                                                    <div className="flex flex-col sm:flex-row gap-4 mb-6">
+                                                        <div className="relative flex-1 text-white text-sm">
+                                                            <Search className="absolute left-6 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
+                                                            <input
+                                                                type="text"
+                                                                placeholder="Buscar música ou artista no acervo..."
+                                                                value={acervoSearchTerm}
+                                                                onChange={e => setAcervoSearchTerm(e.target.value)}
+                                                                className="w-full bg-black/40 border border-white/10 rounded-[28px] pl-16 pr-6 py-5 text-white font-bold outline-none focus:border-[#B87333]/50 transition-all placeholder:text-slate-700 shadow-inner"
+                                                            />
+                                                        </div>
+                                                        {selectedAcervoItems.length > 0 && (
+                                                            <div className="flex items-center gap-2 animate-in fade-in zoom-in duration-300">
+                                                                <button onClick={() => setSelectedAcervoItems([])} className="px-6 py-5 bg-white/5 border border-white/10 hover:bg-white/10 rounded-[28px] text-slate-400 font-bold text-xs uppercase transition-all shadow-inner hover:text-white">Cancelar</button>
+                                                                <button onClick={() => handleDeleteAcervo(selectedAcervoItems, `${selectedAcervoItems.length} músicas selecionadas`)} className="px-6 py-5 bg-red-600/20 border border-red-500/30 hover:bg-red-600 rounded-[28px] text-red-500 font-bold text-xs uppercase transition-all shadow-xl hover:text-white flex items-center shadow-red-900/20 gap-2"><Trash2 className="w-4 h-4" /> Excluir ({selectedAcervoItems.length})</button>
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    {/* Select All Toggle */}
+                                                    {acervo.length > 0 && !acervoLoading && (
+                                                        <div className="mb-4 flex items-center justify-between px-2">
+                                                            <label className="flex items-center space-x-3 cursor-pointer group">
+                                                                <div className="relative flex items-center justify-center">
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        className="peer sr-only"
+                                                                        checked={selectedAcervoItems.length > 0 && selectedAcervoItems.length === acervo.filter(item => item.song_name.toLowerCase().includes(acervoSearchTerm.toLowerCase()) || item.artist_name.toLowerCase().includes(acervoSearchTerm.toLowerCase())).length}
+                                                                        onChange={(e) => {
+                                                                            const filtered = acervo.filter(item => item.song_name.toLowerCase().includes(acervoSearchTerm.toLowerCase()) || item.artist_name.toLowerCase().includes(acervoSearchTerm.toLowerCase()));
+                                                                            if (e.target.checked) setSelectedAcervoItems(filtered.map(i => i.id));
+                                                                            else setSelectedAcervoItems([]);
+                                                                        }}
+                                                                    />
+                                                                    <div className="w-5 h-5 border-2 border-white/20 rounded-md peer-checked:bg-[#B87333] peer-checked:border-[#B87333] transition-all flex items-center justify-center group-hover:border-[#B87333]/50">
+                                                                        <Check className="w-3.5 h-3.5 text-white opacity-0 peer-checked:opacity-100 transition-opacity" />
+                                                                    </div>
+                                                                </div>
+                                                                <span className="text-xs font-bold text-slate-500 uppercase tracking-widest group-hover:text-slate-300 transition-colors">Selecionar Todos Visíveis</span>
+                                                            </label>
+                                                        </div>
+                                                    )}
+
+                                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 max-h-[450px] overflow-y-auto pr-4 scrollbar-thin pb-10">
+                                                        {acervoLoading ? (
+                                                            <div className="col-span-full py-20 text-center"><RefreshCw className="w-10 h-10 animate-spin text-[#B87333] mx-auto mb-4" /><p className="text-[10px] font-black text-slate-600 uppercase tracking-widest">Sincronizando Banco...</p></div>
+                                                        ) : acervo.filter(item => item.song_name.toLowerCase().includes(acervoSearchTerm.toLowerCase()) || item.artist_name.toLowerCase().includes(acervoSearchTerm.toLowerCase())).map((item, idx) => (
+                                                            <div key={idx} className={`bg-black/40 border p-6 rounded-[32px] flex flex-col transition-all group relative overflow-hidden gap-5 ${selectedAcervoItems.includes(item.id) ? 'border-[#B87333]/50 bg-[#B87333]/5' : 'border-white/5 hover:border-[#B87333]/30'}`}>
+                                                                <div className={`absolute top-0 left-0 w-1 h-full transition-all ${selectedAcervoItems.includes(item.id) ? 'bg-[#B87333]' : 'bg-[#B87333]/20 group-hover:bg-[#B87333]'}`}></div>
+
+                                                                <div className="flex items-start justify-between w-full">
+                                                                    {/* Checkbox */}
+                                                                    <label className="cursor-pointer relative flex items-center justify-center p-2 -m-2">
+                                                                        <input
+                                                                            type="checkbox"
+                                                                            className="peer sr-only"
+                                                                            checked={selectedAcervoItems.includes(item.id)}
+                                                                            onChange={(e) => {
+                                                                                if (e.target.checked) setSelectedAcervoItems([...selectedAcervoItems, item.id]);
+                                                                                else setSelectedAcervoItems(selectedAcervoItems.filter(id => id !== item.id));
+                                                                            }}
+                                                                        />
+                                                                        <div className="w-5 h-5 border-2 border-white/20 rounded-md peer-checked:bg-[#B87333] peer-checked:border-[#B87333] transition-all flex items-center justify-center hover:border-[#B87333]/50">
+                                                                            <Check className="w-3.5 h-3.5 text-white opacity-0 peer-checked:opacity-100 transition-opacity" />
+                                                                        </div>
+                                                                    </label>
+
+                                                                    <div className="flex-1 min-w-0 px-4">
+                                                                        <p className="text-base font-black text-white uppercase italic truncate leading-tight">{item.song_name}</p>
+                                                                        <p className="text-[10px] font-bold text-slate-500 mt-1 uppercase tracking-widest transition-colors group-hover:text-[#B87333]/80 truncate">
+                                                                            {item.artist_name} • {item.song_key}
+                                                                        </p>
+                                                                    </div>
+                                                                </div>
+
+                                                                {item.capo > 0 && (
+                                                                    <div className="px-4">
+                                                                        <span className="inline-flex px-3 py-1 bg-[#B87333]/15 text-[#B87333] rounded-lg font-black tracking-[0.2em] text-[8px] border border-[#B87333]/20 uppercase">
+                                                                            Capo: {item.capo}ª Casa
+                                                                        </span>
+                                                                    </div>
+                                                                )}
+
+                                                                <div className="flex items-center gap-2 px-2 pt-2 border-t border-white/5 w-full justify-between">
+                                                                    <div className="flex items-center gap-2">
+                                                                        <button
+                                                                            onClick={() => {
+                                                                                setManualPreviewSong(item);
+                                                                                setTimeout(() => window.print(), 300);
+                                                                            }}
+                                                                            className="w-10 h-10 bg-white/5 hover:bg-[#ea580c] text-slate-500 hover:text-white rounded-xl flex items-center justify-center transition-all border border-white/5 active:scale-95"
+                                                                            title="Imprimir Cifra"
+                                                                        >
+                                                                            <Printer className="w-4 h-4" />
+                                                                        </button>
+                                                                        <button onClick={() => {
+                                                                            const NOTES_ARR = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+                                                                            let s_key = item.song_key;
+                                                                            if (item.capo > 0) {
+                                                                                let baseMatch = s_key.match(/([A-G][b#]?)/i);
+                                                                                let base = baseMatch ? baseMatch[1] : null;
+                                                                                if (base) {
+                                                                                    let idx = NOTES_ARR.indexOf(base);
+                                                                                    if (idx !== -1) {
+                                                                                        let final_idx = (idx + item.capo) % 12;
+                                                                                        s_key = s_key.replace(base, NOTES_ARR[final_idx]);
+                                                                                    }
+                                                                                }
+                                                                            }
+                                                                            setSongs([...songs, {
+                                                                                ...item,
+                                                                                requested_key: item.song_key,
+                                                                                sounding_key: s_key,
+                                                                                _orig_key: item.song_key,
+                                                                                _orig_content: item.content || '',
+                                                                                capo: item.capo || 0,
+                                                                                show_chords: true,
+                                                                                include_tabs: item.include_tabs ?? true
+                                                                            }]);
+                                                                        }} className="w-10 h-10 bg-white/5 hover:bg-[#B87333] text-slate-500 hover:text-white rounded-xl flex items-center justify-center transition-all border border-white/5 active:scale-90" title="Adicionar à Forja">
+                                                                            <Plus className="w-4 h-4" />
+                                                                        </button>
+                                                                    </div>
+                                                                    <div className="flex items-center gap-2">
+                                                                        <button onClick={() => handleEditOpen(item.id)} className="w-10 h-10 bg-white/5 hover:bg-blue-600 text-slate-600 hover:text-white rounded-xl flex items-center justify-center transition-all border border-white/5 active:scale-90" title="Editar">
+                                                                            <Edit3 className="w-4 h-4" />
+                                                                        </button>
+                                                                        <button onClick={() => handleDeleteAcervo(item.id, item.song_name)} className="w-10 h-10 bg-white/5 hover:bg-red-600 text-slate-600 hover:text-white rounded-xl flex items-center justify-center transition-all border border-white/5 active:scale-90" title="Excluir">
+                                                                            <Trash2 className="w-4 h-4" />
+                                                                        </button>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+
+                            {/* ABA 2: LISTAS */}
+                            {mainNav === 'listas' && (() => {
+                                const allPlaylists = Array.isArray(savedPlaylists) ? savedPlaylists : JSON.parse(localStorage.getItem('iron_chords_playlists') || '[]');
+                                const filteredPlaylists = allPlaylists.filter(pl => pl.name.toLowerCase().includes(listSearchTerm.toLowerCase()));
+                                const allSelected = filteredPlaylists.length > 0 && filteredPlaylists.every(pl => selectedLists.includes(pl.id));
+                                return (
+                                    <div className="flex-1 animate-in fade-in slide-in-from-right-8 duration-700">
+                                        <div className="bg-[#16161D]/80 backdrop-blur-xl border border-white/5 rounded-[40px] p-8 shadow-2xl min-h-[500px]">
+                                            {/* Sub-tab Selector */}
+                                            <div className="flex items-center justify-between mb-8">
+                                                <div className="flex p-1 bg-black/40 rounded-2xl border border-white/5 shadow-inner">
+                                                    <button
+                                                        onClick={() => setListasSubTab('salvas')}
+                                                        className={`px-6 py-2.5 text-[10px] font-black uppercase tracking-[0.2em] rounded-xl transition-all duration-500 flex items-center space-x-2 ${listasSubTab === 'salvas' ? 'bg-[#B87333] text-white shadow-[0_5px_15px_rgba(184,115,51,0.3)]' : 'text-slate-500 hover:text-slate-300'}`}
+                                                    >
+                                                        <LayoutList className="w-3.5 h-3.5" />
+                                                        <span>Listas Salvas</span>
+                                                    </button>
+                                                    <button
+                                                        onClick={() => setListasSubTab('lote')}
+                                                        className={`px-6 py-2.5 text-[10px] font-black uppercase tracking-[0.2em] rounded-xl transition-all duration-500 flex items-center space-x-2 ${listasSubTab === 'lote' ? 'bg-[#B87333] text-white shadow-[0_5px_15px_rgba(184,115,51,0.3)]' : 'text-slate-500 hover:text-slate-300'}`}
+                                                    >
+                                                        <UploadCloud className="w-3.5 h-3.5" />
+                                                        <span>Envio em Lote</span>
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            {listasSubTab === 'salvas' ? (
+                                                <div className="animate-in fade-in duration-500">
+                                                    {/* Header */}
+                                                    <div className="flex items-center justify-between mb-6">
+                                                        <div className="flex items-center space-x-4">
+                                                            <div className="w-2 h-10 bg-[#B87333] rounded-full shadow-[0_0_15px_rgba(184,115,51,0.4)]"></div>
+                                                            <h2 className="text-2xl font-black text-white uppercase italic tracking-tighter">Listas Salvas</h2>
+                                                            <span className="text-[10px] font-black text-slate-600 bg-white/5 px-3 py-1 rounded-full border border-white/5">{allPlaylists.length}</span>
+                                                        </div>
+                                                        {selectedLists.length > 0 && (
+                                                            <button onClick={() => { setDeleteTarget({ type: 'lista_multi', id: [...selectedLists], name: `${selectedLists.length} lista(s)` }); setDeleteModalOpen(true); }} className="px-4 py-2 bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white border border-red-600/30 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center space-x-2">
+                                                                <Trash2 className="w-3.5 h-3.5" /><span>Excluir {selectedLists.length} Lista(s)</span>
+                                                            </button>
+                                                        )}
+                                                    </div>
+
+                                                    {/* Search */}
+                                                    <div className="relative mb-6">
+                                                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-600" />
+                                                        <input type="text" placeholder="Buscar lista pelo nome..." value={listSearchTerm} onChange={e => setListSearchTerm(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-2xl pl-11 pr-4 py-3.5 text-sm font-bold text-white outline-none focus:border-[#B87333]/50 transition-all placeholder:text-slate-700" />
+                                                    </div>
+
+                                                    {/* Select All Bar */}
+                                                    {filteredPlaylists.length > 0 && (
+                                                        <div className="flex items-center space-x-3 mb-4 px-2">
+                                                            <label className="flex items-center space-x-2 cursor-pointer">
+                                                                <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${allSelected ? 'bg-[#B87333] border-[#B87333]' : 'border-white/20'}`} onClick={() => { if (allSelected) setSelectedLists([]); else setSelectedLists(filteredPlaylists.map(pl => pl.id)); }}>
+                                                                    {allSelected && <Check className="w-3 h-3 text-white" />}
+                                                                </div>
+                                                                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Selecionar Todas</span>
+                                                            </label>
+                                                        </div>
+                                                    )}
+
+                                                    {filteredPlaylists.length === 0 ? (
+                                                        <div className="py-20 flex col-span-3 items-center justify-center flex-col text-center border-2 border-dashed border-white/5 rounded-[40px] bg-black/20 w-full min-h-[300px]">
+                                                            <LayoutList className="w-16 h-16 text-slate-800 mx-auto mb-6 opacity-20" />
+                                                            <p className="text-xs font-black text-slate-600 uppercase tracking-[0.3em]">{listSearchTerm ? 'Nenhuma lista encontrada.' : 'Nenhuma lista salva ainda.'}</p>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                                            {filteredPlaylists.map((pl, idx) => (
+                                                                <div key={pl.id || idx} className={`bg-black/40 border rounded-[32px] p-6 transition-all group flex flex-col h-[380px] ${selectedLists.includes(pl.id) ? 'border-[#B87333]/40 bg-[#B87333]/5' : 'border-white/5 hover:border-[#B87333]/30'}`}>
+                                                                    <div className="flex items-start justify-between mb-4">
+                                                                        {/* Checkbox */}
+                                                                        <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 mt-1 cursor-pointer transition-all ${selectedLists.includes(pl.id) ? 'bg-[#B87333] border-[#B87333]' : 'border-white/20 hover:border-white/40'}`} onClick={() => setSelectedLists(prev => prev.includes(pl.id) ? prev.filter(id => id !== pl.id) : [...prev, pl.id])}>
+                                                                            {selectedLists.includes(pl.id) && <Check className="w-3 h-3 text-white" />}
+                                                                        </div>
+                                                                        <h3 className="text-lg font-black text-white uppercase italic tracking-tighter line-clamp-2 flex-1 mx-3">{pl.name}</h3>
+                                                                        <div className="flex items-center space-x-1">
+                                                                            <button onClick={() => {
+                                                                                const enriched = (pl.songs || []).map(s => ({
+                                                                                    ...s,
+                                                                                    include_tabs: s.include_tabs !== false,
+                                                                                    capo: s.capo || 0,
+                                                                                    _orig_key: s._orig_key || s.sounding_key || s.song_key || 'C',
+                                                                                    _orig_content: s._orig_content || s.content || ''
+                                                                                }));
+                                                                                setEditingList({ ...pl, songs: enriched });
+                                                                                setEditListName(pl.name);
+                                                                            }} className="p-2 bg-white/5 hover:bg-[#B87333]/20 text-slate-500 hover:text-[#B87333] rounded-lg transition-all border border-white/5" title="Editar Lista"><Edit3 className="w-3.5 h-3.5" /></button>
+                                                                            <button onClick={() => { setDeleteTarget({ type: 'lista', id: pl.id, name: pl.name }); setDeleteModalOpen(true); }} className="p-2 bg-white/5 hover:bg-red-600/20 text-slate-500 hover:text-red-500 rounded-lg transition-all border border-white/5" title="Excluir"><Trash2 className="w-3.5 h-3.5" /></button>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className="mb-4">
+                                                                        <span className="text-[10px] font-black bg-white/5 text-[#B87333] py-1 px-3 rounded-full border border-white/5 uppercase tracking-widest">{pl.songs?.length || 0} Peças</span>
+                                                                    </div>
+                                                                    <div className="flex-1 overflow-y-auto mb-4 pr-2 scrollbar-thin scrollbar-thumb-white/10 space-y-2 bg-[#1A1A1A] p-4 rounded-2xl border border-white/5">
+                                                                        {(pl.songs || []).map((s, i) => (
+                                                                            <div key={i} className="flex items-center justify-between border-b border-white/5 last:border-0 pb-2 last:pb-0 gap-2">
+                                                                                <div className="flex flex-col min-w-0">
+                                                                                    <span className="text-xs text-slate-300 uppercase font-bold truncate tracking-tight">{i + 1}. {s.song_name}</span>
+                                                                                    <span className="text-[9px] text-slate-500 uppercase tracking-widest">{s.artist_name}</span>
+                                                                                </div>
+                                                                                <div className="flex items-center gap-1 shrink-0">
+                                                                                    {(s.sounding_key || s.song_key) && (
+                                                                                        <span className="text-[8px] font-black text-[#B87333] bg-[#B87333]/10 border border-[#B87333]/20 px-1.5 py-0.5 rounded-md uppercase">{s.sounding_key || s.song_key}</span>
+                                                                                    )}
+                                                                                    {s.capo > 0 && (
+                                                                                        <span className="text-[8px] font-black text-slate-400 bg-white/5 border border-white/10 px-1.5 py-0.5 rounded-md">C{s.capo}</span>
+                                                                                    )}
+                                                                                    {s.include_tabs === false && (
+                                                                                        <span className="text-[8px] font-black text-slate-500 bg-white/5 border border-white/10 px-1.5 py-0.5 rounded-md">S/Tab</span>
+                                                                                    )}
+                                                                                </div>
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                    <div className="flex items-center justify-between mt-auto space-x-2 pt-4 border-t border-white/5">
+                                                                        <button onClick={() => {
+                                                                            const songsToLoad = (pl.songs || []).map(s => ({
+                                                                                ...s,
+                                                                                include_tabs: s.include_tabs !== undefined ? s.include_tabs : true,
+                                                                                capo: s.capo || 0,
+                                                                            }));
+                                                                            setSongs(songsToLoad);
+                                                                            setIncludeTabs(songsToLoad[0]?.include_tabs !== false);
+                                                                            setMainNav('player');
+                                                                            setSelectedManualIndex(0);
+                                                                            setActivePlaylistName(pl.name);
+                                                                        }} className="flex-1 bg-white/5 hover:bg-white/10 text-white border border-white/10 py-3 rounded-xl transition-all text-[10px] font-black uppercase tracking-widest flex justify-center items-center space-x-2">
+                                                                            <Play className="w-4 h-4" /><span>Tocar</span>
+                                                                        </button>
+                                                                        <button onClick={() => { setSongs(pl.songs || []); setCurrentExportList(pl); setExportStep(1); setDownloadUrl(null); setExportFormat('docx'); setCoverImage(null); setShowExportModal(true); }} className="flex-1 bg-[#B87333]/10 hover:bg-[#B87333] text-[#B87333] hover:text-white border border-[#B87333]/20 py-3 rounded-xl transition-all text-[10px] font-black uppercase tracking-widest flex justify-center items-center space-x-2">
+                                                                            <FileText className="w-4 h-4" /><span>Livreto</span>
+                                                                        </button>
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    )}
+
+
+                                                    {/* Edit List Modal */}
+                                                    {editingList && (
+                                                        <div className="fixed inset-0 z-[250] flex items-center justify-center bg-[#070709]/90 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-300 p-4">
+                                                            <div className="bg-[#16161D] border border-[#B87333]/30 rounded-[32px] shadow-[0_0_50px_rgba(0,0,0,0.8)] w-full max-w-4xl flex flex-col max-h-[90vh]">
+
+                                                                {/* Modal Header */}
+                                                                <div className="flex items-center justify-between p-8 border-b border-white/5 shrink-0">
+                                                                    <div className="flex items-center space-x-4 flex-1 min-w-0">
+                                                                        <div className="w-1.5 h-6 bg-[#B87333] rounded-full shrink-0"></div>
+                                                                        <input
+                                                                            type="text"
+                                                                            value={editListName}
+                                                                            onChange={e => setEditListName(e.target.value)}
+                                                                            className="bg-transparent text-2xl font-black text-white uppercase italic tracking-tighter outline-none border-b-2 border-transparent focus:border-[#B87333]/50 transition-all flex-1 min-w-0"
+                                                                            placeholder="Nome da Lista..."
+                                                                        />
+                                                                        <span className="text-[10px] text-slate-500 font-black uppercase tracking-widest shrink-0">{editingList.songs.length} músicas</span>
+                                                                    </div>
+                                                                    <div className="flex items-center space-x-2 ml-4 shrink-0">
+                                                                        <button onClick={() => {
+                                                                            const all = Array.isArray(savedPlaylists) ? savedPlaylists : JSON.parse(localStorage.getItem('iron_chords_playlists') || '[]');
+                                                                            const updated = all.map(pl => pl.id === editingList.id ? { ...pl, name: editListName, songs: editingList.songs } : pl);
+                                                                            localStorage.setItem('iron_chords_playlists', JSON.stringify(updated));
+                                                                            setSavedPlaylists(updated);
+                                                                            setEditingList(null);
+                                                                            setExpandedListSongIdx(null);
+                                                                            setShowSaveSuccess(true);
+                                                                            setTimeout(() => setShowSaveSuccess(false), 2000);
+                                                                        }} className="px-6 py-2.5 bg-[#B87333] hover:bg-[#A86323] text-white font-black uppercase text-[10px] tracking-widest rounded-xl transition-all flex items-center space-x-2">
+                                                                            <Save className="w-4 h-4" /><span>Salvar Lista</span>
+                                                                        </button>
+                                                                        <button onClick={() => { setEditingList(null); setExpandedListSongIdx(null); }} className="p-2.5 bg-white/5 hover:bg-white/10 rounded-xl border border-white/5"><X className="w-5 h-5 text-slate-400" /></button>
+                                                                    </div>
+                                                                </div>
+
+                                                                {/* Action bar: select-all + bulk delete */}
+                                                                <div className="px-6 py-3 bg-black/20 border-b border-white/5 shrink-0 flex items-center justify-between">
+                                                                    <label className="flex items-center space-x-2.5 cursor-pointer" onClick={() => {
+                                                                        const all = editingList.songs.map((_, i) => i);
+                                                                        setSelectedListSongs(prev => prev.length === editingList.songs.length ? [] : all);
+                                                                    }}>
+                                                                        <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${selectedListSongs.length === editingList.songs.length && editingList.songs.length > 0 ? 'bg-[#B87333] border-[#B87333]' : 'border-white/20'}`}>
+                                                                            {selectedListSongs.length === editingList.songs.length && editingList.songs.length > 0 && <Check className="w-3 h-3 text-white" />}
+                                                                        </div>
+                                                                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Selecionar Todas</span>
+                                                                    </label>
+                                                                    {selectedListSongs.length > 0 && (
+                                                                        <button onClick={() => {
+                                                                            const remaining = editingList.songs.filter((_, i) => !selectedListSongs.includes(i));
+                                                                            setEditingList({ ...editingList, songs: remaining });
+                                                                            setSelectedListSongs([]);
+                                                                            setExpandedListSongIdx(null);
+                                                                        }} className="flex items-center space-x-1.5 px-4 py-1.5 bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white border border-red-600/30 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all">
+                                                                            <Trash2 className="w-3.5 h-3.5" /><span>Excluir {selectedListSongs.length} Música(s)</span>
+                                                                        </button>
+                                                                    )}
+                                                                    {selectedListSongs.length === 0 && (
+                                                                        <p className="text-[10px] text-[#B87333]/50 font-bold uppercase tracking-widest">💡 Clique no nome para editar</p>
+                                                                    )}
+                                                                </div>
+
+                                                                {/* Song list */}
+                                                                <div className="overflow-y-auto p-6 space-y-2 scrollbar-thin scrollbar-thumb-white/10 flex-1">
+                                                                    {editingList.songs.length === 0 && (
+                                                                        <div className="py-12 text-center text-slate-600 font-black uppercase text-xs tracking-widest">Nenhuma música nesta lista.</div>
+                                                                    )}
+                                                                    {editingList.songs.map((song, si) => {
+                                                                        const isExpanded = expandedListSongIdx === si;
+                                                                        const updateSong = (patch) => {
+                                                                            if (patch.include_tabs !== undefined) {
+                                                                                if (selectedManualIndex === si) setIncludeTabs(patch.include_tabs);
+
+                                                                                // Functional toggle: filter or restore content in the textarea
+                                                                                if (patch.include_tabs === false) {
+                                                                                    patch.content = removeTablatureBlocks(song.content || '');
+                                                                                } else if (patch.include_tabs === true && song.include_tabs === false) {
+                                                                                    // Restore from original if re-enabling tabs
+                                                                                    patch.content = song._orig_content || song.content;
+                                                                                    // If we restore content, we might need to re-transpose it if current key differs
+                                                                                    const currentKey = song.sounding_key || song.song_key || 'C';
+                                                                                    const origKey = song._orig_key || currentKey;
+                                                                                    if (currentKey !== origKey) {
+                                                                                        // Trigger a re-transposition from orig to current
+                                                                                        transpose(0, currentKey);
+                                                                                        return; // transpose will call setEditingList
+                                                                                    }
+                                                                                }
+                                                                            }
+                                                                            if (patch.capo !== undefined) {
+                                                                                const diff = patch.capo - (song.capo || 0); // Correct diff calculation
+                                                                                if (diff !== 0) {
+                                                                                    transpose(diff);
+                                                                                    return; // transpose will call setEditingList
+                                                                                }
+                                                                                if (selectedManualIndex === si) setManualCapo(patch.capo);
+                                                                            }
+
+                                                                            setEditingList(prev => {
+                                                                                const s2 = [...prev.songs];
+                                                                                s2[si] = { ...s2[si], ...patch };
+                                                                                return { ...prev, songs: s2 };
+                                                                            });
+                                                                        };
+                                                                        const transpose = async (semitones, targetKey = null) => {
+                                                                            try {
+                                                                                const currentKey = song.sounding_key || song.song_key || 'C';
+                                                                                const origKeyStr = song._orig_key || song.song_key || currentKey;
+                                                                                const origContent = song._orig_content || song.content || '';
+
+                                                                                let newTargetKey = targetKey;
+                                                                                if (newTargetKey === null) {
+                                                                                    // ♭/♯ buttons: calculate new target from current sounding_key
+                                                                                    const match = currentKey.match(/^[A-G][b#]?/);
+                                                                                    const root = match ? match[0] : 'C';
+                                                                                    const currentIdx = KEYS.indexOf(root);
+                                                                                    if (currentIdx !== -1) {
+                                                                                        const newIdx = (currentIdx + semitones + 12) % 12; // Use first 12 (sharps)
+                                                                                        newTargetKey = currentKey.replace(root, NOTES[newIdx]);
+                                                                                    } else {
+                                                                                        // fallback for flats if not in NOTES (though they shouldn't be here)
+                                                                                        const flatIdx = KEY_SEMITONES[root] || 0;
+                                                                                        const newIdx = (flatIdx + semitones + 12) % 12;
+                                                                                        newTargetKey = currentKey.replace(root, NOTES[newIdx]);
+                                                                                    }
+                                                                                }
+
+                                                                                // Always transpose from ORIGINAL
+                                                                                const matchOrig = origKeyStr.match(/^[A-G][b#]?/);
+                                                                                const rootOrig = matchOrig ? matchOrig[0] : 'C';
+                                                                                const targetMatch = newTargetKey.match(/^[A-G][b#]?/);
+                                                                                const targetRoot = targetMatch ? targetMatch[0] : 'C';
+
+                                                                                const diff = ((KEY_SEMITONES[targetRoot] ?? 0) - (KEY_SEMITONES[rootOrig] ?? 0) + 12) % 12;
+
+                                                                                const patch = { sounding_key: newTargetKey, song_key: newTargetKey };
+                                                                                if (targetKey === null && song.capo !== undefined) {
+                                                                                    // If it was a relative shift from capo or ♭/♯
+                                                                                    // transpose() is called with diff in capo change
+                                                                                }
+
+                                                                                if (diff === 0) {
+                                                                                    setEditingList(prev => {
+                                                                                        const s2 = [...prev.songs];
+                                                                                        s2[si] = { ...s2[si], ...patch, content: origContent };
+                                                                                        return { ...prev, songs: s2 };
+                                                                                    });
+                                                                                    return;
+                                                                                }
+
+                                                                                const res = await fetch(`${API_BASE_URL}/api/transpose`, {
+                                                                                    method: 'POST',
+                                                                                    headers: { 'Content-Type': 'application/json' },
+                                                                                    body: JSON.stringify({ content: origContent, current_key: origKeyStr, semitones: diff })
+                                                                                });
+                                                                                const d = await res.json();
+                                                                                if (d.transposed_content) {
+                                                                                    setEditingList(prev => {
+                                                                                        const s2 = [...prev.songs];
+                                                                                        s2[si] = { ...s2[si], ...patch, content: d.transposed_content };
+                                                                                        return { ...prev, songs: s2 };
+                                                                                    });
+                                                                                }
+                                                                            } catch (e) { console.error(e); }
+                                                                        };
+                                                                        const printSong = () => {
+                                                                            setManualPreviewSong({ ...song, requested_key: song.sounding_key || song.song_key, original_key: song.original_key || song.song_key });
+                                                                            setTimeout(() => window.print(), 300);
+                                                                        };
+
+                                                                        return (
+                                                                            <div key={si} className={`rounded-2xl border transition-all duration-300 overflow-hidden ${isExpanded ? 'border-[#B87333]/40 bg-[#B87333]/5' : selectedListSongs.includes(si) ? 'border-red-500/30 bg-red-600/5' : 'border-white/5 bg-black/30 hover:border-white/10'}`}>
+                                                                                {/* Collapsed row — checkbox + clickable title */}
+                                                                                <div className="flex items-center p-4 group">
+                                                                                    {/* Checkbox */}
+                                                                                    <div onClick={e => { e.stopPropagation(); setSelectedListSongs(prev => prev.includes(si) ? prev.filter(i => i !== si) : [...prev, si]); }} className={`w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 mr-3 cursor-pointer transition-all ${selectedListSongs.includes(si) ? 'bg-red-500 border-red-500' : 'border-white/20 hover:border-white/40'}`}>
+                                                                                        {selectedListSongs.includes(si) && <Check className="w-3 h-3 text-white" />}
+                                                                                    </div>
+                                                                                    {/* Expand toggle */}
+                                                                                    <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setExpandedListSongIdx(isExpanded ? null : si)}>
+                                                                                        <p className={`font-black uppercase italic tracking-tight truncate transition-colors ${isExpanded ? 'text-[#B87333]' : 'text-white group-hover:text-[#B87333]'}`}>{song.song_name}</p>
+                                                                                        <p className="text-[10px] text-slate-500 uppercase tracking-widest">{song.artist_name}</p>
+                                                                                    </div>
+                                                                                    <div className="flex items-center space-x-2 ml-4 shrink-0" onClick={e => e.stopPropagation()}>
+                                                                                        <span className="text-[10px] font-black bg-[#B87333]/10 text-[#B87333] border border-[#B87333]/20 px-2.5 py-1 rounded-lg">Tom: {song.sounding_key || song.song_key || '?'}</span>
+                                                                                        <span className="text-[10px] font-black bg-white/5 text-slate-400 border border-white/10 px-2.5 py-1 rounded-lg">Capo {song.capo || 0}</span>
+                                                                                        <ChevronDown className={`w-4 h-4 text-slate-500 transition-transform duration-300 ${isExpanded ? 'rotate-180 text-[#B87333]' : ''}`} />
+                                                                                    </div>
+                                                                                </div>
+
+                                                                                {/* Expanded editing panel */}
+                                                                                {isExpanded && (
+                                                                                    <div className="px-6 pb-6 border-t border-white/5 pt-5 space-y-5 animate-in fade-in slide-in-from-top-2 duration-200">
+
+                                                                                        {/* Row 1: Name + Artist */}
+                                                                                        <div className="grid grid-cols-2 gap-4">
+                                                                                            <div>
+                                                                                                <label className="block text-[10px] font-black uppercase text-slate-500 mb-1.5 tracking-widest">Nome da Música</label>
+                                                                                                <input type="text" value={song.song_name} onChange={e => updateSong({ song_name: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-white font-bold text-sm outline-none focus:border-[#B87333]/50 transition-all" />
+                                                                                            </div>
+                                                                                            <div>
+                                                                                                <label className="block text-[10px] font-black uppercase text-slate-500 mb-1.5 tracking-widest">Artista</label>
+                                                                                                <input type="text" value={song.artist_name} onChange={e => updateSong({ artist_name: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-white font-bold text-sm outline-none focus:border-[#B87333]/50 transition-all" />
+                                                                                            </div>
+                                                                                        </div>
+
+                                                                                        {/* Row 2: Key + Capo + Tabs + Transpose + Actions */}
+                                                                                        <div className="flex items-end flex-wrap gap-3">
+                                                                                            <div>
+                                                                                                <label className="block text-[10px] font-black uppercase text-slate-500 mb-1.5 tracking-widest">Tom da Cifra</label>
+                                                                                                <select value={song.sounding_key || song.song_key || 'C'} onChange={e => transpose(0, e.target.value)} className="bg-black/60 border border-white/10 rounded-xl px-4 py-2.5 text-white font-bold text-sm outline-none cursor-pointer appearance-none">
+                                                                                                    {KEYS.map(k => <option key={k} value={k}>{k}</option>)}
+                                                                                                </select>
+                                                                                            </div>
+                                                                                            <div>
+                                                                                                <label className="block text-[10px] font-black uppercase text-slate-500 mb-1.5 tracking-widest">Capo</label>
+                                                                                                <select value={song.capo || 0} onChange={e => updateSong({ capo: Number(e.target.value) })} className="bg-black/60 border border-white/10 rounded-xl px-4 py-2.5 text-white font-bold text-sm outline-none cursor-pointer appearance-none">
+                                                                                                    {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map(n => <option key={n} value={n}>Capo {n}</option>)}
+                                                                                                </select>
+                                                                                            </div>
+                                                                                            <div>
+                                                                                                <label className="block text-[10px] font-black uppercase text-slate-500 mb-1.5 tracking-widest">Reset</label>
+                                                                                                <button onClick={() => updateSong({ content: song._orig_content, sounding_key: song._orig_key, song_key: song._orig_key, capo: 0 })} className="p-2.5 bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white rounded-xl border border-white/10 transition-all" title="Resetar para o original desta lista">
+                                                                                                    <RefreshCw className="w-4 h-4" />
+                                                                                                </button>
+                                                                                            </div>
+                                                                                            <div>
+                                                                                                <label className="block text-[10px] font-black uppercase text-slate-500 mb-1.5 tracking-widest">Tablatura</label>
+                                                                                                <button onClick={() => updateSong({ include_tabs: !(song.include_tabs !== false) })} className={`px-4 py-2.5 rounded-xl border font-black uppercase text-[10px] tracking-widest transition-all ${song.include_tabs !== false ? 'bg-[#B87333]/20 border-[#B87333] text-[#B87333]' : 'bg-black/60 border-white/10 text-slate-500'}`}>
+                                                                                                    {song.include_tabs !== false ? '✓ Com Tabs' : '✗ Sem Tabs'}
+                                                                                                </button>
+                                                                                            </div>
+                                                                                            <div className="flex flex-col">
+                                                                                                <label className="block text-[10px] font-black uppercase text-slate-500 mb-1.5 tracking-widest">Transpor</label>
+                                                                                                <div className="flex items-center space-x-1">
+                                                                                                    <button onClick={() => transpose(-1)} className="px-3 py-2 bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white rounded-xl border border-white/10 font-black text-xs transition-all" title="Meio tom abaixo">♭ -1</button>
+                                                                                                    <button onClick={() => transpose(1)} className="px-3 py-2 bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white rounded-xl border border-white/10 font-black text-xs transition-all" title="Meio tom acima">♯ +1</button>
+                                                                                                </div>
+                                                                                            </div>
+                                                                                            {/* Action buttons */}
+                                                                                            <div className="flex flex-col">
+                                                                                                <label className="block text-[10px] font-black uppercase text-slate-500 mb-1.5 tracking-widest">Ações</label>
+                                                                                                <div className="flex items-center space-x-2">
+                                                                                                    <button onClick={printSong} className="flex items-center space-x-1.5 px-3 py-2 bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white rounded-xl border border-white/10 font-black uppercase text-[10px] tracking-widest transition-all" title="Imprimir cifra">
+                                                                                                        <Printer className="w-3.5 h-3.5" /><span>Imprimir</span>
+                                                                                                    </button>
+                                                                                                    <button onClick={() => { const s2 = editingList.songs.filter((_, i) => i !== si); setEditingList({ ...editingList, songs: s2 }); setExpandedListSongIdx(null); }} className="flex items-center space-x-1.5 px-3 py-2 bg-red-600/10 hover:bg-red-600/30 text-red-500 hover:text-red-400 rounded-xl border border-red-600/20 font-black uppercase text-[10px] tracking-widest transition-all">
+                                                                                                        <Trash2 className="w-3.5 h-3.5" /><span>Remover</span>
+                                                                                                    </button>
+                                                                                                </div>
+                                                                                            </div>
+                                                                                        </div>
+
+                                                                                        {/* Cifra content */}
+                                                                                        <div>
+                                                                                            <label className="block text-[10px] font-black uppercase text-slate-500 mb-1.5 tracking-widest">Cifra</label>
+                                                                                            <textarea
+                                                                                                value={song.content || ''}
+                                                                                                onChange={e => updateSong({ content: e.target.value })}
+                                                                                                className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white font-mono text-xs leading-relaxed min-h-[200px] resize-none outline-none focus:border-[#B87333]/50 transition-all scrollbar-thin"
+                                                                                                placeholder="Conteúdo da cifra..."
+                                                                                            />
+                                                                                        </div>
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
+                                                                        );
+                                                                    })}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ) : (
                                                 <div className="flex flex-col items-center justify-center py-10 space-y-8 animate-in fade-in duration-500 relative">
 
                                                     {batchError && (
@@ -4240,547 +4802,10 @@ export default function App() {
                                                     )}
                                                 </div>
                                             )}
-
-                                            {activeTab === 'acervo' && (
-                                                <div className="space-y-6 animate-in fade-in duration-500">
-                                                    {/* Search and Bulk Actions */}
-                                                    <div className="flex flex-col sm:flex-row gap-4 mb-6">
-                                                        <div className="relative flex-1 text-white text-sm">
-                                                            <Search className="absolute left-6 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
-                                                            <input
-                                                                type="text"
-                                                                placeholder="Buscar música ou artista no acervo..."
-                                                                value={acervoSearchTerm}
-                                                                onChange={e => setAcervoSearchTerm(e.target.value)}
-                                                                className="w-full bg-black/40 border border-white/10 rounded-[28px] pl-16 pr-6 py-5 text-white font-bold outline-none focus:border-[#B87333]/50 transition-all placeholder:text-slate-700 shadow-inner"
-                                                            />
-                                                        </div>
-                                                        {selectedAcervoItems.length > 0 && (
-                                                            <div className="flex items-center gap-2 animate-in fade-in zoom-in duration-300">
-                                                                <button onClick={() => setSelectedAcervoItems([])} className="px-6 py-5 bg-white/5 border border-white/10 hover:bg-white/10 rounded-[28px] text-slate-400 font-bold text-xs uppercase transition-all shadow-inner hover:text-white">Cancelar</button>
-                                                                <button onClick={() => handleDeleteAcervo(selectedAcervoItems, `${selectedAcervoItems.length} músicas selecionadas`)} className="px-6 py-5 bg-red-600/20 border border-red-500/30 hover:bg-red-600 rounded-[28px] text-red-500 font-bold text-xs uppercase transition-all shadow-xl hover:text-white flex items-center shadow-red-900/20 gap-2"><Trash2 className="w-4 h-4" /> Excluir ({selectedAcervoItems.length})</button>
-                                                            </div>
-                                                        )}
-                                                    </div>
-
-                                                    {/* Select All Toggle */}
-                                                    {acervo.length > 0 && !acervoLoading && (
-                                                        <div className="mb-4 flex items-center justify-between px-2">
-                                                            <label className="flex items-center space-x-3 cursor-pointer group">
-                                                                <div className="relative flex items-center justify-center">
-                                                                    <input
-                                                                        type="checkbox"
-                                                                        className="peer sr-only"
-                                                                        checked={selectedAcervoItems.length > 0 && selectedAcervoItems.length === acervo.filter(item => item.song_name.toLowerCase().includes(acervoSearchTerm.toLowerCase()) || item.artist_name.toLowerCase().includes(acervoSearchTerm.toLowerCase())).length}
-                                                                        onChange={(e) => {
-                                                                            const filtered = acervo.filter(item => item.song_name.toLowerCase().includes(acervoSearchTerm.toLowerCase()) || item.artist_name.toLowerCase().includes(acervoSearchTerm.toLowerCase()));
-                                                                            if (e.target.checked) setSelectedAcervoItems(filtered.map(i => i.id));
-                                                                            else setSelectedAcervoItems([]);
-                                                                        }}
-                                                                    />
-                                                                    <div className="w-5 h-5 border-2 border-white/20 rounded-md peer-checked:bg-[#B87333] peer-checked:border-[#B87333] transition-all flex items-center justify-center group-hover:border-[#B87333]/50">
-                                                                        <Check className="w-3.5 h-3.5 text-white opacity-0 peer-checked:opacity-100 transition-opacity" />
-                                                                    </div>
-                                                                </div>
-                                                                <span className="text-xs font-bold text-slate-500 uppercase tracking-widest group-hover:text-slate-300 transition-colors">Selecionar Todos Visíveis</span>
-                                                            </label>
-                                                        </div>
-                                                    )}
-
-                                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 max-h-[450px] overflow-y-auto pr-4 scrollbar-thin pb-10">
-                                                        {acervoLoading ? (
-                                                            <div className="col-span-full py-20 text-center"><RefreshCw className="w-10 h-10 animate-spin text-[#B87333] mx-auto mb-4" /><p className="text-[10px] font-black text-slate-600 uppercase tracking-widest">Sincronizando Banco...</p></div>
-                                                        ) : acervo.filter(item => item.song_name.toLowerCase().includes(acervoSearchTerm.toLowerCase()) || item.artist_name.toLowerCase().includes(acervoSearchTerm.toLowerCase())).map((item, idx) => (
-                                                            <div key={idx} className={`bg-black/40 border p-6 rounded-[32px] flex flex-col transition-all group relative overflow-hidden gap-5 ${selectedAcervoItems.includes(item.id) ? 'border-[#B87333]/50 bg-[#B87333]/5' : 'border-white/5 hover:border-[#B87333]/30'}`}>
-                                                                <div className={`absolute top-0 left-0 w-1 h-full transition-all ${selectedAcervoItems.includes(item.id) ? 'bg-[#B87333]' : 'bg-[#B87333]/20 group-hover:bg-[#B87333]"'}`}></div>
-
-                                                                <div className="flex items-start justify-between w-full">
-                                                                    {/* Checkbox */}
-                                                                    <label className="cursor-pointer relative flex items-center justify-center p-2 -m-2">
-                                                                        <input
-                                                                            type="checkbox"
-                                                                            className="peer sr-only"
-                                                                            checked={selectedAcervoItems.includes(item.id)}
-                                                                            onChange={(e) => {
-                                                                                if (e.target.checked) setSelectedAcervoItems([...selectedAcervoItems, item.id]);
-                                                                                else setSelectedAcervoItems(selectedAcervoItems.filter(id => id !== item.id));
-                                                                            }}
-                                                                        />
-                                                                        <div className="w-5 h-5 border-2 border-white/20 rounded-md peer-checked:bg-[#B87333] peer-checked:border-[#B87333] transition-all flex items-center justify-center hover:border-[#B87333]/50">
-                                                                            <Check className="w-3.5 h-3.5 text-white opacity-0 peer-checked:opacity-100 transition-opacity" />
-                                                                        </div>
-                                                                    </label>
-
-                                                                    <div className="flex-1 min-w-0 px-4">
-                                                                        <p className="text-base font-black text-white uppercase italic truncate leading-tight">{item.song_name}</p>
-                                                                        <p className="text-[10px] font-bold text-slate-500 mt-1 uppercase tracking-widest transition-colors group-hover:text-[#B87333]/80 truncate">
-                                                                            {item.artist_name} • {item.song_key}
-                                                                        </p>
-                                                                    </div>
-                                                                </div>
-
-                                                                {item.capo > 0 && (
-                                                                    <div className="px-4">
-                                                                        <span className="inline-flex px-3 py-1 bg-[#B87333]/15 text-[#B87333] rounded-lg font-black tracking-[0.2em] text-[8px] border border-[#B87333]/20 uppercase">
-                                                                            Capo: {item.capo}ª Casa
-                                                                        </span>
-                                                                    </div>
-                                                                )}
-
-                                                                <div className="flex items-center gap-2 px-2 pt-2 border-t border-white/5 w-full justify-between">
-                                                                    <div className="flex items-center gap-2">
-                                                                        <button
-                                                                            onClick={() => {
-                                                                                setManualPreviewSong(item);
-                                                                                setTimeout(() => window.print(), 300);
-                                                                            }}
-                                                                            className="w-10 h-10 bg-white/5 hover:bg-[#ea580c] text-slate-500 hover:text-white rounded-xl flex items-center justify-center transition-all border border-white/5 active:scale-95"
-                                                                            title="Imprimir Cifra"
-                                                                        >
-                                                                            <Printer className="w-4 h-4" />
-                                                                        </button>
-                                                                        <button onClick={() => {
-                                                                            const NOTES_ARR = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
-                                                                            let s_key = item.song_key;
-                                                                            if (item.capo > 0) {
-                                                                                let baseMatch = s_key.match(/([A-G][b#]?)/i);
-                                                                                let base = baseMatch ? baseMatch[1] : null;
-                                                                                if (base) {
-                                                                                    let idx = NOTES_ARR.indexOf(base);
-                                                                                    if (idx !== -1) {
-                                                                                        let final_idx = (idx + item.capo) % 12;
-                                                                                        s_key = s_key.replace(base, NOTES_ARR[final_idx]);
-                                                                                    }
-                                                                                }
-                                                                            }
-                                                                            setSongs([...songs, {
-                                                                                ...item,
-                                                                                requested_key: item.song_key,
-                                                                                sounding_key: s_key,
-                                                                                _orig_key: item.song_key,
-                                                                                _orig_content: item.content || '',
-                                                                                capo: item.capo || 0,
-                                                                                show_chords: true,
-                                                                                include_tabs: item.include_tabs ?? true
-                                                                            }]);
-                                                                        }} className="w-10 h-10 bg-white/5 hover:bg-[#B87333] text-slate-500 hover:text-white rounded-xl flex items-center justify-center transition-all border border-white/5 active:scale-90" title="Adicionar à Forja">
-                                                                            <Plus className="w-4 h-4" />
-                                                                        </button>
-                                                                    </div>
-                                                                    <div className="flex items-center gap-2">
-                                                                        <button onClick={() => handleEditOpen(item.id)} className="w-10 h-10 bg-white/5 hover:bg-blue-600 text-slate-600 hover:text-white rounded-xl flex items-center justify-center transition-all border border-white/5 active:scale-90" title="Editar">
-                                                                            <Edit3 className="w-4 h-4" />
-                                                                        </button>
-                                                                        <button onClick={() => handleDeleteAcervo(item.id, item.song_name)} className="w-10 h-10 bg-white/5 hover:bg-red-600 text-slate-600 hover:text-white rounded-xl flex items-center justify-center transition-all border border-white/5 active:scale-90" title="Excluir">
-                                                                            <Trash2 className="w-4 h-4" />
-                                                                        </button>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            )}
                                         </div>
-
-                                    </div>
-                                </div>
-                            )}
-
-
-                            {/* ABA 2: LISTAS */}
-                            {mainNav === 'listas' && (() => {
-                                const allPlaylists = Array.isArray(savedPlaylists) ? savedPlaylists : JSON.parse(localStorage.getItem('iron_chords_playlists') || '[]');
-                                const filteredPlaylists = allPlaylists.filter(pl => pl.name.toLowerCase().includes(listSearchTerm.toLowerCase()));
-                                const allSelected = filteredPlaylists.length > 0 && filteredPlaylists.every(pl => selectedLists.includes(pl.id));
-                                return (
-                                    <div className="flex-1 animate-in fade-in slide-in-from-right-8 duration-700">
-                                        <div className="bg-[#16161D]/80 backdrop-blur-xl border border-white/5 rounded-[40px] p-8 shadow-2xl min-h-[500px]">
-                                            {/* Header */}
-                                            <div className="flex items-center justify-between mb-6">
-                                                <div className="flex items-center space-x-4">
-                                                    <div className="w-2 h-10 bg-[#B87333] rounded-full shadow-[0_0_15px_rgba(184,115,51,0.4)]"></div>
-                                                    <h2 className="text-2xl font-black text-white uppercase italic tracking-tighter">Listas Salvas</h2>
-                                                    <span className="text-[10px] font-black text-slate-600 bg-white/5 px-3 py-1 rounded-full border border-white/5">{allPlaylists.length}</span>
-                                                </div>
-                                                {selectedLists.length > 0 && (
-                                                    <button onClick={() => { setDeleteTarget({ type: 'lista_multi', id: [...selectedLists], name: `${selectedLists.length} lista(s)` }); setDeleteModalOpen(true); }} className="px-4 py-2 bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white border border-red-600/30 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center space-x-2">
-                                                        <Trash2 className="w-3.5 h-3.5" /><span>Excluir {selectedLists.length} Lista(s)</span>
-                                                    </button>
-                                                )}
-                                            </div>
-
-                                            {/* Search */}
-                                            <div className="relative mb-6">
-                                                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-600" />
-                                                <input type="text" placeholder="Buscar lista pelo nome..." value={listSearchTerm} onChange={e => setListSearchTerm(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-2xl pl-11 pr-4 py-3.5 text-sm font-bold text-white outline-none focus:border-[#B87333]/50 transition-all placeholder:text-slate-700" />
-                                            </div>
-
-                                            {/* Select All Bar */}
-                                            {filteredPlaylists.length > 0 && (
-                                                <div className="flex items-center space-x-3 mb-4 px-2">
-                                                    <label className="flex items-center space-x-2 cursor-pointer">
-                                                        <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${allSelected ? 'bg-[#B87333] border-[#B87333]' : 'border-white/20'}`} onClick={() => { if (allSelected) setSelectedLists([]); else setSelectedLists(filteredPlaylists.map(pl => pl.id)); }}>
-                                                            {allSelected && <Check className="w-3 h-3 text-white" />}
-                                                        </div>
-                                                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Selecionar Todas</span>
-                                                    </label>
-                                                </div>
-                                            )}
-
-                                            {filteredPlaylists.length === 0 ? (
-                                                <div className="py-20 flex col-span-3 items-center justify-center flex-col text-center border-2 border-dashed border-white/5 rounded-[40px] bg-black/20 w-full min-h-[300px]">
-                                                    <LayoutList className="w-16 h-16 text-slate-800 mx-auto mb-6 opacity-20" />
-                                                    <p className="text-xs font-black text-slate-600 uppercase tracking-[0.3em]">{listSearchTerm ? 'Nenhuma lista encontrada.' : 'Nenhuma lista salva ainda.'}</p>
-                                                </div>
-                                            ) : (
-                                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                                    {filteredPlaylists.map((pl, idx) => (
-                                                        <div key={pl.id || idx} className={`bg-black/40 border rounded-[32px] p-6 transition-all group flex flex-col h-[380px] ${selectedLists.includes(pl.id) ? 'border-[#B87333]/40 bg-[#B87333]/5' : 'border-white/5 hover:border-[#B87333]/30'}`}>
-                                                            <div className="flex items-start justify-between mb-4">
-                                                                {/* Checkbox */}
-                                                                <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 mt-1 cursor-pointer transition-all ${selectedLists.includes(pl.id) ? 'bg-[#B87333] border-[#B87333]' : 'border-white/20 hover:border-white/40'}`} onClick={() => setSelectedLists(prev => prev.includes(pl.id) ? prev.filter(id => id !== pl.id) : [...prev, pl.id])}>
-                                                                    {selectedLists.includes(pl.id) && <Check className="w-3 h-3 text-white" />}
-                                                                </div>
-                                                                <h3 className="text-lg font-black text-white uppercase italic tracking-tighter line-clamp-2 flex-1 mx-3">{pl.name}</h3>
-                                                                <div className="flex items-center space-x-1">
-                                                                    <button onClick={() => {
-                                                                        const enriched = (pl.songs || []).map(s => ({
-                                                                            ...s,
-                                                                            include_tabs: s.include_tabs !== false,
-                                                                            capo: s.capo || 0,
-                                                                            _orig_key: s._orig_key || s.sounding_key || s.song_key || 'C',
-                                                                            _orig_content: s._orig_content || s.content || ''
-                                                                        }));
-                                                                        setEditingList({ ...pl, songs: enriched });
-                                                                        setEditListName(pl.name);
-                                                                    }} className="p-2 bg-white/5 hover:bg-[#B87333]/20 text-slate-500 hover:text-[#B87333] rounded-lg transition-all border border-white/5" title="Editar Lista"><Edit3 className="w-3.5 h-3.5" /></button>
-                                                                    <button onClick={() => { setDeleteTarget({ type: 'lista', id: pl.id, name: pl.name }); setDeleteModalOpen(true); }} className="p-2 bg-white/5 hover:bg-red-600/20 text-slate-500 hover:text-red-500 rounded-lg transition-all border border-white/5" title="Excluir"><Trash2 className="w-3.5 h-3.5" /></button>
-                                                                </div>
-                                                            </div>
-                                                            <div className="mb-4">
-                                                                <span className="text-[10px] font-black bg-white/5 text-[#B87333] py-1 px-3 rounded-full border border-white/5 uppercase tracking-widest">{pl.songs?.length || 0} Peças</span>
-                                                            </div>
-                                                            <div className="flex-1 overflow-y-auto mb-4 pr-2 scrollbar-thin scrollbar-thumb-white/10 space-y-2 bg-[#1A1A1A] p-4 rounded-2xl border border-white/5">
-                                                                {(pl.songs || []).map((s, i) => (
-                                                                    <div key={i} className="flex items-center justify-between border-b border-white/5 last:border-0 pb-2 last:pb-0 gap-2">
-                                                                        <div className="flex flex-col min-w-0">
-                                                                            <span className="text-xs text-slate-300 uppercase font-bold truncate tracking-tight">{i + 1}. {s.song_name}</span>
-                                                                            <span className="text-[9px] text-slate-500 uppercase tracking-widest">{s.artist_name}</span>
-                                                                        </div>
-                                                                        <div className="flex items-center gap-1 shrink-0">
-                                                                            {(s.sounding_key || s.song_key) && (
-                                                                                <span className="text-[8px] font-black text-[#B87333] bg-[#B87333]/10 border border-[#B87333]/20 px-1.5 py-0.5 rounded-md uppercase">{s.sounding_key || s.song_key}</span>
-                                                                            )}
-                                                                            {s.capo > 0 && (
-                                                                                <span className="text-[8px] font-black text-slate-400 bg-white/5 border border-white/10 px-1.5 py-0.5 rounded-md">C{s.capo}</span>
-                                                                            )}
-                                                                            {s.include_tabs === false && (
-                                                                                <span className="text-[8px] font-black text-slate-500 bg-white/5 border border-white/10 px-1.5 py-0.5 rounded-md">S/Tab</span>
-                                                                            )}
-                                                                        </div>
-                                                                    </div>
-                                                                ))}
-                                                            </div>
-                                                            <div className="flex items-center justify-between mt-auto space-x-2 pt-4 border-t border-white/5">
-                                                                <button onClick={() => {
-                                                                    const songsToLoad = (pl.songs || []).map(s => ({
-                                                                        ...s,
-                                                                        include_tabs: s.include_tabs !== undefined ? s.include_tabs : true,
-                                                                        capo: s.capo || 0,
-                                                                    }));
-                                                                    setSongs(songsToLoad);
-                                                                    setIncludeTabs(songsToLoad[0]?.include_tabs !== false);
-                                                                    setMainNav('player');
-                                                                    setSelectedManualIndex(0);
-                                                                    setActivePlaylistName(pl.name);
-                                                                }} className="flex-1 bg-white/5 hover:bg-white/10 text-white border border-white/10 py-3 rounded-xl transition-all text-[10px] font-black uppercase tracking-widest flex justify-center items-center space-x-2">
-                                                                    <Play className="w-4 h-4" /><span>Tocar</span>
-                                                                </button>
-                                                                <button onClick={() => { setSongs(pl.songs || []); setCurrentExportList(pl); setExportStep(1); setDownloadUrl(null); setExportFormat('docx'); setCoverImage(null); setShowExportModal(true); }} className="flex-1 bg-[#B87333]/10 hover:bg-[#B87333] text-[#B87333] hover:text-white border border-[#B87333]/20 py-3 rounded-xl transition-all text-[10px] font-black uppercase tracking-widest flex justify-center items-center space-x-2">
-                                                                    <FileText className="w-4 h-4" /><span>Livreto</span>
-                                                                </button>
-                                                            </div>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            )}
-                                        </div>
-
-                                        {/* Edit List Modal */}
-                                        {editingList && (
-                                            <div className="fixed inset-0 z-[250] flex items-center justify-center bg-[#070709]/90 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-300 p-4">
-                                                <div className="bg-[#16161D] border border-[#B87333]/30 rounded-[32px] shadow-[0_0_50px_rgba(0,0,0,0.8)] w-full max-w-4xl flex flex-col max-h-[90vh]">
-
-                                                    {/* Modal Header */}
-                                                    <div className="flex items-center justify-between p-8 border-b border-white/5 shrink-0">
-                                                        <div className="flex items-center space-x-4 flex-1 min-w-0">
-                                                            <div className="w-1.5 h-6 bg-[#B87333] rounded-full shrink-0"></div>
-                                                            <input
-                                                                type="text"
-                                                                value={editListName}
-                                                                onChange={e => setEditListName(e.target.value)}
-                                                                className="bg-transparent text-2xl font-black text-white uppercase italic tracking-tighter outline-none border-b-2 border-transparent focus:border-[#B87333]/50 transition-all flex-1 min-w-0"
-                                                                placeholder="Nome da Lista..."
-                                                            />
-                                                            <span className="text-[10px] text-slate-500 font-black uppercase tracking-widest shrink-0">{editingList.songs.length} músicas</span>
-                                                        </div>
-                                                        <div className="flex items-center space-x-2 ml-4 shrink-0">
-                                                            <button onClick={() => {
-                                                                const all = Array.isArray(savedPlaylists) ? savedPlaylists : JSON.parse(localStorage.getItem('iron_chords_playlists') || '[]');
-                                                                const updated = all.map(pl => pl.id === editingList.id ? { ...pl, name: editListName, songs: editingList.songs } : pl);
-                                                                localStorage.setItem('iron_chords_playlists', JSON.stringify(updated));
-                                                                setSavedPlaylists(updated);
-                                                                setEditingList(null);
-                                                                setExpandedListSongIdx(null);
-                                                                setShowSaveSuccess(true);
-                                                                setTimeout(() => setShowSaveSuccess(false), 2000);
-                                                            }} className="px-6 py-2.5 bg-[#B87333] hover:bg-[#A86323] text-white font-black uppercase text-[10px] tracking-widest rounded-xl transition-all flex items-center space-x-2">
-                                                                <Save className="w-4 h-4" /><span>Salvar Lista</span>
-                                                            </button>
-                                                            <button onClick={() => { setEditingList(null); setExpandedListSongIdx(null); }} className="p-2.5 bg-white/5 hover:bg-white/10 rounded-xl border border-white/5"><X className="w-5 h-5 text-slate-400" /></button>
-                                                        </div>
-                                                    </div>
-
-                                                    {/* Action bar: select-all + bulk delete */}
-                                                    <div className="px-6 py-3 bg-black/20 border-b border-white/5 shrink-0 flex items-center justify-between">
-                                                        <label className="flex items-center space-x-2.5 cursor-pointer" onClick={() => {
-                                                            const all = editingList.songs.map((_, i) => i);
-                                                            setSelectedListSongs(prev => prev.length === editingList.songs.length ? [] : all);
-                                                        }}>
-                                                            <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${selectedListSongs.length === editingList.songs.length && editingList.songs.length > 0 ? 'bg-[#B87333] border-[#B87333]' : 'border-white/20'}`}>
-                                                                {selectedListSongs.length === editingList.songs.length && editingList.songs.length > 0 && <Check className="w-3 h-3 text-white" />}
-                                                            </div>
-                                                            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Selecionar Todas</span>
-                                                        </label>
-                                                        {selectedListSongs.length > 0 && (
-                                                            <button onClick={() => {
-                                                                const remaining = editingList.songs.filter((_, i) => !selectedListSongs.includes(i));
-                                                                setEditingList({ ...editingList, songs: remaining });
-                                                                setSelectedListSongs([]);
-                                                                setExpandedListSongIdx(null);
-                                                            }} className="flex items-center space-x-1.5 px-4 py-1.5 bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white border border-red-600/30 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all">
-                                                                <Trash2 className="w-3.5 h-3.5" /><span>Excluir {selectedListSongs.length} Música(s)</span>
-                                                            </button>
-                                                        )}
-                                                        {selectedListSongs.length === 0 && (
-                                                            <p className="text-[10px] text-[#B87333]/50 font-bold uppercase tracking-widest">💡 Clique no nome para editar</p>
-                                                        )}
-                                                    </div>
-
-                                                    {/* Song list */}
-                                                    <div className="overflow-y-auto p-6 space-y-2 scrollbar-thin scrollbar-thumb-white/10 flex-1">
-                                                        {editingList.songs.length === 0 && (
-                                                            <div className="py-12 text-center text-slate-600 font-black uppercase text-xs tracking-widest">Nenhuma música nesta lista.</div>
-                                                        )}
-                                                        {editingList.songs.map((song, si) => {
-                                                            const isExpanded = expandedListSongIdx === si;
-                                                            const updateSong = (patch) => {
-                                                                if (patch.include_tabs !== undefined) {
-                                                                    if (selectedManualIndex === si) setIncludeTabs(patch.include_tabs);
-
-                                                                    // Functional toggle: filter or restore content in the textarea
-                                                                    if (patch.include_tabs === false) {
-                                                                        patch.content = removeTablatureBlocks(song.content || '');
-                                                                    } else if (patch.include_tabs === true && song.include_tabs === false) {
-                                                                        // Restore from original if re-enabling tabs
-                                                                        patch.content = song._orig_content || song.content;
-                                                                        // If we restore content, we might need to re-transpose it if current key differs
-                                                                        const currentKey = song.sounding_key || song.song_key || 'C';
-                                                                        const origKey = song._orig_key || currentKey;
-                                                                        if (currentKey !== origKey) {
-                                                                            // Trigger a re-transposition from orig to current
-                                                                            transpose(0, currentKey);
-                                                                            return; // transpose will call setEditingList
-                                                                        }
-                                                                    }
-                                                                }
-                                                                if (patch.capo !== undefined) {
-                                                                    const diff = patch.capo - (song.capo || 0); // Correct diff calculation
-                                                                    if (diff !== 0) {
-                                                                        transpose(diff);
-                                                                        return; // transpose will call setEditingList
-                                                                    }
-                                                                    if (selectedManualIndex === si) setManualCapo(patch.capo);
-                                                                }
-
-                                                                setEditingList(prev => {
-                                                                    const s2 = [...prev.songs];
-                                                                    s2[si] = { ...s2[si], ...patch };
-                                                                    return { ...prev, songs: s2 };
-                                                                });
-                                                            };
-                                                            const transpose = async (semitones, targetKey = null) => {
-                                                                try {
-                                                                    const currentKey = song.sounding_key || song.song_key || 'C';
-                                                                    const origKeyStr = song._orig_key || song.song_key || currentKey;
-                                                                    const origContent = song._orig_content || song.content || '';
-
-                                                                    let newTargetKey = targetKey;
-                                                                    if (newTargetKey === null) {
-                                                                        // ♭/♯ buttons: calculate new target from current sounding_key
-                                                                        const match = currentKey.match(/^[A-G][b#]?/);
-                                                                        const root = match ? match[0] : 'C';
-                                                                        const currentIdx = KEYS.indexOf(root);
-                                                                        if (currentIdx !== -1) {
-                                                                            const newIdx = (currentIdx + semitones + 12) % 12; // Use first 12 (sharps)
-                                                                            newTargetKey = currentKey.replace(root, NOTES[newIdx]);
-                                                                        } else {
-                                                                            // fallback for flats if not in NOTES (though they shouldn't be here)
-                                                                            const flatIdx = KEY_SEMITONES[root] || 0;
-                                                                            const newIdx = (flatIdx + semitones + 12) % 12;
-                                                                            newTargetKey = currentKey.replace(root, NOTES[newIdx]);
-                                                                        }
-                                                                    }
-
-                                                                    // Always transpose from ORIGINAL
-                                                                    const matchOrig = origKeyStr.match(/^[A-G][b#]?/);
-                                                                    const rootOrig = matchOrig ? matchOrig[0] : 'C';
-                                                                    const targetMatch = newTargetKey.match(/^[A-G][b#]?/);
-                                                                    const targetRoot = targetMatch ? targetMatch[0] : 'C';
-
-                                                                    const diff = ((KEY_SEMITONES[targetRoot] ?? 0) - (KEY_SEMITONES[rootOrig] ?? 0) + 12) % 12;
-
-                                                                    const patch = { sounding_key: newTargetKey, song_key: newTargetKey };
-                                                                    if (targetKey === null && song.capo !== undefined) {
-                                                                        // If it was a relative shift from capo or ♭/♯
-                                                                        // transpose() is called with diff in capo change
-                                                                    }
-
-                                                                    if (diff === 0) {
-                                                                        setEditingList(prev => {
-                                                                            const s2 = [...prev.songs];
-                                                                            s2[si] = { ...s2[si], ...patch, content: origContent };
-                                                                            return { ...prev, songs: s2 };
-                                                                        });
-                                                                        return;
-                                                                    }
-
-                                                                    const res = await fetch(`${API_BASE_URL}/api/transpose`, {
-                                                                        method: 'POST',
-                                                                        headers: { 'Content-Type': 'application/json' },
-                                                                        body: JSON.stringify({ content: origContent, current_key: origKeyStr, semitones: diff })
-                                                                    });
-                                                                    const d = await res.json();
-                                                                    if (d.transposed_content) {
-                                                                        setEditingList(prev => {
-                                                                            const s2 = [...prev.songs];
-                                                                            s2[si] = { ...s2[si], ...patch, content: d.transposed_content };
-                                                                            return { ...prev, songs: s2 };
-                                                                        });
-                                                                    }
-                                                                } catch (e) { console.error(e); }
-                                                            };
-                                                            const printSong = () => {
-                                                                setManualPreviewSong({ ...song, requested_key: song.sounding_key || song.song_key, original_key: song.original_key || song.song_key });
-                                                                setTimeout(() => window.print(), 300);
-                                                            };
-
-                                                            return (
-                                                                <div key={si} className={`rounded-2xl border transition-all duration-300 overflow-hidden ${isExpanded ? 'border-[#B87333]/40 bg-[#B87333]/5' : selectedListSongs.includes(si) ? 'border-red-500/30 bg-red-600/5' : 'border-white/5 bg-black/30 hover:border-white/10'}`}>
-                                                                    {/* Collapsed row — checkbox + clickable title */}
-                                                                    <div className="flex items-center p-4 group">
-                                                                        {/* Checkbox */}
-                                                                        <div onClick={e => { e.stopPropagation(); setSelectedListSongs(prev => prev.includes(si) ? prev.filter(i => i !== si) : [...prev, si]); }} className={`w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 mr-3 cursor-pointer transition-all ${selectedListSongs.includes(si) ? 'bg-red-500 border-red-500' : 'border-white/20 hover:border-white/40'}`}>
-                                                                            {selectedListSongs.includes(si) && <Check className="w-3 h-3 text-white" />}
-                                                                        </div>
-                                                                        {/* Expand toggle */}
-                                                                        <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setExpandedListSongIdx(isExpanded ? null : si)}>
-                                                                            <p className={`font-black uppercase italic tracking-tight truncate transition-colors ${isExpanded ? 'text-[#B87333]' : 'text-white group-hover:text-[#B87333]'}`}>{song.song_name}</p>
-                                                                            <p className="text-[10px] text-slate-500 uppercase tracking-widest">{song.artist_name}</p>
-                                                                        </div>
-                                                                        <div className="flex items-center space-x-2 ml-4 shrink-0" onClick={e => e.stopPropagation()}>
-                                                                            <span className="text-[10px] font-black bg-[#B87333]/10 text-[#B87333] border border-[#B87333]/20 px-2.5 py-1 rounded-lg">Tom: {song.sounding_key || song.song_key || '?'}</span>
-                                                                            <span className="text-[10px] font-black bg-white/5 text-slate-400 border border-white/10 px-2.5 py-1 rounded-lg">Capo {song.capo || 0}</span>
-                                                                            <ChevronDown className={`w-4 h-4 text-slate-500 transition-transform duration-300 ${isExpanded ? 'rotate-180 text-[#B87333]' : ''}`} />
-                                                                        </div>
-                                                                    </div>
-
-                                                                    {/* Expanded editing panel */}
-                                                                    {isExpanded && (
-                                                                        <div className="px-6 pb-6 border-t border-white/5 pt-5 space-y-5 animate-in fade-in slide-in-from-top-2 duration-200">
-
-                                                                            {/* Row 1: Name + Artist */}
-                                                                            <div className="grid grid-cols-2 gap-4">
-                                                                                <div>
-                                                                                    <label className="block text-[10px] font-black uppercase text-slate-500 mb-1.5 tracking-widest">Nome da Música</label>
-                                                                                    <input type="text" value={song.song_name} onChange={e => updateSong({ song_name: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-white font-bold text-sm outline-none focus:border-[#B87333]/50 transition-all" />
-                                                                                </div>
-                                                                                <div>
-                                                                                    <label className="block text-[10px] font-black uppercase text-slate-500 mb-1.5 tracking-widest">Artista</label>
-                                                                                    <input type="text" value={song.artist_name} onChange={e => updateSong({ artist_name: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-white font-bold text-sm outline-none focus:border-[#B87333]/50 transition-all" />
-                                                                                </div>
-                                                                            </div>
-
-                                                                            {/* Row 2: Key + Capo + Tabs + Transpose + Actions */}
-                                                                            <div className="flex items-end flex-wrap gap-3">
-                                                                                <div>
-                                                                                    <label className="block text-[10px] font-black uppercase text-slate-500 mb-1.5 tracking-widest">Tom da Cifra</label>
-                                                                                    <select value={song.sounding_key || song.song_key || 'C'} onChange={e => transpose(0, e.target.value)} className="bg-black/60 border border-white/10 rounded-xl px-4 py-2.5 text-white font-bold text-sm outline-none cursor-pointer appearance-none">
-                                                                                        {KEYS.map(k => <option key={k} value={k}>{k}</option>)}
-                                                                                    </select>
-                                                                                </div>
-                                                                                <div>
-                                                                                    <label className="block text-[10px] font-black uppercase text-slate-500 mb-1.5 tracking-widest">Capo</label>
-                                                                                    <select value={song.capo || 0} onChange={e => updateSong({ capo: Number(e.target.value) })} className="bg-black/60 border border-white/10 rounded-xl px-4 py-2.5 text-white font-bold text-sm outline-none cursor-pointer appearance-none">
-                                                                                        {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map(n => <option key={n} value={n}>Capo {n}</option>)}
-                                                                                    </select>
-                                                                                </div>
-                                                                                <div>
-                                                                                    <label className="block text-[10px] font-black uppercase text-slate-500 mb-1.5 tracking-widest">Reset</label>
-                                                                                    <button onClick={() => updateSong({ content: song._orig_content, sounding_key: song._orig_key, song_key: song._orig_key, capo: 0 })} className="p-2.5 bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white rounded-xl border border-white/10 transition-all" title="Resetar para o original desta lista">
-                                                                                        <RefreshCw className="w-4 h-4" />
-                                                                                    </button>
-                                                                                </div>
-                                                                                <div>
-                                                                                    <label className="block text-[10px] font-black uppercase text-slate-500 mb-1.5 tracking-widest">Tablatura</label>
-                                                                                    <button onClick={() => updateSong({ include_tabs: !(song.include_tabs !== false) })} className={`px-4 py-2.5 rounded-xl border font-black uppercase text-[10px] tracking-widest transition-all ${song.include_tabs !== false ? 'bg-[#B87333]/20 border-[#B87333] text-[#B87333]' : 'bg-black/60 border-white/10 text-slate-500'}`}>
-                                                                                        {song.include_tabs !== false ? '✓ Com Tabs' : '✗ Sem Tabs'}
-                                                                                    </button>
-                                                                                </div>
-                                                                                <div className="flex flex-col">
-                                                                                    <label className="block text-[10px] font-black uppercase text-slate-500 mb-1.5 tracking-widest">Transpor</label>
-                                                                                    <div className="flex items-center space-x-1">
-                                                                                        <button onClick={() => transpose(-1)} className="px-3 py-2 bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white rounded-xl border border-white/10 font-black text-xs transition-all" title="Meio tom abaixo">♭ -1</button>
-                                                                                        <button onClick={() => transpose(1)} className="px-3 py-2 bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white rounded-xl border border-white/10 font-black text-xs transition-all" title="Meio tom acima">♯ +1</button>
-                                                                                    </div>
-                                                                                </div>
-                                                                                {/* Action buttons */}
-                                                                                <div className="flex flex-col">
-                                                                                    <label className="block text-[10px] font-black uppercase text-slate-500 mb-1.5 tracking-widest">Ações</label>
-                                                                                    <div className="flex items-center space-x-2">
-                                                                                        <button onClick={printSong} className="flex items-center space-x-1.5 px-3 py-2 bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white rounded-xl border border-white/10 font-black uppercase text-[10px] tracking-widest transition-all" title="Imprimir cifra">
-                                                                                            <Printer className="w-3.5 h-3.5" /><span>Imprimir</span>
-                                                                                        </button>
-                                                                                        <button onClick={() => { const s2 = editingList.songs.filter((_, i) => i !== si); setEditingList({ ...editingList, songs: s2 }); setExpandedListSongIdx(null); }} className="flex items-center space-x-1.5 px-3 py-2 bg-red-600/10 hover:bg-red-600/30 text-red-500 hover:text-red-400 rounded-xl border border-red-600/20 font-black uppercase text-[10px] tracking-widest transition-all">
-                                                                                            <Trash2 className="w-3.5 h-3.5" /><span>Remover</span>
-                                                                                        </button>
-                                                                                    </div>
-                                                                                </div>
-                                                                            </div>
-
-                                                                            {/* Cifra content */}
-                                                                            <div>
-                                                                                <label className="block text-[10px] font-black uppercase text-slate-500 mb-1.5 tracking-widest">Cifra</label>
-                                                                                <textarea
-                                                                                    value={song.content || ''}
-                                                                                    onChange={e => updateSong({ content: e.target.value })}
-                                                                                    className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white font-mono text-xs leading-relaxed min-h-[200px] resize-none outline-none focus:border-[#B87333]/50 transition-all scrollbar-thin"
-                                                                                    placeholder="Conteúdo da cifra..."
-                                                                                />
-                                                                            </div>
-                                                                        </div>
-                                                                    )}
-                                                                </div>
-                                                            );
-                                                        })}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        )}
                                     </div>
                                 );
-                            })()}
+                            })() }
 
 
 
@@ -5164,8 +5189,7 @@ export default function App() {
                             <p className="text-yellow-400/80 font-bold uppercase tracking-[0.2em] text-xs mt-2">A música já está salva no acervo</p>
                         </div>
                     </div>
-                )
-            }
+                )}
 
             {/* Edit Acervo Modal */}
             {
