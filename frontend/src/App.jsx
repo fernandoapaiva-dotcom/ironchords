@@ -1302,8 +1302,6 @@ export default function App() {
                         setDetectedPitch(pitch);
                     },
                     (text, isFinal) => {
-                        // Ignore internal system/error messages from AudioTracker
-                        if (text && (text.startsWith('[SISTEMA:') || text.startsWith('[ERRO VOZ:'))) return;
                         setTranscriptRaw(text);
                         lastVoiceTimeRef.current = Date.now();
                         if (syncLineByTextRef.current) syncLineByTextRef.current(text, isFinal);
@@ -1522,8 +1520,6 @@ export default function App() {
         // Resume if we hear a voice match
         if (isPausedBySilence) setIsPausedBySilence(false);
         if (!text || text.trim().length === 0) return;
-        // Skip system/error messages passed through the speech callback
-        if (text.startsWith('[SISTEMA:') || text.startsWith('[ERRO VOZ:')) return;
 
         const currentSongData = songs[songIdx];
         const lines = (currentSongData.content || "").split('\n');
@@ -2973,7 +2969,7 @@ export default function App() {
                     <div className="fixed inset-0 bg-[#070709] z-[100] flex flex-col animate-in fade-in zoom-in-95 duration-500">
                         {/* PLAYER HEADER — single scrollable row (Feature 4) */}
                         <div className={`bg-black/60 border-b border-white/5 backdrop-blur-2xl shrink-0 no-print w-full z-[200] transition-all duration-300 ${isImmersiveMode && !showImmersiveControls ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
-                            <div className="flex items-center px-3 py-2 gap-2 overflow-x-auto scrollbar-none">
+                            <div className="flex flex-wrap items-center px-3 py-2 gap-2">
 
                                 {/* Logo + Back + info */}
                                 <div className="flex flex-col items-start shrink-0 mr-2">
@@ -3132,7 +3128,7 @@ export default function App() {
 
                         <div className="flex-1 flex overflow-hidden relative">
                             {/* PLAYER PLAYLIST SIDEBAR — hidden in immersive mode */}
-                            <div className={`${isSidebarCollapsed ? 'w-20 px-3' : 'w-80 px-6'} ${isImmersiveMode ? 'hidden' : ''} bg-black/40 border-r border-white/5 flex flex-col py-6 space-y-6 shrink-0 relative no-print transition-all duration-300 ease-in-out`}>
+                            <div className={`${isSidebarCollapsed ? 'w-20 px-3' : 'w-80 px-6'} ${isImmersiveMode ? 'hidden' : ''} bg-black/40 border-r border-white/5 flex flex-col py-6 space-y-6 shrink-0 relative z-[150] no-print transition-all duration-300 ease-in-out`}>
                                 {/* Toggle Button */}
                                 <button
                                     onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
