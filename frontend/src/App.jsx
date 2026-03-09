@@ -1302,9 +1302,10 @@ export default function App() {
                         setDetectedPitch(pitch);
                     },
                     (text, isFinal) => {
-                        setTranscriptRaw(text);
+                        const isSystemMsg = text && (text.startsWith('[SISTEMA:') || text.startsWith('[ERRO VOZ:'));
+                        if (!isSystemMsg) setTranscriptRaw(text);
                         lastVoiceTimeRef.current = Date.now();
-                        if (syncLineByTextRef.current) syncLineByTextRef.current(text, isFinal);
+                        if (!isSystemMsg && syncLineByTextRef.current) syncLineByTextRef.current(text, isFinal);
                     },
                     (state) => setFsmState(state),
                     (status) => setConnectionStatus(status)
