@@ -552,25 +552,11 @@ const TopNav = ({ current, onChange }) => (
     <div className="flex items-center justify-center p-4 mb-4 border-b border-white/5 bg-[#070709] sticky top-0 z-50">
         <div className="flex bg-[#16161D] p-1.5 rounded-3xl border border-white/10 shadow-2xl">
             <button
-                onClick={() => onChange('escolha')}
-                className={`flex items-center space-x-3 px-8 py-3.5 rounded-[20px] font-black uppercase tracking-widest text-[10px] italic transition-all duration-300 ${current === 'escolha' ? 'bg-[#B87333] text-white shadow-[0_0_20px_rgba(184,115,51,0.4)] scale-105' : 'text-slate-500 hover:text-white hover:bg-white/5'}`}
-            >
-                <Hammer className="w-4 h-4" />
-                <span>Escolha de Músicas</span>
-            </button>
-            <button
                 onClick={() => onChange('listas')}
                 className={`flex items-center space-x-3 px-8 py-3.5 rounded-[20px] font-black uppercase tracking-widest text-[10px] italic transition-all duration-300 ${current === 'listas' ? 'bg-[#B87333] text-white shadow-[0_0_20px_rgba(184,115,51,0.4)] scale-105' : 'text-slate-500 hover:text-white hover:bg-white/5'}`}
             >
                 <LayoutList className="w-4 h-4" />
                 <span>Listas</span>
-            </button>
-            <button
-                onClick={() => onChange('player')}
-                className={`flex items-center space-x-3 px-8 py-3.5 rounded-[20px] font-black uppercase tracking-widest text-[10px] italic transition-all duration-300 ${current === 'player' ? 'bg-blue-600 text-white shadow-[0_0_20px_rgba(37,99,235,0.4)] scale-105' : 'text-slate-500 hover:text-white hover:bg-white/5'}`}
-            >
-                <Play className="w-4 h-4" />
-                <span>Player da Forja</span>
             </button>
         </div>
     </div>
@@ -743,7 +729,7 @@ export default function App() {
     const [forgeMessage, setForgeMessage] = useState("Forjando conteúdo...");
     const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0 });
     const [downloadUrl, setDownloadUrl] = useState(null);
-    const [mainNav, setMainNav] = useState('escolha');
+    const [mainNav, setMainNav] = useState('player');
     const [showExportModal, setShowExportModal] = useState(false);
     const [exportStep, setExportStep] = useState(1);
     const [currentExportList, setCurrentExportList] = useState(null);
@@ -2385,6 +2371,19 @@ export default function App() {
                 };
                 setSongs(prev => [...prev, newSong]);
                 setSelectedManualIndex(songs.length); // jump to the new song
+                // Silent auto-save to DB so songs searched in player build the acervo automatically
+                fetch(`${API_BASE_URL}/api/chords`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        song_name: newSong.song_name,
+                        artist_name: newSong.artist_name,
+                        song_key: newSong.original_key || newSong.song_key || 'C',
+                        content: newSong._orig_content || newSong.content || '',
+                        capo: newSong.capo || 0,
+                        include_tabs: newSong.include_tabs !== undefined ? newSong.include_tabs : true
+                    })
+                }).catch(() => {/* silent fail - db save is best-effort */});
             }
         } catch (e) { console.error('[PlayerSearch] Error adding song:', e); }
     };
@@ -3333,7 +3332,7 @@ export default function App() {
                         <div className="flex-1 overflow-y-auto w-full max-w-6xl mx-auto px-4 pb-20">
 
                             {/* ABA 1: ESCOLHA DE PEÇAS */}
-                            {mainNav === 'escolha' && (
+                            {false && mainNav === 'escolha' && (
                                 <div className="flex-1 animate-in fade-in slide-in-from-right-8 duration-700 no-print">
                                     <div className="bg-[#16161D]/80 backdrop-blur-xl border border-white/5 rounded-[40px] p-8 shadow-2xl">
                                         <div className="flex items-center justify-between mb-10">
