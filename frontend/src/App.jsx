@@ -723,6 +723,7 @@ export default function App() {
     const [currentExportList, setCurrentExportList] = useState(null);
     // Settings
     const [exportFormat, setExportFormat] = useState('docx');
+    const [sortOrder, setSortOrder] = useState('queue');
     const [coverImage, setCoverImage] = useState(null);
     const [includeToc, setIncludeToc] = useState(true);
     const [includeDictionary, setIncludeDictionary] = useState(true);
@@ -2939,6 +2940,7 @@ export default function App() {
             formData.append('export_format', exportFormat);
             formData.append('include_toc', includeToc ? 'true' : 'false');
             formData.append('include_dictionary', includeDictionary ? 'true' : 'false');
+            formData.append('sort_order', sortOrder);
             if (coverImage) formData.append('cover_image', coverImage);
 
             const res = await fetch(`${API_BASE_URL}/api/generate_book`, { method: 'POST', body: formData });
@@ -4834,6 +4836,24 @@ export default function App() {
                                                                 </div>
                                                                 <input type="checkbox" className="hidden" checked={includeDictionary} onChange={(e) => setIncludeDictionary(e.target.checked)} />
                                                             </label>
+
+                                                            <div className="pt-4 border-t border-white/5">
+                                                                <p className="text-[10px] font-black text-[#B87333] uppercase tracking-[0.3em] mb-4">Ordem das Músicas</p>
+                                                                <div className="grid grid-cols-2 gap-3">
+                                                                    <button
+                                                                        onClick={() => setSortOrder('alphabetical')}
+                                                                        className={`py-3 px-4 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all ${sortOrder === 'alphabetical' ? 'bg-[#B87333] border-[#B87333] text-white shadow-lg shadow-[#B87333]/20' : 'bg-white/5 border-white/5 text-slate-500 hover:border-white/10'}`}
+                                                                    >
+                                                                        Alfabética
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={() => setSortOrder('queue')}
+                                                                        className={`py-3 px-4 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all ${sortOrder === 'queue' ? 'bg-[#B87333] border-[#B87333] text-white shadow-lg shadow-[#B87333]/20' : 'bg-white/5 border-white/5 text-slate-500 hover:border-white/10'}`}
+                                                                    >
+                                                                        Ordem da Fila
+                                                                    </button>
+                                                                </div>
+                                                            </div>
                                                         </div>
                                                     </div>
 

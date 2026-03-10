@@ -174,7 +174,7 @@ def is_valid_chord(word: str) -> bool:
     has_root = any(c in "ABCDEFG" for c in word)
     return has_root and all(c in musical_atoms for c in c_word)
 
-def generate_docx(songs: list, output_filename: str = "Livreto.docx", cover_image_path: Optional[str] = None, include_toc: bool = True, include_dictionary: bool = True) -> str:
+def generate_docx(songs: list, output_filename: str = "Livreto.docx", cover_image_path: Optional[str] = None, include_toc: bool = True, include_dictionary: bool = True, sort_order: str = "alphabetical") -> str:
     doc = Document()
     for section in doc.sections:
         section.top_margin = Cm(0.7)
@@ -183,18 +183,32 @@ def generate_docx(songs: list, output_filename: str = "Livreto.docx", cover_imag
         section.right_margin = Cm(0.7)
     
     # Capa & TOC (Minimalist)
-    p_capa = doc.add_paragraph()
+    if cover_image_path and os.path.exists(cover_image_path):
+        # Create a paragraph for the image
+        p_img = doc.add_paragraph()
+        p_img.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        p_img.paragraph_format.space_before = Pt(80) 
+        run_img = p_img.add_run()
+        run_img.add_picture(cover_image_path, width=Inches(4.5))
+        p_img.paragraph_format.space_after = Pt(20)
+        
+        # Create a separate paragraph for the title BELOW the image
+        p_capa = doc.add_paragraph()
+    else:
+        p_capa = doc.add_paragraph()
+        p_capa.paragraph_format.space_before = Pt(180)
+
     p_capa.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    p_capa.paragraph_format.space_before = Pt(150)
     run_capa = p_capa.add_run("LIVRETO DE CIFRAS")
     run_capa.font.name = 'Segoe UI Black'
-    run_capa.font.size = Pt(24)
+    run_capa.font.size = Pt(28)
     run_capa.font.color.rgb = RGBColor(0, 0, 0)
     
     p_sub = doc.add_paragraph('Gerado Automaticamente via IronChords')
     p_sub.alignment = WD_ALIGN_PARAGRAPH.CENTER
     p_sub.style.font.name = 'Consolas'
-    p_sub.style.font.size = Pt(10)
+    p_sub.style.font.size = Pt(12)
+    p_sub.paragraph_format.space_after = Pt(20)
     
     doc.add_page_break()
     
@@ -203,7 +217,11 @@ def generate_docx(songs: list, output_filename: str = "Livreto.docx", cover_imag
         add_toc(doc)
         doc.add_page_break()
     
-    songs_sorted = sorted(songs, key=lambda x: str(x['song_name']).lower())
+    if sort_order == "alphabetical":
+        songs_sorted = sorted(songs, key=lambda x: str(x['song_name']).lower())
+    else:
+        songs_sorted = songs # Keep queue order
+        
     temp_dir = tempfile.mkdtemp()
     out_p = os.path.join(os.path.dirname(__file__), output_filename)
     

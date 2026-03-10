@@ -786,7 +786,8 @@ async def generate_book(
     export_format: str = Form("docx"),
     cover_image: Optional[UploadFile] = File(None),
     include_toc: str = Form("true"),
-    include_dictionary: str = Form("true")
+    include_dictionary: str = Form("true"),
+    sort_order: str = Form("alphabetical")
 ):
     try:
         raw_songs = json.loads(songs_data)
@@ -800,7 +801,7 @@ async def generate_book(
             base_key = song.get("song_key") or song.get("key") or "C"
             prepared_songs.append({
                 "song_name": song.get("song_name", "Sem Título"),
-                "artist_name": song.get("artist_name", "Desenhecido"),
+                "artist_name": song.get("artist_name", "Desconhecido"),
                 "key": base_key,
                 "sounding_key": song.get("sounding_key") or base_key,
                 "capo": int(song.get("capo") or 0),
@@ -823,7 +824,8 @@ async def generate_book(
             docx_filename, 
             cover_path,
             include_toc=(include_toc == "true"),
-            include_dictionary=(include_dictionary == "true")
+            include_dictionary=(include_dictionary == "true"),
+            sort_order=sort_order
         )
         
         # --- NOVO: Força a atualização do sumário no DOCX via Word COM ---
