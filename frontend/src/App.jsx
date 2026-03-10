@@ -773,6 +773,7 @@ export default function App() {
     const [batchResults, setBatchResults] = useState([]);
     const [showBatchReview, setShowBatchReview] = useState(false);
     const [batchFixData, setBatchFixData] = useState(null);
+    const [editQueueSong, setEditQueueSong] = useState(null); // { idx, song_name, artist_name, song_key, capo, include_tabs, content }
     const [batchFixSuggestions, setBatchFixSuggestions] = useState([]);
     const [showBatchFixSuggestions, setShowBatchFixSuggestions] = useState(false);
     // Cache: pre-fetched suggestion data keyed by "song||artist" for instant access
@@ -3353,15 +3354,15 @@ export default function App() {
                                                             </div>
                                                         )}
                                                     </button>
-                                                    {/* Trash + Print action buttons */}
+                                                    {/* Edit + Trash action buttons */}
                                                     {!isSidebarCollapsed && (
                                                         <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center space-x-0.5 opacity-0 group-hover/song:opacity-100 transition-all">
                                                             <button
-                                                                onClick={(e) => { e.stopPropagation(); setSelectedManualIndex(idx); setTimeout(() => window.print(), 50); }}
-                                                                className="p-1.5 rounded-lg bg-black/60 text-slate-500 hover:text-white hover:bg-white/10 transition-all"
-                                                                title="Imprimir cifra"
+                                                                onClick={(e) => { e.stopPropagation(); const song = songs[idx]; setEditQueueSong({ idx, song_name: song.song_name, artist_name: song.artist_name, song_key: song.key || song.song_key || 'C', capo: song.capo || 0, include_tabs: song.include_tabs || false, content: song.content || '' }); }}
+                                                                className="p-1.5 rounded-lg bg-black/60 text-slate-500 hover:text-[#B87333] hover:bg-[#B87333]/10 transition-all"
+                                                                title="Editar música"
                                                             >
-                                                                <Printer className="w-3 h-3" />
+                                                                <Edit3 className="w-3 h-3" />
                                                             </button>
                                                             <button
                                                                 onClick={(e) => { e.stopPropagation(); handleDeleteSongFromQueue(idx); }}
@@ -5599,6 +5600,92 @@ export default function App() {
                     </div>
                 )
             }
+
+            {/* ——— EDIT QUEUE SONG MODAL ——— */}
+            {editQueueSong && (
+                <div className="fixed inset-0 z-[500] flex items-center justify-center bg-[#070709]/95 backdrop-blur-2xl animate-in fade-in zoom-in-95 duration-300 p-4">
+                    <div className="bg-[#16161D] border border-white/10 rounded-[40px] shadow-2xl w-full max-w-2xl max-h-[95vh] flex flex-col overflow-hidden">
+                        {/* Header */}
+                        <div className="flex items-center justify-between p-8 pb-6 border-b border-white/5 shrink-0">
+                            <div className="flex items-center space-x-4">
+                                <div className="w-2 h-10 bg-[#B87333] rounded-full shadow-[0_0_15px_rgba(184,115,51,0.4)]"></div>
+                                <div>
+                                    <h2 className="text-2xl font-black text-white uppercase italic tracking-tighter">Editar Música</h2>
+                                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em] mt-0.5">Altere os dados da música na fila</p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => setEditQueueSong(null)}
+                                className="p-3 bg-white/5 hover:bg-white/10 rounded-2xl transition-all border border-white/5"
+                            >
+                                <X className="w-6 h-6 text-slate-400" />
+                            </button>
+                        </div>
+                        {/* Body */}
+                        <div className="flex-1 overflow-y-auto p-8 space-y-6 custom-scrollbar">
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Artista</label>
+                                    <input type="text" value={editQueueSong.artist_name} onChange={e => setEditQueueSong({ ...editQueueSong, artist_name: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white font-bold outline-none focus:border-[#B87333]/50 transition-all" />
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Música</label>
+                                    <input type="text" value={editQueueSong.song_name} onChange={e => setEditQueueSong({ ...editQueueSong, song_name: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white font-bold outline-none focus:border-[#B87333]/50 transition-all" />
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-3 gap-4">
+                                <div>
+                                    <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Tom Original</label>
+                                    <select value={editQueueSong.song_key} onChange={e => setEditQueueSong({ ...editQueueSong, song_key: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white font-bold outline-none focus:border-[#B87333]/50 transition-all">
+                                        {["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"].map(k => <option key={k} value={k} className="bg-[#1A1A1A]">{k}</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2 ml-1">Capo</label>
+                                    <select value={editQueueSong.capo} onChange={e => setEditQueueSong({ ...editQueueSong, capo: Number(e.target.value) })} className="w-full bg-black/60 border border-white/10 rounded-xl px-4 py-3 text-white outline-none cursor-pointer font-bold appearance-none focus:border-[#B87333]/50 transition-all">
+                                        {[...Array(13)].map((_, i) => <option key={i} value={i} className="bg-[#1A1A1A]">{i === 0 ? 'Sem Capo' : `${i}ª Casa`}</option>)}
+                                    </select>
+                                </div>
+                                <div className="flex flex-col justify-end">
+                                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2 ml-1">Tablaturas</label>
+                                    <button
+                                        type="button"
+                                        onClick={() => setEditQueueSong(prev => ({ ...prev, include_tabs: !prev.include_tabs }))}
+                                        className={`w-full py-3 rounded-xl border transition-all font-black uppercase text-[10px] tracking-widest ${editQueueSong.include_tabs ? 'bg-[#B87333]/20 border-[#B87333] text-[#B87333]' : 'bg-black/60 border-white/10 text-slate-600'}`}
+                                    >
+                                        {editQueueSong.include_tabs ? 'Ativadas' : 'Desativadas'}
+                                    </button>
+                                </div>
+                            </div>
+                            <div className="flex flex-col flex-1">
+                                <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Cifra Bruta</label>
+                                <textarea value={editQueueSong.content} onChange={e => setEditQueueSong({ ...editQueueSong, content: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white outline-none font-mono text-xs leading-relaxed min-h-[250px] resize-none focus:border-[#B87333]/50 transition-all scrollbar-thin" placeholder="Cole a cifra estruturada aqui..."></textarea>
+                            </div>
+                        </div>
+                        {/* Footer */}
+                        <div className="p-8 pt-4 border-t border-white/5 shrink-0">
+                            <button onClick={() => {
+                                if (!editQueueSong.content.trim() && !editQueueSong.song_name.trim()) return;
+                                const next = [...songs];
+                                next[editQueueSong.idx] = {
+                                    ...next[editQueueSong.idx],
+                                    song_name: editQueueSong.song_name,
+                                    artist_name: editQueueSong.artist_name,
+                                    key: editQueueSong.song_key,
+                                    song_key: editQueueSong.song_key,
+                                    capo: editQueueSong.capo,
+                                    include_tabs: editQueueSong.include_tabs,
+                                    content: editQueueSong.content,
+                                };
+                                setSongs(next);
+                                setEditQueueSong(null);
+                            }} className="w-full py-4 bg-[#B87333] hover:bg-[#8B4513] text-white font-black uppercase tracking-widest rounded-xl transition-all shadow-xl shadow-[#B87333]/20">
+                                Salvar Alterações
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Share and Import Modals */}
             <ShareModal
