@@ -20,10 +20,23 @@ LOGO_PATH = os.path.join(os.path.dirname(__file__), "brand_logo.png")
 def add_header_logo(section):
     """Adds small logo to top right corner of the section header."""
     header = section.header
+    
+    # Idempotency check: if linked to previous, it already has the logo
+    try:
+        if header.is_linked_to_previous:
+            return
+    except:
+        pass
+
     if not header.paragraphs:
         header.add_paragraph()
     p = header.paragraphs[0]
     p.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    
+    # Second check: if paragraph already has content, skip
+    if p.runs and any(run.text.strip() or run.element.findall('.//{http://schemas.openxmlformats.org/drawingml/2006/main}blip') for run in p.runs):
+        return
+
     if os.path.exists(LOGO_PATH):
         run = p.add_run()
         run.add_picture(LOGO_PATH, width=Inches(1.0)) # Slightly larger for the combined mark

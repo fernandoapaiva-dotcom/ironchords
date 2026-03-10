@@ -2902,17 +2902,37 @@ export default function App() {
 
     const handleGenerateDocument = async () => {
         if (songs.length === 0) return;
-        setForgeMessage("Forjando peças em metal quente...");
+        const validSongs = songs.filter(s => s.content || s.status === 'success');
+
+        setForgeMessage("Ajustando a Forja...");
+        setBatchProgress({ current: 5, total: 100 });
         setIsGenerating(true);
+
+        // Progress Simulation for visual feedback
+        let simProgress = 5;
+        const progressInterval = setInterval(() => {
+            simProgress += Math.random() * 8;
+            if (simProgress > 94) {
+                clearInterval(progressInterval);
+                simProgress = 94;
+            }
+            setBatchProgress({ current: Math.floor(simProgress), total: 100 });
+
+            // Dynamic messages based on progress
+            if (simProgress > 20 && simProgress < 40) setForgeMessage("Prensando o Metal...");
+            if (simProgress > 40 && simProgress < 60) setForgeMessage("Polindo as Cifras...");
+            if (simProgress > 60 && simProgress < 85) setForgeMessage("Temperando o Papel...");
+            if (simProgress > 85) setForgeMessage("Finalizando a Peça...");
+        }, 600);
+
         try {
             const formData = new FormData();
-            // Include all songs that have been successfully loaded (manual or batch)
-            const validSongs = songs.filter(s => s.content || s.status === 'success');
             formData.append('songs_data', JSON.stringify(validSongs));
             formData.append('export_format', exportFormat);
             formData.append('include_toc', includeToc ? 'true' : 'false');
             formData.append('include_dictionary', includeDictionary ? 'true' : 'false');
             if (coverImage) formData.append('cover_image', coverImage);
+
             const res = await fetch(`${API_BASE_URL}/api/generate_book`, { method: 'POST', body: formData });
 
             if (!res.ok) {
@@ -2924,10 +2944,15 @@ export default function App() {
                 throw new Error("Erro no servidor: " + errText);
             }
 
+            setBatchProgress({ current: 100, total: 100 });
             const blob = await res.blob();
             setDownloadUrl(window.URL.createObjectURL(blob));
-        } catch (err) { alert(err.message); }
-        finally { setIsGenerating(false); }
+        } catch (err) {
+            alert(err.message);
+        } finally {
+            clearInterval(progressInterval);
+            setIsGenerating(false);
+        }
     };
 
     const removeSong = (index) => setSongs(songs.filter((_, i) => i !== index));
