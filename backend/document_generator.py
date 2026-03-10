@@ -15,7 +15,7 @@ from docx.oxml.ns import qn
 from chord_drawer import build_chord_dictionary
 
 CHORD_REGEX = re.compile(r"(?<![a-zA-Z0-9])([A-G][b#]?(?:m|maj|min|dim|aug|sus)?(?:\d)?(?:/[A-G][b#]?)?)(?![a-zA-Z0-9])")
-LOGO_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend", "public", "logo.png")
+LOGO_PATH = os.path.join(os.path.dirname(__file__), "flame_symbol.png")
 
 def add_header_logo(section):
     """Adds small logo to top right corner of the section header."""
