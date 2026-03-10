@@ -1014,8 +1014,13 @@ export default function App() {
         setTimeout(() => setShowSaveSuccess(false), 2000);
     };
 
-    const handlePrint = () => {
-        window.print();
+    const [songForPrint, setSongForPrint] = useState(null);
+
+    const handlePrint = (songOverride = null) => {
+        const song = songOverride || manualPreviewSong || currentSong;
+        if (!song) { window.print(); return; }
+        setSongForPrint(song);
+        setTimeout(() => window.print(), 150);
     };
 
     const [micEnabled, setMicEnabled] = useState(false);
@@ -4300,10 +4305,7 @@ export default function App() {
                                                                 <div className="flex items-center gap-2 px-2 pt-2 border-t border-white/5 w-full justify-between">
                                                                     <div className="flex items-center gap-2">
                                                                         <button
-                                                                            onClick={() => {
-                                                                                setManualPreviewSong(item);
-                                                                                setTimeout(() => window.print(), 300);
-                                                                            }}
+                                                                            onClick={() => handlePrint(item)}
                                                                             className="w-10 h-10 bg-white/5 hover:bg-[#ea580c] text-slate-500 hover:text-white rounded-xl flex items-center justify-center transition-all border border-white/5 active:scale-95"
                                                                             title="Imprimir Cifra"
                                                                         >
@@ -4571,7 +4573,7 @@ export default function App() {
                                 createPortal(
                                     <div id="dedicated-print-sheet" className="hidden print:block fixed inset-0 bg-white text-black z-[99999] overflow-y-auto">
                                         {(() => {
-                                            const songToPrint = activeTab === 'player' ? currentSong : manualPreviewSong;
+                                            const songToPrint = songForPrint || manualPreviewSong || currentSong;
                                             if (!songToPrint) return null;
 
                                             return (
