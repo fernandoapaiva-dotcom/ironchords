@@ -176,11 +176,25 @@ def add_manual_music(request: ManualEntryRequest):
     # Try to find exactly the requested key in DB first for efficiency (skip if force_refresh)
     chord_data = None
     if not request.force_refresh:
-        chord_data = get_chord(request.song_name, request.artist_name, req_key if req_key else None)
+        chord_data = get_chord(request.song_name, request.artist_name, req_key if req_key else None, version=request.version)
         
         if not chord_data:
             # If not found exactly, try any version of this song in DB
-            chord_data = get_chord(request.song_name, request.artist_name)
+            chord_data = get_chord(request.song_name, request.artist_name, version=request.version)
+    
+    # Pre-fetch versions list for UI sync
+    available_versions = []
+    try:
+        from scraper import get_cifraclub_versions, get_slug
+        # We need slugs for the versions scraper. 
+        # For simplicity in the response, we'll try to get them from existing logic or just fetch if we have a match.
+        a_slug = get_slug(request.artist_name)
+        s_slug = get_slug(request.song_name)
+        # If we have a successful scraper/db match later, we might refine this.
+        # But providing it here ensures the UI can show the dropdown immediately.
+        available_versions = get_cifraclub_versions(a_slug, s_slug)
+    except:
+        available_versions = [{"name": "Principal", "key": "Principal"}]
     
     if chord_data:
         # Normalize key name from DB
@@ -297,7 +311,8 @@ def add_manual_music(request: ManualEntryRequest):
                     content=chord_data['content'],
                     source=chord_data['source'],
                     capo=0,
-                    include_tabs=request.include_tabs
+                    include_tabs=request.include_tabs,
+                    version=chord_data.get('version', 'Principal')
                 )
             except Exception as e:
                 print(f"Error auto-saving manual search: {e}")
@@ -336,13 +351,17 @@ def add_manual_music(request: ManualEntryRequest):
         "sounding_key": sounding_key,
         "content": final_content,
         "source": cast(Dict[str, Any], chord_data)['source'],
-        "capo": request.capo
+        "capo": request.capo,
+        "versions": available_versions
     }
 
-@app.get("/api/song/versions")
-async def get_song_versions(artist_slug: str, song_slug: str):
-    versions = scraper.get_cifraclub_versions(artist_slug, song_slug)
-    # Filter out if only Principal is available
+@app.get("/api/music/versions")
+async def get_versions_by_name(song_name: str, artist_name: str):
+    a_slug = scraper.get_slug(artist_name)
+    s_slug = scraper.get_slug(song_name)
+    
+    versions = scraper.get_cifraclub_versions(a_slug, s_slug)
+    # Filter if only Principal
     if len(versions) <= 1:
         return {"versions": []}
     return {"versions": versions}
@@ -377,13 +396,7 @@ def transpose_endpoint(request: TransposeRequest):
         print(f"TRANSPOSE ERROR: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/api/song/versions")
-async def get_song_versions(artist_slug: str, song_slug: str):
-    versions = scraper.get_cifraclub_versions(artist_slug, song_slug)
-    # Filter out versions if only Principal is available
-    if len(versions) <= 1:
-        return {"versions": []}
-    return {"versions": versions}
+# Duplicate route removed.
 
 class BatchEntry(BaseModel):
     song_name: str
@@ -406,7 +419,7 @@ def add_batch_music(request: BatchRequest):
             req_key = row.key.strip()
 
             # Try to find exactly this song version (name, artist, key)
-            chord_data = get_chord(song_name, artist_name, req_key)
+            chord_data = get_chord(song_name, artist_name, req_key, version=row.version)
             
             # Determine if we need to override cache based on tabs presence
             needs_scrape = False
@@ -435,13 +448,14 @@ def add_batch_music(request: BatchRequest):
                             content=chord_data['content'],
                             source=chord_data['source'],
                             capo=0,
-                            include_tabs=row.include_tabs
+                            include_tabs=row.include_tabs,
+                            version=row.version or 'Principal'
                         )
                     except Exception as e:
                         print(f"Error auto-saving batch search: {e}")
             if not chord_data:
                 # Fallback to any version if specific scrape failed
-                chord_data = get_chord(song_name, artist_name)
+                chord_data = get_chord(song_name, artist_name, version=row.version)
                 if chord_data:
                     chord_data['key'] = chord_data.get('song_key')
             
@@ -460,7 +474,8 @@ def add_batch_music(request: BatchRequest):
                             content=chord_data['content'],
                             source=chord_data['source'],
                             capo=0,
-                            include_tabs=row.include_tabs
+                            include_tabs=row.include_tabs,
+                            version=row.version or 'Principal'
                         )
                     except Exception as e:
                         print(f"Error auto-saving batch fallback search: {e}")
@@ -611,7 +626,7 @@ def get_chords():
 def create_chord(data: ChordEdit):
     try:
         from database import save_chord # type: ignore
-        save_chord(data.song_name, data.artist_name, data.song_key, data.content, "manual", data.capo or 0, data.include_tabs)
+        save_chord(data.song_name, data.artist_name, data.song_key, data.content, "manual", data.capo or 0, data.include_tabs, "Principal")
         return {"status": "ok"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

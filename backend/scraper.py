@@ -80,6 +80,7 @@ def scrape_cifraclub(song_name: str, artist_url_name: str, version: Optional[str
             "song_name": song_name,
             "artist_name": (artist_url_name.split('/')[0] if "/" in artist_url_name else artist_url_name).replace("-", " ").title(),
             "key": key,
+            "version": version or "Principal",
             "capo": capo,
             "content": clean_text(content),
             "source": "cifraclub"

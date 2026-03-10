@@ -1,4 +1,4 @@
-﻿import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { PhoneticMatcher } from './utils/PhoneticMatcher';
 import { Music, UploadCloud, Plus, Minus, FileText, CheckCircle, AlertCircle, Eye, EyeOff, FileAudio, Info, X, Guitar, Settings2, Image as ImageIcon, Database, Edit3, Trash2, ArrowRight, Play, Maximize, Maximize2, Pause, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Download, ArrowLeft, SkipBack, SkipForward, Save, Share2, FolderHeart, Flame, Hammer, Sparkles, RefreshCw, Zap, ShieldCheck, Monitor, Tv, Check, LayoutList, Layout, Mic, Search, RotateCcw, Printer, Archive, GripVertical, Minimize2, Link, MessageCircle, Mail, ExternalLink } from 'lucide-react';
@@ -2242,7 +2242,8 @@ export default function App() {
             const songSlug = s.song_name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
 
             try {
-                const res = await fetch(`${API_BASE_URL}/api/song/versions?artist_slug=${artistSlug}&song_slug=${songSlug}`);
+                // Use the new robust name-based endpoint
+                const res = await fetch(`${API_BASE_URL}/api/music/versions?song_name=${encodeURIComponent(s.song_name)}&artist_name=${encodeURIComponent(s.artist_name)}`);
                 const data = await res.json();
                 setCurrentPlayerVersions(data.versions || []);
             } catch (err) {
@@ -2266,6 +2267,7 @@ export default function App() {
                 body: JSON.stringify({
                     song_name: s.song_name,
                     artist_name: s.artist_name,
+                    key: s.song_key || "",
                     version: versionKey,
                     force_refresh: true
                 })
@@ -2573,12 +2575,13 @@ export default function App() {
     */
 
 
-    const handleManualSubmit = async (e, songNameOverride, artistNameOverride, keyOverride) => {
+    const handleManualSubmit = async (e, songNameOverride, artistNameOverride, keyOverride, versionOverride) => {
         if (e) e.preventDefault();
         const useSongName = songNameOverride || songName;
         const useArtistName = artistNameOverride || artistName;
         // Use empty string to signal "Original Key"
         const useKey = (keyOverride === "") ? "" : (keyOverride || songKey);
+        const useVersion = versionOverride || songVersion;
 
         if (!useSongName || !useArtistName) return;
         setManualLoading(true);
@@ -2591,7 +2594,7 @@ export default function App() {
                     song_name: useSongName,
                     artist_name: useArtistName,
                     key: useKey,
-                    version: songVersion,
+                    version: useVersion,
                     include_tabs: includeTabs,
                     capo: manualCapo
                 })
@@ -2614,6 +2617,11 @@ export default function App() {
                 capo: data.capo || manualCapo
             };
             setManualPreviewSong(newSong);
+            if (data.versions && data.versions.length > 0) {
+                setAvailableVersions(data.versions);
+            } else {
+                setAvailableVersions([{ name: 'Principal', key: 'Principal' }]);
+            }
             setSuggestions([]);
             // Sync UI with found data
             if (newSong.song_key) setSongKey(newSong.song_key);
@@ -3594,7 +3602,7 @@ export default function App() {
                         <div className="flex-1 overflow-y-auto w-full max-w-6xl mx-auto px-4 pb-20">
 
                             {/* ABA 1: ESCOLHA DE PEÇAS */}
-                            {false && mainNav === 'escolha' && (
+                            {mainNav === 'escolha' && (
                                 <div className="flex-1 animate-in fade-in slide-in-from-right-8 duration-700 no-print">
                                     <div className="bg-[#16161D]/80 backdrop-blur-xl border border-white/5 rounded-[40px] p-8 shadow-2xl">
                                         <div className="flex items-center justify-between mb-10">
@@ -3683,7 +3691,16 @@ export default function App() {
                                                             {availableVersions && availableVersions.length > 1 && (
                                                                 <div>
                                                                     <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2 ml-1">Versão</label>
-                                                                    <select value={songVersion} onChange={e => setSongVersion(e.target.value)} className="w-full bg-black/60 border border-white/10 rounded-2xl px-5 py-5 text-white outline-none cursor-pointer font-bold appearance-none">
+                                                                    <select
+                                                                        value={songVersion}
+                                                                        onChange={e => {
+                                                                            const v = e.target.value;
+                                                                            setSongVersion(v);
+                                                                            // Trigger search immediately with the new version as override
+                                                                            handleManualSubmit(null, null, null, null, v);
+                                                                        }}
+                                                                        className="w-full bg-black/60 border border-white/10 rounded-2xl px-5 py-5 text-white outline-none cursor-pointer font-bold appearance-none"
+                                                                    >
                                                                         {availableVersions.map(v => <option key={v.key} value={v.key} className="bg-[#1A1A1A]">{v.name}</option>)}
                                                                     </select>
                                                                 </div>
