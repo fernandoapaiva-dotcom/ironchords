@@ -15,7 +15,7 @@ from docx.oxml.ns import qn
 from chord_drawer import build_chord_dictionary
 
 CHORD_REGEX = re.compile(r"(?<![a-zA-Z0-9])([A-G][b#]?(?:m|maj|min|dim|aug|sus)?(?:\d)?(?:/[A-G][b#]?)?)(?![a-zA-Z0-9])")
-LOGO_PATH = os.path.join(os.path.dirname(__file__), "flame_symbol.png")
+LOGO_PATH = os.path.join(os.path.dirname(__file__), "brand_logo.png")
 
 def add_header_logo(section):
     """Adds small logo to top right corner of the section header."""
@@ -26,7 +26,7 @@ def add_header_logo(section):
     p.alignment = WD_ALIGN_PARAGRAPH.RIGHT
     if os.path.exists(LOGO_PATH):
         run = p.add_run()
-        run.add_picture(LOGO_PATH, width=Inches(0.45))
+        run.add_picture(LOGO_PATH, width=Inches(1.0)) # Slightly larger for the combined mark
 
 def add_toc(doc):
     p = doc.add_paragraph()
@@ -62,15 +62,7 @@ def add_footer_with_branding(doc):
         p = footer.paragraphs[0] if footer.paragraphs else footer.add_paragraph()
         p.alignment = WD_ALIGN_PARAGRAPH.CENTER
         
-        # Left: Brand
-        run_left = p.add_run("IronChords")
-        run_left.font.name = 'Consolas'
-        run_left.font.size = Pt(8)
-        run_left.bold = True
-        run_left.font.color.rgb = RGBColor(184, 115, 51) # B87333
-        
-        # Center: Separator
-        p.add_run("  —  ").font.size = Pt(8)
+        # Center: Branding removed as per request "just symbol in top right"
         
         # Right: Page X of Y
         run_page = p.add_run("Página ")
@@ -177,33 +169,20 @@ def generate_docx(songs: list, output_filename: str = "Livreto.docx", cover_imag
         section.left_margin = Cm(0.7)
         section.right_margin = Cm(0.7)
     
-    # Capa & TOC
-    if cover_image_path and os.path.exists(cover_image_path):
-        p_img = doc.add_paragraph()
-        p_img.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        # V32: Make cover image larger (premium identity)
-        p_img.add_run().add_picture(cover_image_path, width=Cm(16))
-        # Small spacer
-        p_img.paragraph_format.space_after = Pt(24)
-        
-        h0 = doc.add_heading('IRONCHORDS', 0)
-        h0.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        h0.runs[0].font.name = 'Segoe UI Black'
-        h0.runs[0].font.color.rgb = RGBColor(0, 0, 0) # Black instead of default blue heading
-    else:
-        h0 = doc.add_heading('IronChords', 0)
-        h0.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        h0.runs[0].font.name = 'Segoe UI Black'
-        
-    p_sub = doc.add_paragraph()
-    p_sub.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    run_sub = p_sub.add_run("IRONCHORDS")
-    run_sub.font.name = 'Consolas'
-    run_sub.font.size = Pt(14)
-    run_sub.bold = True
-    run_sub.font.color.rgb = RGBColor(184, 115, 51)
+    # Capa & TOC (Minimalist)
+    p_capa = doc.add_paragraph()
+    p_capa.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p_capa.paragraph_format.space_before = Pt(150)
+    run_capa = p_capa.add_run("LIVRETO DE CIFRAS")
+    run_capa.font.name = 'Segoe UI Black'
+    run_capa.font.size = Pt(24)
+    run_capa.font.color.rgb = RGBColor(0, 0, 0)
     
-    doc.add_paragraph('Livreto Gerado Automaticamente').alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p_sub = doc.add_paragraph('Gerado Automaticamente via IronChords')
+    p_sub.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p_sub.style.font.name = 'Consolas'
+    p_sub.style.font.size = Pt(10)
+    
     doc.add_page_break()
     
     if include_toc:
