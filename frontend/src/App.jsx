@@ -4703,234 +4703,233 @@ export default function App() {
                                     document.body
                                 )
                             }
+                        </div>
+                    </div>
+                )
+                }
+            </main>
 
-
-                            {/* Export Livreto Modal */}
-                            {
-                                showExportModal && (
-                                    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-[#070709]/90 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-300 p-4">
-                                        <div className="bg-[#16161D] border border-white/10 rounded-[32px] shadow-2xl w-full max-w-5xl flex flex-col max-h-[90vh]">
-                                            <div className="flex items-center justify-between p-8 border-b border-white/5 shrink-0">
-                                                <div className="flex items-center space-x-4">
-                                                    <div className="w-1.5 h-6 bg-[#B87333] rounded-full shadow-[0_0_15px_rgba(184,115,51,0.4)]"></div>
-                                                    <h3 className="text-xl font-black text-white uppercase italic tracking-tighter">Gerar Livreto: {currentExportList?.name}</h3>
-                                                </div>
-                                                <button onClick={() => { setShowExportModal(false); setExportStep(1); setDownloadUrl(null); }} className="p-2 bg-white/5 hover:bg-white/10 rounded-xl transition-all border border-white/5 flex items-center justify-center">
-                                                    <X className="w-5 h-5 text-slate-400" />
-                                                </button>
+            {/* Export Livreto Modal */}
+            {
+                showExportModal && (
+                    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-[#070709]/90 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-300 p-4">
+                        <div className="bg-[#16161D] border border-white/10 rounded-[32px] shadow-2xl w-full max-w-5xl flex flex-col max-h-[90vh]">
+                            <div className="flex items-center justify-between p-8 border-b border-white/5 shrink-0">
+                                <div className="flex items-center space-x-4">
+                                    <div className="w-1.5 h-6 bg-[#B87333] rounded-full shadow-[0_0_15px_rgba(184,115,51,0.4)]"></div>
+                                    <h3 className="text-xl font-black text-white uppercase italic tracking-tighter">Gerar Livreto: {currentExportList?.name}</h3>
+                                </div>
+                                <button onClick={() => { setShowExportModal(false); setExportStep(1); setDownloadUrl(null); }} className="p-2 bg-white/5 hover:bg-white/10 rounded-xl transition-all border border-white/5 flex items-center justify-center">
+                                    <X className="w-5 h-5 text-slate-400" />
+                                </button>
+                            </div>
+                            <div className="flex-1 overflow-y-auto p-4 scrollbar-thin scrollbar-thumb-white/10">
+                                {/* STEP 1: CONFIGURAÇÕES DA FORJA */}
+                                {exportStep === 1 && (
+                                    <div className="flex-1 animate-in fade-in slide-in-from-right-8 duration-700">
+                                        <div className="bg-[#16161D]/80 backdrop-blur-xl border border-white/5 rounded-[40px] p-8 shadow-2xl">
+                                            <div className="flex items-center space-x-4 mb-10">
+                                                <div className="w-2 h-10 bg-[#B87333] rounded-full shadow-[0_0_15px_rgba(184,115,51,0.4)]"></div>
+                                                <h2 className="text-2xl font-black text-white uppercase italic tracking-tighter">Engrenagens da Forja</h2>
                                             </div>
-                                            <div className="flex-1 overflow-y-auto p-4 scrollbar-thin scrollbar-thumb-white/10">
-                                                {/* STEP 4: CONFIGURAÇÕES DA FORJA */}
-                                                {exportStep === 1 && (
-                                                    <div className="flex-1 animate-in fade-in slide-in-from-right-8 duration-700">
-                                                        <div className="bg-[#16161D]/80 backdrop-blur-xl border border-white/5 rounded-[40px] p-8 shadow-2xl">
-                                                            <div className="flex items-center space-x-4 mb-10">
-                                                                <div className="w-2 h-10 bg-[#B87333] rounded-full shadow-[0_0_15px_rgba(184,115,51,0.4)]"></div>
-                                                                <h2 className="text-2xl font-black text-white uppercase italic tracking-tighter">Engrenagens da Forja</h2>
-                                                            </div>
 
-                                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-                                                                <div className="space-y-8">
-                                                                    <div className="bg-black/40 border border-white/5 rounded-[32px] p-8">
-                                                                        <div className="flex items-center space-x-3 mb-6">
-                                                                            <Settings2 className="w-5 h-5 text-[#B87333]" />
-                                                                            <h3 className="text-xs font-black text-white uppercase tracking-widest italic">Saída de Dados</h3>
-                                                                        </div>
-                                                                        <div className="grid grid-cols-1 gap-4">
-                                                                            {['docx', 'pdf', 'both'].map(fmt => (
-                                                                                <button
-                                                                                    key={fmt}
-                                                                                    onClick={() => setExportFormat(fmt)}
-                                                                                    className={`p-6 rounded-2xl border transition-all text-left flex items-center justify-between group ${exportFormat === fmt ? 'bg-[#B87333] border-[#B87333] shadow-lg shadow-[#B87333]/20' : 'bg-white/5 border-white/5 hover:border-[#B87333]/40'}`}
-                                                                                >
-                                                                                    <div>
-                                                                                        <p className={`text-sm font-black uppercase tracking-widest transition-colors ${exportFormat === fmt ? 'text-white' : 'text-slate-400 group-hover:text-white'}`}>
-                                                                                            {fmt === 'docx' ? 'Microsoft Word (.docx)' : fmt === 'pdf' ? 'Adobe PDF (.pdf)' : 'Arquivo Mestre (.ZIP)'}
-                                                                                        </p>
-                                                                                        <p className={`text-[10px] font-bold mt-1 uppercase ${exportFormat === fmt ? 'text-white/60' : 'text-slate-600'}`}>
-                                                                                            {fmt === 'both' ? 'Inclui PDF e DOCX em um único pacote' : 'Otimizado para edição e impressão'}
-                                                                                        </p>
-                                                                                    </div>
-                                                                                    <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${exportFormat === fmt ? 'bg-white border-white text-[#B87333]' : 'border-white/10'}`}>
-                                                                                        {exportFormat === fmt && <Check className="w-4 h-4 stroke-[4]" />}
-                                                                                    </div>
-                                                                                </button>
-                                                                            ))}
-                                                                        </div>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+                                                <div className="space-y-8">
+                                                    <div className="bg-black/40 border border-white/5 rounded-[32px] p-8">
+                                                        <div className="flex items-center space-x-3 mb-6">
+                                                            <Settings2 className="w-5 h-5 text-[#B87333]" />
+                                                            <h3 className="text-xs font-black text-white uppercase tracking-widest italic">Saída de Dados</h3>
+                                                        </div>
+                                                        <div className="grid grid-cols-1 gap-4">
+                                                            {['docx', 'pdf', 'both'].map(fmt => (
+                                                                <button
+                                                                    key={fmt}
+                                                                    onClick={() => setExportFormat(fmt)}
+                                                                    className={`p-6 rounded-2xl border transition-all text-left flex items-center justify-between group ${exportFormat === fmt ? 'bg-[#B87333] border-[#B87333] shadow-lg shadow-[#B87333]/20' : 'bg-white/5 border-white/5 hover:border-[#B87333]/40'}`}
+                                                                >
+                                                                    <div>
+                                                                        <p className={`text-sm font-black uppercase tracking-widest transition-colors ${exportFormat === fmt ? 'text-white' : 'text-slate-400 group-hover:text-white'}`}>
+                                                                            {fmt === 'docx' ? 'Microsoft Word (.docx)' : fmt === 'pdf' ? 'Adobe PDF (.pdf)' : 'Arquivo Mestre (.ZIP)'}
+                                                                        </p>
+                                                                        <p className={`text-[10px] font-bold mt-1 uppercase ${exportFormat === fmt ? 'text-white/60' : 'text-slate-600'}`}>
+                                                                            {fmt === 'both' ? 'Inclui PDF e DOCX em um único pacote' : 'Otimizado para edição e impressão'}
+                                                                        </p>
                                                                     </div>
-                                                                </div>
-
-                                                                <div className="space-y-8">
-                                                                    <div className="bg-black/40 border border-white/5 rounded-[32px] p-8">
-                                                                        <div className="flex items-center space-x-3 mb-6">
-                                                                            <Settings2 className="w-5 h-5 text-[#B87333]" />
-                                                                            <h3 className="text-xs font-black text-white uppercase tracking-widest italic">Opções do Livreto</h3>
-                                                                        </div>
-                                                                        <div className="space-y-4">
-                                                                            <label className="flex items-center justify-between p-4 bg-white/5 border border-white/5 rounded-2xl cursor-pointer hover:border-[#B87333]/40 transition-all group">
-                                                                                <div>
-                                                                                    <p className="text-sm font-black text-white uppercase tracking-widest">Incluir Sumário</p>
-                                                                                    <p className="text-[10px] font-bold text-slate-500 uppercase mt-1">Com páginas clicáveis (TOC)</p>
-                                                                                </div>
-                                                                                <div className={`w-12 h-6 rounded-full p-1 transition-colors ${includeToc ? 'bg-[#B87333]' : 'bg-slate-700'}`}>
-                                                                                    <div className={`w-4 h-4 rounded-full bg-white transition-transform ${includeToc ? 'translate-x-6' : 'translate-x-0'}`}></div>
-                                                                                </div>
-                                                                                <input type="checkbox" className="hidden" checked={includeToc} onChange={(e) => setIncludeToc(e.target.checked)} />
-                                                                            </label>
-
-                                                                            <label className="flex items-center justify-between p-4 bg-white/5 border border-white/5 rounded-2xl cursor-pointer hover:border-[#B87333]/40 transition-all group">
-                                                                                <div>
-                                                                                    <p className="text-sm font-black text-white uppercase tracking-widest">Dicionário de Acordes</p>
-                                                                                    <p className="text-[10px] font-bold text-slate-500 uppercase mt-1">Desenhos no fim de cada música</p>
-                                                                                </div>
-                                                                                <div className={`w-12 h-6 rounded-full p-1 transition-colors ${includeDictionary ? 'bg-[#B87333]' : 'bg-slate-700'}`}>
-                                                                                    <div className={`w-4 h-4 rounded-full bg-white transition-transform ${includeDictionary ? 'translate-x-6' : 'translate-x-0'}`}></div>
-                                                                                </div>
-                                                                                <input type="checkbox" className="hidden" checked={includeDictionary} onChange={(e) => setIncludeDictionary(e.target.checked)} />
-                                                                            </label>
-                                                                        </div>
+                                                                    <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${exportFormat === fmt ? 'bg-white border-white text-[#B87333]' : 'border-white/10'}`}>
+                                                                        {exportFormat === fmt && <Check className="w-4 h-4 stroke-[4]" />}
                                                                     </div>
-
-                                                                    <div className="bg-black/40 border border-white/5 rounded-[32px] p-8">
-                                                                        <div className="flex items-center space-x-3 mb-6">
-                                                                            <ImageIcon className="w-5 h-5 text-[#B87333]" />
-                                                                            <h3 className="text-xs font-black text-white uppercase tracking-widest italic">Identidade Visual</h3>
-                                                                        </div>
-                                                                        <div
-                                                                            onClick={() => coverInputRef.current?.click()}
-                                                                            className={`relative overflow-hidden border-2 border-dashed rounded-[32px] aspect-video flex flex-col items-center justify-center cursor-pointer transition-all ${coverImage ? 'border-[#B87333]' : 'border-white/10 hover:border-[#B87333]/40 bg-white/5'}`}
-                                                                        >
-                                                                            {coverImage ? (
-                                                                                <div className="absolute inset-0 w-full h-full p-4">
-                                                                                    <div className="w-full h-full rounded-2xl bg-black/40 flex flex-col items-center justify-center border border-white/10">
-                                                                                        <CheckCircle className="w-10 h-10 text-[#B87333] mb-4" />
-                                                                                        <p className="text-[10px] font-black text-white uppercase tracking-widest px-8 text-center truncate w-full">{coverImage.name}</p>
-                                                                                        <button
-                                                                                            onClick={(e) => { e.stopPropagation(); setCoverImage(null); }}
-                                                                                            className="mt-6 px-6 py-2 bg-white/5 hover:bg-red-900/40 text-slate-500 hover:text-red-500 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all border border-white/5"
-                                                                                        >
-                                                                                            Remover
-                                                                                        </button>
-                                                                                    </div>
-                                                                                </div>
-                                                                            ) : (
-                                                                                <>
-                                                                                    <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mb-4">
-                                                                                        <UploadCloud className="w-8 h-8 text-slate-700" />
-                                                                                    </div>
-                                                                                    <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest">Upload de Capa Customizada</p>
-                                                                                    <p className="text-[9px] font-bold text-slate-700 mt-2 uppercase tracking-tighter">JPEG, PNG • Max 5MB</p>
-                                                                                </>
-                                                                            )}
-                                                                            <input type="file" ref={coverInputRef} onChange={handleCoverUpload} accept="image/*" className="hidden" />
-                                                                        </div>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
+                                                                </button>
+                                                            ))}
                                                         </div>
                                                     </div>
-                                                )}
+                                                </div>
 
-                                                {/* STEP 5: FINALIZAÇÃO */}
-                                                {exportStep === 2 && (
-                                                    <div className="flex-1 animate-in fade-in slide-in-from-right-8 duration-700">
-                                                        <div className="bg-[#16161D]/80 backdrop-blur-xl border border-white/5 rounded-[40px] p-12 shadow-2xl flex flex-col items-center justify-center text-center">
-                                                            {!downloadUrl ? (
-                                                                <div className="max-w-xl space-y-10">
-                                                                    <div className="relative">
-                                                                        <div className="w-32 h-32 bg-[#B87333]/10 rounded-[40px] flex items-center justify-center mx-auto border border-[#B87333]/20 relative z-10">
-                                                                            <FileText className={`w-14 h-14 text-[#B87333] ${isGenerating ? 'animate-pulse' : ''}`} />
-                                                                        </div>
-                                                                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 bg-[#B87333]/5 rounded-full blur-3xl animate-pulse"></div>
-                                                                    </div>
-
-                                                                    <div className="space-y-4">
-                                                                        <h2 className="text-3xl font-black text-white uppercase italic tracking-tighter">A Forja está Pronta</h2>
-                                                                        <p className="text-sm text-slate-500 font-medium leading-relaxed uppercase tracking-widest">
-                                                                            Todas as suas {songs.length} peças foram ajustadas e cronometradas. <br />
-                                                                            Clique abaixo para iniciar a geração do seu material exclusivo.
-                                                                        </p>
-                                                                    </div>
-
-                                                                    <button
-                                                                        disabled={songs.length === 0 || isGenerating}
-                                                                        onClick={handleGenerateDocument}
-                                                                        className="w-full py-6 bg-[#B87333] hover:bg-[#8B4513] text-white font-black uppercase tracking-[0.3em] rounded-[24px] shadow-2xl shadow-[#B87333]/20 transition-all flex items-center justify-center group active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed text-lg italic"
-                                                                    >
-                                                                        {isGenerating ? (
-                                                                            <>
-                                                                                <RefreshCw className="w-7 h-7 mr-4 animate-spin" />
-                                                                                <span>TRABALHANDO NO METAL...</span>
-                                                                            </>
-                                                                        ) : (
-                                                                            <>
-                                                                                <Zap className="w-7 h-7 mr-4 group-hover:scale-125 transition-transform" />
-                                                                                <span>BATER O MARTELO</span>
-                                                                            </>
-                                                                        )}
-                                                                    </button>
+                                                <div className="space-y-8">
+                                                    <div className="bg-black/40 border border-white/5 rounded-[32px] p-8">
+                                                        <div className="flex items-center space-x-3 mb-6">
+                                                            <Settings2 className="w-5 h-5 text-[#B87333]" />
+                                                            <h3 className="text-xs font-black text-white uppercase tracking-widest italic">Opções do Livreto</h3>
+                                                        </div>
+                                                        <div className="space-y-4">
+                                                            <label className="flex items-center justify-between p-4 bg-white/5 border border-white/5 rounded-2xl cursor-pointer hover:border-[#B87333]/40 transition-all group">
+                                                                <div>
+                                                                    <p className="text-sm font-black text-white uppercase tracking-widest">Incluir Sumário</p>
+                                                                    <p className="text-[10px] font-bold text-slate-500 uppercase mt-1">Com páginas clicáveis (TOC)</p>
                                                                 </div>
-                                                            ) : (
-                                                                <div className="max-w-xl space-y-10 animate-in zoom-in-95 duration-700">
-                                                                    <div className="relative">
-                                                                        <div className="w-32 h-32 bg-green-500/10 rounded-[40px] flex items-center justify-center mx-auto border border-green-500/20 relative z-10">
-                                                                            <ShieldCheck className="w-14 h-14 text-green-500" />
-                                                                        </div>
-                                                                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 bg-green-500/5 rounded-full blur-3xl"></div>
-                                                                    </div>
+                                                                <div className={`w-12 h-6 rounded-full p-1 transition-colors ${includeToc ? 'bg-[#B87333]' : 'bg-slate-700'}`}>
+                                                                    <div className={`w-4 h-4 rounded-full bg-white transition-transform ${includeToc ? 'translate-x-6' : 'translate-x-0'}`}></div>
+                                                                </div>
+                                                                <input type="checkbox" className="hidden" checked={includeToc} onChange={(e) => setIncludeToc(e.target.checked)} />
+                                                            </label>
 
-                                                                    <div className="space-y-4">
-                                                                        <h2 className="text-3xl font-black text-white uppercase italic tracking-tighter">Missão Cumprida</h2>
-                                                                        <p className="text-sm text-slate-500 font-medium leading-relaxed uppercase tracking-widest">
-                                                                            Seu documento foi forjado com sucesso no calor industrial. <br />
-                                                                            Utilize o acesso abaixo para resgatar sua peça.
-                                                                        </p>
-                                                                    </div>
+                                                            <label className="flex items-center justify-between p-4 bg-white/5 border border-white/5 rounded-2xl cursor-pointer hover:border-[#B87333]/40 transition-all group">
+                                                                <div>
+                                                                    <p className="text-sm font-black text-white uppercase tracking-widest">Dicionário de Acordes</p>
+                                                                    <p className="text-[10px] font-bold text-slate-500 uppercase mt-1">Desenhos no fim de cada música</p>
+                                                                </div>
+                                                                <div className={`w-12 h-6 rounded-full p-1 transition-colors ${includeDictionary ? 'bg-[#B87333]' : 'bg-slate-700'}`}>
+                                                                    <div className={`w-4 h-4 rounded-full bg-white transition-transform ${includeDictionary ? 'translate-x-6' : 'translate-x-0'}`}></div>
+                                                                </div>
+                                                                <input type="checkbox" className="hidden" checked={includeDictionary} onChange={(e) => setIncludeDictionary(e.target.checked)} />
+                                                            </label>
+                                                        </div>
+                                                    </div>
 
-                                                                    <div className="grid grid-cols-1 gap-4">
-                                                                        <a
-                                                                            href={downloadUrl}
-                                                                            download={exportFormat === 'pdf' ? "IronChords_Book.pdf" : exportFormat === 'both' ? "IronChords_Forged.zip" : "IronChords_Book.docx"}
-                                                                            className="w-full py-6 bg-green-600 hover:bg-green-700 text-white text-center text-lg font-black uppercase tracking-[0.3em] rounded-[24px] transition-all shadow-xl shadow-green-900/20 italic flex items-center justify-center"
-                                                                        >
-                                                                            <Download className="w-7 h-7 mr-4" />
-                                                                            RECOLHER PEÇA
-                                                                        </a>
+                                                    <div className="bg-black/40 border border-white/5 rounded-[32px] p-8">
+                                                        <div className="flex items-center space-x-3 mb-6">
+                                                            <ImageIcon className="w-5 h-5 text-[#B87333]" />
+                                                            <h3 className="text-xs font-black text-white uppercase tracking-widest italic">Identidade Visual</h3>
+                                                        </div>
+                                                        <div
+                                                            onClick={() => coverInputRef.current?.click()}
+                                                            className={`relative overflow-hidden border-2 border-dashed rounded-[32px] aspect-video flex flex-col items-center justify-center cursor-pointer transition-all ${coverImage ? 'border-[#B87333]' : 'border-white/10 hover:border-[#B87333]/40 bg-white/5'}`}
+                                                        >
+                                                            {coverImage ? (
+                                                                <div className="absolute inset-0 w-full h-full p-4">
+                                                                    <div className="w-full h-full rounded-2xl bg-black/40 flex flex-col items-center justify-center border border-white/10">
+                                                                        <CheckCircle className="w-10 h-10 text-[#B87333] mb-4" />
+                                                                        <p className="text-[10px] font-black text-white uppercase tracking-widest px-8 text-center truncate w-full">{coverImage.name}</p>
                                                                         <button
-                                                                            onClick={() => { setDownloadUrl(null); setCurrentStep(1); setSongs([]); }}
-                                                                            className="w-full py-4 bg-white/5 hover:bg-white/10 text-slate-500 hover:text-white font-black uppercase tracking-widest rounded-2xl text-[10px] italic transition-all border border-white/5"
+                                                                            onClick={(e) => { e.stopPropagation(); setCoverImage(null); }}
+                                                                            className="mt-6 px-6 py-2 bg-white/5 hover:bg-red-900/40 text-slate-500 hover:text-red-500 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all border border-white/5"
                                                                         >
-                                                                            Iniciar Nova Forja
+                                                                            Remover
                                                                         </button>
                                                                     </div>
                                                                 </div>
+                                                            ) : (
+                                                                <>
+                                                                    <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mb-4">
+                                                                        <UploadCloud className="w-8 h-8 text-slate-700" />
+                                                                    </div>
+                                                                    <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest">Upload de Capa Customizada</p>
+                                                                    <p className="text-[9px] font-bold text-slate-700 mt-2 uppercase tracking-tighter">JPEG, PNG • Max 5MB</p>
+                                                                </>
                                                             )}
+                                                            <input type="file" ref={coverInputRef} onChange={handleCoverUpload} accept="image/*" className="hidden" />
                                                         </div>
                                                     </div>
-                                                )}
-
-
+                                                </div>
                                             </div>
-                                            {exportStep === 1 && (
-                                                <div className="p-8 border-t border-white/5 flex justify-end">
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* STEP 2: FINALIZAÇÃO */}
+                                {exportStep === 2 && (
+                                    <div className="flex-1 animate-in fade-in slide-in-from-right-8 duration-700">
+                                        <div className="bg-[#16161D]/80 backdrop-blur-xl border border-white/5 rounded-[40px] p-12 shadow-2xl flex flex-col items-center justify-center text-center">
+                                            {!downloadUrl ? (
+                                                <div className="max-w-xl space-y-10">
+                                                    <div className="relative">
+                                                        <div className="w-32 h-32 bg-[#B87333]/10 rounded-[40px] flex items-center justify-center mx-auto border border-[#B87333]/20 relative z-10">
+                                                            <FileText className={`w-14 h-14 text-[#B87333] ${isGenerating ? 'animate-pulse' : ''}`} />
+                                                        </div>
+                                                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 bg-[#B87333]/5 rounded-full blur-3xl animate-pulse"></div>
+                                                    </div>
+
+                                                    <div className="space-y-4">
+                                                        <h2 className="text-3xl font-black text-white uppercase italic tracking-tighter">A Forja está Pronta</h2>
+                                                        <p className="text-sm text-slate-500 font-medium leading-relaxed uppercase tracking-widest">
+                                                            Todas as suas {currentExportList?.songs?.length || songs.length} peças foram ajustadas e cronometradas. <br />
+                                                            Clique abaixo para iniciar a geração do seu material exclusivo.
+                                                        </p>
+                                                    </div>
+
                                                     <button
-                                                        onClick={() => setExportStep(2)}
-                                                        className="px-10 py-5 bg-[#B87333] text-white font-black uppercase tracking-widest text-[10px] italic transition-all shadow-xl shadow-[#B87333]/20 hover:bg-[#8B4513] rounded-2xl flex items-center space-x-3"
+                                                        disabled={(currentExportList?.songs?.length || songs.length) === 0 || isGenerating}
+                                                        onClick={handleGenerateDocument}
+                                                        className="w-full py-6 bg-[#B87333] hover:bg-[#8B4513] text-white font-black uppercase tracking-[0.3em] rounded-[24px] shadow-2xl shadow-[#B87333]/20 transition-all flex items-center justify-center group active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed text-lg italic"
                                                     >
-                                                        <span>Ir para Finalização</span>
-                                                        <ArrowRight className="w-4 h-4" />
+                                                        {isGenerating ? (
+                                                            <>
+                                                                <RefreshCw className="w-7 h-7 mr-4 animate-spin" />
+                                                                <span>TRABALHANDO NO METAL...</span>
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <Zap className="w-7 h-7 mr-4 group-hover:scale-125 transition-transform" />
+                                                                <span>BATER O MARTELO</span>
+                                                            </>
+                                                        )}
                                                     </button>
+                                                </div>
+                                            ) : (
+                                                <div className="max-w-xl space-y-10 animate-in zoom-in-95 duration-700">
+                                                    <div className="relative">
+                                                        <div className="w-32 h-32 bg-green-500/10 rounded-[40px] flex items-center justify-center mx-auto border border-green-500/20 relative z-10">
+                                                            <ShieldCheck className="w-14 h-14 text-green-500" />
+                                                        </div>
+                                                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 bg-green-500/5 rounded-full blur-3xl"></div>
+                                                    </div>
+
+                                                    <div className="space-y-4">
+                                                        <h2 className="text-3xl font-black text-white uppercase italic tracking-tighter">Missão Cumprida</h2>
+                                                        <p className="text-sm text-slate-500 font-medium leading-relaxed uppercase tracking-widest">
+                                                            Seu documento foi forjado com sucesso no calor industrial. <br />
+                                                            Utilize o acesso abaixo para resgatar sua peça.
+                                                        </p>
+                                                    </div>
+
+                                                    <div className="grid grid-cols-1 gap-4">
+                                                        <a
+                                                            href={downloadUrl}
+                                                            download={exportFormat === 'pdf' ? "IronChords_Book.pdf" : exportFormat === 'both' ? "IronChords_Forged.zip" : "IronChords_Book.docx"}
+                                                            className="w-full py-6 bg-green-600 hover:bg-green-700 text-white text-center text-lg font-black uppercase tracking-[0.3em] rounded-[24px] transition-all shadow-xl shadow-green-900/20 italic flex items-center justify-center"
+                                                        >
+                                                            <Download className="w-7 h-7 mr-4" />
+                                                            RECOLHER PEÇA
+                                                        </a>
+                                                        <button
+                                                            onClick={() => { setDownloadUrl(null); setExportStep(1); setShowExportModal(false); }}
+                                                            className="w-full py-4 bg-white/5 hover:bg-white/10 text-slate-500 hover:text-white font-black uppercase tracking-widest rounded-2xl text-[10px] italic transition-all border border-white/5"
+                                                        >
+                                                            Fechar
+                                                        </button>
+                                                    </div>
                                                 </div>
                                             )}
                                         </div>
                                     </div>
-                                )
-                            }
-                        </div >
-                    </div >
+                                )}
+
+
+                            </div>
+                            {exportStep === 1 && (
+                                <div className="p-8 border-t border-white/5 flex justify-end">
+                                    <button
+                                        onClick={() => setExportStep(2)}
+                                        className="px-10 py-5 bg-[#B87333] text-white font-black uppercase tracking-widest text-[10px] italic transition-all shadow-xl shadow-[#B87333]/20 hover:bg-[#8B4513] rounded-2xl flex items-center space-x-3"
+                                    >
+                                        <span>Ir para Finalização</span>
+                                        <ArrowRight className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    </div>
                 )
-                }
-            </main >
+            }
 
             {/* Conflict Resolution Modal */}
             {

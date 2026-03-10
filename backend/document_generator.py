@@ -6,7 +6,7 @@ import re
 from typing import Optional
 
 from docx import Document
-from docx.shared import Pt, Inches, Cm
+from docx.shared import Pt, Inches, Cm, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.enum.section import WD_SECTION
 from docx.oxml import OxmlElement
@@ -55,7 +55,7 @@ def add_footer_with_branding(doc):
         run_left.font.name = 'Courier New'
         run_left.font.size = Pt(8)
         run_left.bold = True
-        run_left.font.color.rgb = (184, 115, 51) # B87333
+        run_left.font.color.rgb = RGBColor(184, 115, 51) # B87333
         
         # Center: Separator
         p.add_run("  —  ").font.size = Pt(8)
@@ -134,7 +134,7 @@ def add_watermark(section):
     run = p.add_run("FORJA AO PALCO")
     run.font.name = 'Courier New'
     run.font.size = Pt(48)
-    run.font.color.rgb = (184, 115, 51) # B87333
+    run.font.color.rgb = RGBColor(184, 115, 51) # B87333
     run.font.bold = True
     # Mimic watermark with transparency if possible (Word doesn't support easily via docx)
     # We'll just leave it as subtle header text for now or try to use a dummy image if available.
@@ -177,7 +177,7 @@ def generate_docx(songs: list, output_filename: str = "Livreto.docx", cover_imag
         h0 = doc.add_heading('CAMINHO DAS CIFRAS', 0)
         h0.alignment = WD_ALIGN_PARAGRAPH.CENTER
         h0.runs[0].font.name = 'Courier New'
-        h0.runs[0].font.color.rgb = (0, 0, 0) # Black instead of default blue heading
+        h0.runs[0].font.color.rgb = RGBColor(0, 0, 0) # Black instead of default blue heading
     else:
         h0 = doc.add_heading('Caminho das Cifras', 0)
         h0.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -188,7 +188,7 @@ def generate_docx(songs: list, output_filename: str = "Livreto.docx", cover_imag
     run_sub.font.name = 'Courier New'
     run_sub.font.size = Pt(14)
     run_sub.bold = True
-    run_sub.font.color.rgb = (184, 115, 51)
+    run_sub.font.color.rgb = RGBColor(184, 115, 51)
     
     doc.add_paragraph('Livreto Gerado Automaticamente').alignment = WD_ALIGN_PARAGRAPH.CENTER
     doc.add_page_break()
