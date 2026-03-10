@@ -15,6 +15,18 @@ from docx.oxml.ns import qn
 from chord_drawer import build_chord_dictionary
 
 CHORD_REGEX = re.compile(r"(?<![a-zA-Z0-9])([A-G][b#]?(?:m|maj|min|dim|aug|sus)?(?:\d)?(?:/[A-G][b#]?)?)(?![a-zA-Z0-9])")
+LOGO_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend", "public", "logo.png")
+
+def add_header_logo(section):
+    """Adds small logo to top right corner of the section header."""
+    header = section.header
+    if not header.paragraphs:
+        header.add_paragraph()
+    p = header.paragraphs[0]
+    p.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    if os.path.exists(LOGO_PATH):
+        run = p.add_run()
+        run.add_picture(LOGO_PATH, width=Inches(0.45))
 
 def add_toc(doc):
     p = doc.add_paragraph()
@@ -51,8 +63,8 @@ def add_footer_with_branding(doc):
         p.alignment = WD_ALIGN_PARAGRAPH.CENTER
         
         # Left: Brand
-        run_left = p.add_run("Forja ao Palco")
-        run_left.font.name = 'Courier New'
+        run_left = p.add_run("IronChords")
+        run_left.font.name = 'Consolas'
         run_left.font.size = Pt(8)
         run_left.bold = True
         run_left.font.color.rgb = RGBColor(184, 115, 51) # B87333
@@ -63,7 +75,7 @@ def add_footer_with_branding(doc):
         # Right: Page X of Y
         run_page = p.add_run("Página ")
         run_page.font.size = Pt(8)
-        run_page.font.name = 'Courier New'
+        run_page.font.name = 'Consolas'
         
         # Current Page field
         fldChar1 = OxmlElement('w:fldChar')
@@ -79,7 +91,7 @@ def add_footer_with_branding(doc):
         run_fld._r.append(instrText1)
         run_fld._r.append(fldChar2)
         run_fld.font.size = Pt(8)
-        run_fld.font.name = 'Courier New'
+        run_fld.font.name = 'Consolas'
         run_fld.bold = True
         
         p.add_run(" de ").font.size = Pt(8)
@@ -98,7 +110,7 @@ def add_footer_with_branding(doc):
         run_fld2._r.append(instrText2)
         run_fld2._r.append(fldChar4)
         run_fld2.font.size = Pt(8)
-        run_fld2.font.name = 'Courier New'
+        run_fld2.font.name = 'Consolas'
         run_fld2.bold = True
 
 def add_watermark(section):
@@ -131,8 +143,8 @@ def add_watermark(section):
     # The user specifically asked for watermark, let's try a standard header branding.
     
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    run = p.add_run("FORJA AO PALCO")
-    run.font.name = 'Courier New'
+    run = p.add_run("IRONCHORDS")
+    run.font.name = 'Segoe UI Black'
     run.font.size = Pt(48)
     run.font.color.rgb = RGBColor(184, 115, 51) # B87333
     run.font.bold = True
@@ -174,18 +186,19 @@ def generate_docx(songs: list, output_filename: str = "Livreto.docx", cover_imag
         # Small spacer
         p_img.paragraph_format.space_after = Pt(24)
         
-        h0 = doc.add_heading('CAMINHO DAS CIFRAS', 0)
+        h0 = doc.add_heading('IRONCHORDS', 0)
         h0.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        h0.runs[0].font.name = 'Courier New'
+        h0.runs[0].font.name = 'Segoe UI Black'
         h0.runs[0].font.color.rgb = RGBColor(0, 0, 0) # Black instead of default blue heading
     else:
-        h0 = doc.add_heading('Caminho das Cifras', 0)
+        h0 = doc.add_heading('IronChords', 0)
         h0.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        h0.runs[0].font.name = 'Segoe UI Black'
         
     p_sub = doc.add_paragraph()
     p_sub.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    run_sub = p_sub.add_run("FORJA AO PALCO")
-    run_sub.font.name = 'Courier New'
+    run_sub = p_sub.add_run("IRONCHORDS")
+    run_sub.font.name = 'Consolas'
     run_sub.font.size = Pt(14)
     run_sub.bold = True
     run_sub.font.color.rgb = RGBColor(184, 115, 51)
@@ -241,8 +254,8 @@ def generate_docx(songs: list, output_filename: str = "Livreto.docx", cover_imag
             n_cols = 1
             eff_l = float(line_cnt)
             
-            # V31: SAFETY FACTOR (Courier New 1pt height is approx 1.35pt including leading)
-            LEADING_FACTOR: float = 1.35 
+            # V31: SAFETY FACTOR (Consolas 1pt height is approx 1.30pt including leading)
+            LEADING_FACTOR: float = 1.30
             
             # Search for best Font/Spacing/Column triplet
             f_size = 16.0  # Increased max font for proportional filling
@@ -253,7 +266,7 @@ def generate_docx(songs: list, output_filename: str = "Livreto.docx", cover_imag
             def calculate_layout(fs, ls, nc, el):
                 h = (el * fs * ls * LEADING_FACTOR * CM_PT)
                 cw = 19.6 if nc == 1 else 9.2
-                wrapped = (max_line_w * fs * 0.0215) > cw
+                wrapped = (max_line_w * fs * 0.0225) > cw # Slightly wider for Consolas
                 return h, wrapped
 
             # Optimization Loop
@@ -292,7 +305,7 @@ def generate_docx(songs: list, output_filename: str = "Livreto.docx", cover_imag
             if cur_fit_h < avail_h * 0.9 and float(f_size) >= 12.0:
                 new_ls = float(avail_h) / (float(eff_l) * float(f_size) * LEADING_FACTOR * CM_PT)
                 L_SPACING = min(1.2, new_ls * 0.98) # Safe cap
-            section = doc.add_section(WD_SECTION.CONTINUOUS)
+            section = doc.add_section(WD_SECTION.NEW_PAGE)
             create_columns(section, 1)
             
             shape_key = song.get('key', 'C')
@@ -308,13 +321,13 @@ def generate_docx(songs: list, output_filename: str = "Livreto.docx", cover_imag
             if capo > 0:
                 tom_text += f" (forma de {shape_key})"
             p_t = doc.add_paragraph(tom_text)
-            p_t.style.font.name = 'Courier New'
+            p_t.style.font.name = 'Consolas'
             p_t.style.font.bold = True
             
             if capo > 0:
                 p_t.paragraph_format.space_after = Pt(0)
                 p_c = doc.add_paragraph(f"Capo: {capo}ª casa")
-                p_c.style.font.name = 'Courier New'
+                p_c.style.font.name = 'Consolas'
                 p_c.style.font.bold = True
                 p_c.paragraph_format.space_after = Pt(2)
             else:
@@ -326,7 +339,7 @@ def generate_docx(songs: list, output_filename: str = "Livreto.docx", cover_imag
             
             for l_str in lines:
                 p = doc.add_paragraph()
-                p.style.font.name = 'Courier New'
+                p.style.font.name = 'Consolas'
                 p.paragraph_format.space_after = Pt(0)
                 p.paragraph_format.line_spacing = L_SPACING
                 p.paragraph_format.keep_together = True
@@ -356,7 +369,7 @@ def generate_docx(songs: list, output_filename: str = "Livreto.docx", cover_imag
                 else:
                     run = p.add_run(l_str)
                     run.font.size = Pt(f_size)
-                for r in p.runs: r.font.name = 'Courier New'
+                for r in p.runs: r.font.name = 'Consolas'
 
             # 5. ABSOLUTE BOTTOM ANCHOR
             if show_diag and num_chords > 0:
@@ -375,7 +388,7 @@ def generate_docx(songs: list, output_filename: str = "Livreto.docx", cover_imag
                 p_dic = doc.add_paragraph()
                 r_dic = p_dic.add_run("Dicionário de Acordes:")
                 r_dic.bold = True
-                r_dic.font.name = 'Courier New'
+                r_dic.font.name = 'Consolas'
                 p_dic.paragraph_format.space_after = Pt(0)
                 
                 c_list = sorted(list(unique_chords))
@@ -400,7 +413,9 @@ def generate_docx(songs: list, output_filename: str = "Livreto.docx", cover_imag
                         col_i += 1
             
                 
-        # Add Footer Branding to all sections
+        # Add Header & Footer Branding to all sections
+        for section in doc.sections:
+            add_header_logo(section)
         add_footer_with_branding(doc)
         
         doc.save(out_p)
