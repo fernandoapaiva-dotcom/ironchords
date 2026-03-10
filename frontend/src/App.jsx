@@ -4956,7 +4956,7 @@ export default function App() {
                                                     <div className="grid grid-cols-1 gap-4">
                                                         <a
                                                             href={downloadUrl}
-                                                            download={exportFormat === 'pdf' ? "IronChords_Book.pdf" : exportFormat === 'both' ? "IronChords_Forged.zip" : "IronChords_Book.docx"}
+                                                            download={`IronChords_${(currentExportList?.name || 'Livreto').replace(/\s+/g, '_')}.${exportFormat === 'pdf' ? 'pdf' : exportFormat === 'both' ? 'zip' : 'docx'}`}
                                                             className="w-full py-6 bg-green-600 hover:bg-green-700 text-white text-center text-lg font-black uppercase tracking-[0.3em] rounded-[24px] transition-all shadow-xl shadow-green-900/20 italic flex items-center justify-center"
                                                         >
                                                             <Download className="w-7 h-7 mr-4" />
