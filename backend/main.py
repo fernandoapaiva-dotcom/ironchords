@@ -53,7 +53,7 @@ def clean_song_name(name: str) -> str:
 
 import scraper # type: ignore
 from scraper import find_chord_cascade, get_cifraclub_versions # type: ignore
-from database import init_db, get_chord, save_chord, get_db_connection, get_all_chords # type: ignore
+from database import init_db, get_chord, save_chord, get_db_connection, get_all_chords, register_user, authorize_user, check_user_status # type: ignore
 import chord_utils # type: ignore
 from chord_utils import process_chords # type: ignore
 from document_generator import generate_docx # type: ignore
@@ -118,6 +118,45 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+class RegistrationRequest(BaseModel):
+    email: str
+
+@app.post("/api/auth/register")
+def register_user_endpoint(request: RegistrationRequest):
+    success = register_user(request.email)
+    if not success:
+        # Check if already authorized or pending
+        status = check_user_status(request.email)
+        if status:
+            return {"status": status, "message": f"Usuário já possui status: {status}"}
+        return {"status": "error", "message": "Falha ao registrar usuário."}
+    
+    # Notify admin
+    admin_email = "fernando.m.aragao89@gmail.com"
+    auth_link = f"http://localhost:8000/api/auth/authorize/{request.email}"
+    print(f"\n[AUTH NOTIFICATION]")
+    print(f"Novo usuário registrado: {request.email}")
+    print(f"Para autorizar, acesse: {auth_link}")
+    print(f"Sent notification to: {admin_email}\n")
+    
+    return {"status": "pending", "message": "Cadastro realizado. Aguardando autorização do administrador."}
+
+@app.get("/api/auth/status/{email}")
+def check_status_endpoint(email: str):
+    status = check_user_status(email)
+    if not status:
+        return {"status": "unregistered"}
+    return {"status": status}
+
+@app.get("/api/auth/authorize/{email}")
+def authorize_user_endpoint(email: str):
+    authorize_user(email)
+    return {
+        "status": "success", 
+        "message": f"Usuário {email} autorizado com sucesso!",
+        "html": f"<h1>Acesso Autorizado!</h1><p>O usuário <b>{email}</b> agora tem acesso ilimitado.</p>"
+    }
 
 @app.get("/")
 def health_check():

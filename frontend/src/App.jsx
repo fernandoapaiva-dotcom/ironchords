@@ -6,6 +6,7 @@ import * as XLSX from 'xlsx';
 import { SVGuitarChord } from 'svguitar';
 import { AudioTracker } from './utils/AudioTracker';
 import { CifraParser } from './utils/CifraParser';
+import LoginScreen from './components/LoginScreen';
 
 // Dynamic API Base URL detection
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || (
@@ -690,6 +691,28 @@ const ImportModal = ({ data, onImport, onClose }) => {
 };
 
 export default function App() {
+    const [authenticatedUser, setAuthenticatedUser] = useState(null);
+    const [isAuthenticating, setIsAuthenticating] = useState(true);
+
+    useEffect(() => {
+        const checkAuth = async () => {
+            const savedEmail = localStorage.getItem('ironchords_user_email');
+            if (savedEmail) {
+                try {
+                    const res = await fetch(`${API_BASE_URL}/api/auth/status/${savedEmail}`);
+                    const data = await res.json();
+                    if (data.status === 'authorized') {
+                        setAuthenticatedUser(savedEmail);
+                    }
+                } catch (err) {
+                    console.error("Auth check failed:", err);
+                }
+            }
+            setIsAuthenticating(false);
+        };
+        checkAuth();
+    }, []);
+
     const [activeTab, setActiveTab] = useState('manual');
     const [playerSidebarTab, setPlayerSidebarTab] = useState('fila'); // 'fila' | 'listas'
     const [listasSubTab, setListasSubTab] = useState('salvas');
@@ -2993,6 +3016,18 @@ export default function App() {
     };
 
     const currentSong = songs[selectedManualIndex] || null;
+
+    if (isAuthenticating) {
+        return (
+            <div className="min-h-screen bg-[#070709] flex items-center justify-center">
+                <div className="w-12 h-12 border-4 border-[#ea580c]/20 border-t-[#ea580c] rounded-full animate-spin"></div>
+            </div>
+        );
+    }
+
+    if (!authenticatedUser) {
+        return <LoginScreen onAuthorized={(email) => setAuthenticatedUser(email)} />;
+    }
 
     return (
         <div className="min-h-screen bg-[#070709] bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] text-slate-300 font-sans selection:bg-[#B87333]/30 selection:text-white overflow-x-hidden">
