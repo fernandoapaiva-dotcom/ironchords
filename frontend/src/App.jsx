@@ -1569,6 +1569,39 @@ function App() {
         const saved = localStorage.getItem('iron_chords_playlists');
         return saved ? JSON.parse(saved) : [];
     });
+
+    // Auto-Save Effect for Active Playlist
+    useEffect(() => {
+        // Only auto-save if an explicit list is active (not the initial default state or a single song "Nova Cifra/Lista")
+        if (!activePlaylistName || activePlaylistName === "Nova Cifra/Lista") return;
+        
+        // Use a debounce to prevent spamming LocalStorage and the API on quick changes (like transposing)
+        const debounceSave = setTimeout(() => {
+            const allPlaylists = JSON.parse(localStorage.getItem('iron_chords_playlists') || '[]');
+            const existingIndex = allPlaylists.findIndex(p => p.name === activePlaylistName);
+            
+            // Only autosave if the playlist already exists in the saved playlists
+            if (existingIndex >= 0) {
+                const currentDataStr = JSON.stringify(allPlaylists[existingIndex].songs);
+                const newDataStr = JSON.stringify(songs);
+                
+                // Only write and sync if songs actually changed
+                if (currentDataStr !== newDataStr) {
+                    const updated = [...allPlaylists];
+                    updated[existingIndex].songs = songs;
+                    
+                    localStorage.setItem('iron_chords_playlists', JSON.stringify(updated));
+                    setSavedPlaylists(updated);
+                    
+                    if (authenticatedUser) {
+                        saveCloudPlaylist(authenticatedUser, activePlaylistName, songs);
+                    }
+                }
+            }
+        }, 800); // 800ms debounce
+
+        return () => clearTimeout(debounceSave);
+    }, [songs, activePlaylistName, authenticatedUser]);
     const [playlistNameInput, setPlaylistNameInput] = useState('');
     const [showPlaylistManager, setShowPlaylistManager] = useState(false);
 
