@@ -1164,7 +1164,6 @@ export default function App() {
     const [isDynamicSpeedActive, setIsDynamicSpeedActive] = useState(false);
     const [scrollSpeed, setScrollSpeed] = useState(1);
     const scrollContainerRef = useRef(null);
-    const manualScrollContainerRef = useRef(null);
     const wasInPlayerRef = useRef(false);
 
 
