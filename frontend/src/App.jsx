@@ -21,14 +21,15 @@ const API_BASE_URL = getBaseUrl().replace(/\/api\/?$/, '');
 // -------------------------------------------------------------------
 // PINCH-TO-ZOOM HOOK – adjusts font size when user pinches on mobile
 // -------------------------------------------------------------------
-function usePinchZoom(containerRef, fontSize, setFontSize, minSize = 12, maxSize = 48) {
+function usePinchZoom(containerRef, fontSize, setFontSize, minSize = 12, maxSize = 60) {
     const lastDistRef = React.useRef(null);
 
     React.useEffect(() => {
-        const el = containerRef.current;
+        const el = containerRef?.current;
         if (!el) return;
 
         const getTouchDist = (touches) => {
+            if (touches.length < 2) return 0;
             const dx = touches[0].clientX - touches[1].clientX;
             const dy = touches[0].clientY - touches[1].clientY;
             return Math.sqrt(dx * dx + dy * dy);
@@ -42,17 +43,25 @@ function usePinchZoom(containerRef, fontSize, setFontSize, minSize = 12, maxSize
 
         const onTouchMove = (e) => {
             if (e.touches.length !== 2 || lastDistRef.current === null) return;
-            e.preventDefault(); // Prevent browser default zoom
+            // Only prevent default if we are actively zooming
+            e.preventDefault();
             const newDist = getTouchDist(e.touches);
             const delta = newDist - lastDistRef.current;
-            if (Math.abs(delta) > 3) {
-                setFontSize(prev => Math.min(maxSize, Math.max(minSize, prev + delta * 0.05)));
+            
+            if (Math.abs(delta) > 5) {
+                setFontSize(prev => {
+                    const nextSize = prev + (delta > 0 ? 1 : -1);
+                    return Math.min(maxSize, Math.max(minSize, nextSize));
+                });
                 lastDistRef.current = newDist;
             }
         };
 
-        const onTouchEnd = () => { lastDistRef.current = null; };
+        const onTouchEnd = () => {
+            lastDistRef.current = null;
+        };
 
+        // Add passive: false to touchmove so e.preventDefault() works without console errors
         el.addEventListener('touchstart', onTouchStart, { passive: true });
         el.addEventListener('touchmove', onTouchMove, { passive: false });
         el.addEventListener('touchend', onTouchEnd, { passive: true });
@@ -3375,7 +3384,7 @@ export default function App() {
             {/* Global Settings Gear Icon */}
             <button 
                 onClick={() => setShowSettingsModal(true)}
-                className="fixed top-6 right-4 sm:top-8 sm:right-8 z-[400] p-2.5 sm:p-4 bg-[#16161D]/80 backdrop-blur-xl border border-white/10 rounded-2xl text-slate-400 hover:text-[#B87333] hover:border-[#B87333]/40 transition-all shadow-2xl group no-print flex items-center justify-center w-11 h-11 sm:w-14 sm:h-14"
+                className="fixed top-6 right-4 sm:top-8 sm:right-8 z-[50] p-2.5 sm:p-4 bg-[#16161D]/80 backdrop-blur-xl border border-white/10 rounded-2xl text-slate-400 hover:text-[#B87333] hover:border-[#B87333]/40 transition-all shadow-2xl group no-print flex items-center justify-center w-11 h-11 sm:w-14 sm:h-14"
                 title="Configurações e Gestão"
             >
                 <Settings2 className="w-5 h-5 sm:w-6 sm:h-6 group-hover:rotate-90 transition-transform duration-500" />
