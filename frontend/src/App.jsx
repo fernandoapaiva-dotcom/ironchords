@@ -10,11 +10,14 @@ import LoginScreen from './components/LoginScreen';
 
 // Dynamic API Base URL detection
 const getBaseUrl = () => {
+    // If running in production (e.g. Vercel), force Render URL
+    if (import.meta.env.PROD) return 'https://ironchords.onrender.com';
+    
+    // Otherwise fallback logic for development
     const raw = import.meta.env.VITE_API_BASE_URL;
     if (raw) return raw.replace(/\/$/, '');
     if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') return 'http://127.0.0.1:8000';
     if (window.location.port && window.location.port !== '80' && window.location.port !== '443') return `${window.location.protocol}//${window.location.hostname}:8000`;
-    // Fallback to Render if Vercel doesn't have the env var set
     return 'https://ironchords.onrender.com';
 };
 const API_BASE_URL = getBaseUrl().replace(/\/api\/?$/, '');
@@ -60,20 +63,11 @@ function usePinchZoom(containerRef, fontSize, setFontSize, minSize = 12, maxSize
                 e.preventDefault();
             }
 
-            // Smoother threshold: only update if delta is significant to avoid jitter
-            if (Math.abs(delta) > 5) {
-                if (frameRef.current) cancelAnimationFrame(frameRef.current);
-                
-                // Use a multiplier to make the zoom feel more natural
-                const zoomFactor = delta > 0 ? 0.8 : -0.8;
-                
+            // Immediately set state without requestAnimationFrame for direct response
+            if (Math.abs(delta) > 1) { // Very low threshold for high sensitivity
+                const zoomFactor = delta > 0 ? 0.5 : -0.5; // Small increments
                 targetFontSizeRef.current = Math.min(maxSize, Math.max(minSize, targetFontSizeRef.current + zoomFactor));
-                
-                // Batch updates using requestAnimationFrame for performance
-                frameRef.current = requestAnimationFrame(() => {
-                    setFontSize(targetFontSizeRef.current);
-                });
-                
+                setFontSize(targetFontSizeRef.current);
                 lastDistRef.current = newDist;
             }
         };
@@ -5086,7 +5080,7 @@ export default function App() {
                                                             <h3 className="text-xs font-black text-white uppercase tracking-widest italic">Saída de Dados</h3>
                                                         </div>
                                                         <div className="grid grid-cols-1 gap-4">
-                                                            {['docx', 'pdf', 'both'].map(fmt => (
+                                                            {['docx'].map(fmt => (
                                                                 <button
                                                                     key={fmt}
                                                                     onClick={() => setExportFormat(fmt)}
@@ -5094,10 +5088,10 @@ export default function App() {
                                                                 >
                                                                     <div>
                                                                         <p className={`text-sm font-black uppercase tracking-widest transition-colors ${exportFormat === fmt ? 'text-white' : 'text-slate-400 group-hover:text-white'}`}>
-                                                                            {fmt === 'docx' ? 'Microsoft Word (.docx)' : fmt === 'pdf' ? 'Adobe PDF (.pdf)' : 'Arquivo Mestre (.ZIP)'}
+                                                                            Microsoft Word (.docx)
                                                                         </p>
                                                                         <p className={`text-[10px] font-bold mt-1 uppercase ${exportFormat === fmt ? 'text-white/60' : 'text-slate-600'}`}>
-                                                                            {fmt === 'both' ? 'Inclui PDF e DOCX em um único pacote' : 'Otimizado para edição e impressão'}
+                                                                            Otimizado para edição e impressão (PDF só vis impressão local)
                                                                         </p>
                                                                     </div>
                                                                     <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${exportFormat === fmt ? 'bg-white border-white text-[#B87333]' : 'border-white/10'}`}>
