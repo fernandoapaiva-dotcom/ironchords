@@ -3437,7 +3437,7 @@ export default function App() {
                 {/* Batch Button */}
                 <button 
                     onClick={() => setBatchModalOpen(true)}
-                    className="hidden sm:flex p-2 sm:p-3 bg-[#16161D]/60 backdrop-blur-xl border border-white/5 rounded-xl text-slate-500 hover:text-[#B87333] hover:border-[#B87333]/40 transition-all shadow-xl items-center justify-center gap-2 px-4"
+                    className="flex p-2 sm:p-3 bg-[#16161D]/60 backdrop-blur-xl border border-white/5 rounded-xl text-slate-500 hover:text-[#B87333] hover:border-[#B87333]/40 transition-all shadow-xl items-center justify-center gap-1 sm:gap-2 px-2 sm:px-4"
                     title="Adicionar em Lote"
                 >
                     <UploadCloud className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -3454,7 +3454,7 @@ export default function App() {
                         setCoverImage(null);
                         setShowExportModal(true);
                     }}
-                    className="p-2 sm:p-3 bg-[#16161D]/60 backdrop-blur-xl border border-white/5 rounded-xl text-slate-500 hover:text-[#B87333] hover:border-[#B87333]/40 transition-all shadow-xl flex items-center justify-center gap-2 px-4"
+                    className="p-2 sm:p-3 bg-[#16161D]/60 backdrop-blur-xl border border-white/5 rounded-xl text-slate-500 hover:text-[#B87333] hover:border-[#B87333]/40 transition-all shadow-xl flex items-center justify-center gap-1 sm:gap-2 px-2 sm:px-4"
                     title="Gerar Livreto"
                 >
                     <FileText className="w-4 h-4 sm:w-5 sm:h-5" />
