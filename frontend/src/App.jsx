@@ -21,9 +21,9 @@ const API_BASE_URL = getBaseUrl().replace(/\/api\/?$/, '');
 // -------------------------------------------------------------------
 // PINCH-TO-ZOOM HOOK – adjusts font size when user pinches on mobile
 // -------------------------------------------------------------------
-/*
 function usePinchZoom(containerRef, fontSize, setFontSize, minSize = 12, maxSize = 60) {
     const lastDistRef = React.useRef(null);
+    const frameRef = React.useRef(null);
 
     React.useEffect(() => {
         const el = containerRef?.current;
@@ -44,37 +44,47 @@ function usePinchZoom(containerRef, fontSize, setFontSize, minSize = 12, maxSize
 
         const onTouchMove = (e) => {
             if (e.touches.length !== 2 || lastDistRef.current === null) return;
-            // Only prevent default if we are actively zooming
-            e.preventDefault();
+            
+            // Only prevent default if we are actively zooming to stop scroll
+            if (e.cancelable) {
+                e.preventDefault();
+            }
+
             const newDist = getTouchDist(e.touches);
             const delta = newDist - lastDistRef.current;
             
-            if (Math.abs(delta) > 5) {
-                setFontSize(prev => {
-                    const nextSize = prev + (delta > 0 ? 1 : -1);
-                    return Math.min(maxSize, Math.max(minSize, nextSize));
+            // Require a slightly larger pinch movement to trigger a render, avoiding micro-locks
+            if (Math.abs(delta) > 8) {
+                if (frameRef.current) cancelAnimationFrame(frameRef.current);
+                
+                // Throttle state updates to Animation Frames to prevent React white-screen crashes
+                frameRef.current = requestAnimationFrame(() => {
+                    setFontSize(prev => {
+                        const nextSize = prev + (delta > 0 ? 1 : -1);
+                        return Math.min(maxSize, Math.max(minSize, nextSize));
+                    });
+                    lastDistRef.current = newDist;
                 });
-                lastDistRef.current = newDist;
             }
         };
 
         const onTouchEnd = () => {
             lastDistRef.current = null;
+            if (frameRef.current) cancelAnimationFrame(frameRef.current);
         };
 
-        // Add passive: false to touchmove so e.preventDefault() works without console errors
         el.addEventListener('touchstart', onTouchStart, { passive: true });
         el.addEventListener('touchmove', onTouchMove, { passive: false });
         el.addEventListener('touchend', onTouchEnd, { passive: true });
 
         return () => {
+            if (frameRef.current) cancelAnimationFrame(frameRef.current);
             el.removeEventListener('touchstart', onTouchStart);
             el.removeEventListener('touchmove', onTouchMove);
             el.removeEventListener('touchend', onTouchEnd);
         };
     }, [containerRef, setFontSize, minSize, maxSize]);
 }
-*/
 
 
 
@@ -1447,9 +1457,9 @@ export default function App() {
         }
     }, []);
 
-    // Apply Pinch-to-Zoom Hook to both containers
-    // usePinchZoom(scrollContainerRef, playerFontSize, setPlayerFontSize, 12, 60);
-    // usePinchZoom(manualScrollContainerRef, manualFontSize, setManualFontSize, 12, 60);
+    // Apply Pinch-to-Zoom Hook to both containers safely
+    usePinchZoom(scrollContainerRef, playerFontSize, setPlayerFontSize, 12, 60);
+    usePinchZoom(manualScrollContainerRef, manualFontSize, setManualFontSize, 12, 60);
 
     // AutoScroll Effect with Mic interaction (Manual / Player / Presentation)
     useEffect(() => {
