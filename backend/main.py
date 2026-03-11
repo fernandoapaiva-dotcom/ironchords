@@ -1039,6 +1039,7 @@ async def generate_book(
                     # Atualiza o índice especificamente
                     if doc_obj.TablesOfContents.Count > 0:
                         debug_f.write("Atualizando TOC...\n")
+                        doc_obj.TablesOfContents(1).UpdatePageNumbers()
                         doc_obj.TablesOfContents(1).Update()
                     
                     debug_f.write("Salvando DOCX...\n")
