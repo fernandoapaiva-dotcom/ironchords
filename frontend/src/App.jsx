@@ -3585,6 +3585,13 @@ export default function App() {
                             <div className="w-px h-6 bg-white/10" />
 
                             <button onClick={() => { setCurrentLineIndex(0); currentLineIndexRef.current = 0; if (scrollContainerRef.current) scrollContainerRef.current.scrollTop = 0; }} className="w-10 h-10 rounded-full flex items-center justify-center bg-white/5 hover:bg-white/10 transition-all text-slate-400 hover:text-white shrink-0" title="Reiniciar do Topo"><RotateCcw className="w-4 h-4 -scale-x-100" /></button>
+
+                            <div className="w-px h-6 bg-white/10" />
+
+                            <div className="flex items-center space-x-1 bg-white/5 border border-white/5 rounded-full p-1">
+                                <button onClick={() => setPlayerFontSize(prev => Math.max(12, prev - 1))} className="p-2 text-slate-400 hover:text-white transition-all font-black text-xs" title="Diminuir Zoom (Letra)">A-</button>
+                                <button onClick={() => setPlayerFontSize(prev => Math.min(60, prev + 1))} className="p-2 text-slate-400 hover:text-white transition-all font-black text-xs" title="Aumentar Zoom (Letra)">A+</button>
+                            </div>
                         </div>
 
 
@@ -4348,11 +4355,15 @@ export default function App() {
                                                                             </div>
                                                                         </div>
 
-                                                                        {/* Scroll */}
+                                                                        {/* Zoom & Scroll */}
                                                                         <div className="flex items-center space-x-4 border-l border-white/5 pl-6">
+                                                                            <div className="flex items-center space-x-1 bg-white/5 border border-white/5 rounded-xl p-0.5">
+                                                                                <button onClick={() => setManualFontSize(prev => Math.max(12, prev - 1))} className="p-1 px-2 text-slate-500 hover:text-white transition-all font-black text-[10px]" title="Diminuir Zoom (Letra)">A-</button>
+                                                                                <button onClick={() => setManualFontSize(prev => Math.min(60, prev + 1))} className="p-1 px-2 text-slate-500 hover:text-white transition-all font-black text-[10px]" title="Aumentar Zoom (Letra)">A+</button>
+                                                                            </div>
                                                                             <button
                                                                                 onClick={() => setIsManualAutoScrolling(!isManualAutoScrolling)}
-                                                                                className="w-10 h-10 rounded-xl flex items-center justify-center transition-all ${isManualAutoScrolling ? 'bg-[#B87333] text-white shadow-lg shadow-[#B87333]/40' : 'bg-white/5 text-slate-500 hover:text-white'}"
+                                                                                className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${isManualAutoScrolling ? 'bg-[#B87333] text-white shadow-lg shadow-[#B87333]/40' : 'bg-white/5 text-slate-500 hover:text-white'}`}
                                                                             >
                                                                                 {isManualAutoScrolling ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
                                                                             </button>
