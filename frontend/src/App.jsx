@@ -747,6 +747,21 @@ const ShareModal = ({ isOpen, onClose, listName, link }) => {
 // -------------------------------------------------------------------
 // SETTINGS MODAL
 // -------------------------------------------------------------------
+// -------------------------------------------------------------------
+// UTILS
+// -------------------------------------------------------------------
+const normalize_google_email = (email) => {
+    if (!email) return "";
+    let e = email.toLowerCase().trim();
+    let [local, domain] = e.split('@');
+    if (domain === 'gmail.com' || domain === 'googlemail.com') {
+        local = local.split('+')[0]; // Remove aliases
+        local = local.replace(/\./g, ''); // Remove periods
+        return `${local}@gmail.com`;
+    }
+    return e;
+};
+
 const SettingsModal = ({ isOpen, onClose, includeToc, setIncludeToc, includeDictionary, setIncludeDictionary, authenticatedUser, setShowUserManagement, deferredPrompt, handleInstallPWA }) => {
     if (!isOpen) return null;
 
@@ -794,7 +809,7 @@ const SettingsModal = ({ isOpen, onClose, includeToc, setIncludeToc, includeDict
                         </div>
                     </div>
 
-                    {authenticatedUser === 'fernando.m.aragao89@gmail.com' && (
+                    {normalize_google_email(authenticatedUser) === 'fernandomaragao89@gmail.com' && (
                         <div className="bg-blue-600/5 border border-blue-500/20 rounded-[32px] p-8 shadow-[0_0_30px_rgba(59,130,246,0.05)]">
                             <div className="flex items-center space-x-3 mb-6">
                                 <ShieldCheck className="w-5 h-5 text-blue-500" />
