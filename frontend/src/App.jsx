@@ -1146,6 +1146,7 @@ function App() {
     const [isGenerating, setIsGenerating] = useState(false);
     // Player Song Search (sidebar)
     const [playerSongSearch, setPlayerSongSearch] = useState('');
+    const [playerSongSearchLoading, setPlayerSongSearchLoading] = useState(false);
     const [playerSongSuggestions, setPlayerSongSuggestions] = useState([]);
     const [addingSongSlug, setAddingSongSlug] = useState(null);
 
