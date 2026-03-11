@@ -1060,6 +1060,7 @@ export default function App() {
                     const data = await res.json();
                     if (data.status === 'authorized') {
                         setAuthenticatedUser(savedEmail);
+                        syncCloudPlaylists(savedEmail);
                     }
                 } catch (err) {
                     console.error("Auth check failed:", err);
@@ -1069,6 +1070,61 @@ export default function App() {
         };
         checkAuth();
     }, []);
+
+    const syncCloudPlaylists = async (email) => {
+        if (!email) return;
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/playlists/${email}`);
+            const data = await res.json();
+            if (data.playlists) {
+                const cloudPlaylists = data.playlists.map(p => ({
+                    id: p.id,
+                    name: p.name,
+                    songs: JSON.parse(p.data)
+                }));
+                const local = JSON.parse(localStorage.getItem('iron_chords_playlists') || '[]');
+                
+                // Merge strategy: cloud takes precedence for same name, but keep local-only ones
+                const merged = [...cloudPlaylists];
+                local.forEach(lp => {
+                    if (!merged.some(cp => cp.name === lp.name)) {
+                        merged.push(lp);
+                        // Also upload this local-only list to cloud for backup
+                        saveCloudPlaylist(email, lp.name, lp.songs);
+                    }
+                });
+                
+                localStorage.setItem('iron_chords_playlists', JSON.stringify(merged));
+                setSavedPlaylists(merged);
+            }
+        } catch (err) {
+            console.error("Cloud sync failed:", err);
+        }
+    };
+
+    const saveCloudPlaylist = async (email, name, songsData) => {
+        if (!email) return;
+        try {
+            await fetch(`${API_BASE_URL}/api/playlists`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ user_email: email, name, data: songsData })
+            });
+        } catch (err) {
+            console.error("Save to cloud failed:", err);
+        }
+    };
+
+    const deleteCloudPlaylist = async (email, name) => {
+        if (!email) return;
+        try {
+            await fetch(`${API_BASE_URL}/api/playlists/${email}/${encodeURIComponent(name)}`, {
+                method: 'DELETE'
+            });
+        } catch (err) {
+            console.error("Delete from cloud failed:", err);
+        }
+    };
 
     const [activeTab, setActiveTab] = useState('manual');
     const [playerSidebarTab, setPlayerSidebarTab] = useState('fila'); // 'fila' | 'listas'
@@ -1307,9 +1363,9 @@ export default function App() {
 
         if (!saveListName.trim() || songsToSave.length === 0) return;
 
-        // 1. Save to Playlists (localStorage)
+        // 1. Save to Local Storage
         const listToSave = {
-            id: Date.now().toString(),
+            id: Date.now(),
             name: saveListName,
             songs: songsToSave.map(s => ({
                 id: s.id || null,
@@ -1324,7 +1380,13 @@ export default function App() {
             }))
         };
         const playlists = JSON.parse(localStorage.getItem('iron_chords_playlists') || '[]');
-        localStorage.setItem('iron_chords_playlists', JSON.stringify([...playlists, listToSave]));
+        const updatedPlaylists = [...playlists, listToSave];
+        localStorage.setItem('iron_chords_playlists', JSON.stringify(updatedPlaylists));
+
+        // 1.5 Save to Cloud (Backup)
+        if (authenticatedUser) {
+            saveCloudPlaylist(authenticatedUser, listToSave.name, listToSave.songs);
+        }
 
         // 2. Save to Acervo (DB) with conflict check
         const conflictsFound = [];
@@ -1337,7 +1399,7 @@ export default function App() {
 
         setSaveListModalOpen(false);
         setSaveListName('');
-        setSavedPlaylists(JSON.parse(localStorage.getItem('iron_chords_playlists') || '[]'));
+        setSavedPlaylists(updatedPlaylists);
         setShowSaveSuccess(true);
         if (batchModalOpen) {
             setBatchModalOpen(false);
@@ -1382,10 +1444,18 @@ export default function App() {
                 });
                 // Append songs not already in the list
                 const brandNew = Array.from(newByName.values());
-                return { ...pl, songs: [...merged, ...brandNew] };
+                const updatedPlaylist = { ...pl, songs: [...merged, ...brandNew] };
+
+                // Cloud backup for updated playlist
+                if (authenticatedUser) {
+                    saveCloudPlaylist(authenticatedUser, updatedPlaylist.name, updatedPlaylist.songs);
+                }
+                return updatedPlaylist;
             }
             return pl;
         });
+        localStorage.setItem('iron_chords_playlists', JSON.stringify(updated));
+        setSavedPlaylists(updated);
         localStorage.setItem('iron_chords_playlists', JSON.stringify(updated));
         setSavedPlaylists(updated);
         setSaveListModalOpen(false);
@@ -2551,11 +2621,13 @@ export default function App() {
                 setSelectedAcervoItems([]);
             } catch (err) { alert(err); }
         } else if (deleteTarget.type === 'lista') {
-            const existing = JSON.parse(localStorage.getItem('iron_chords_playlists') || '[]');
-            const updated = existing.filter(pl => pl.id !== deleteTarget.id);
+            const listToDelete = savedPlaylists.find(p => p.id === deleteTarget.id);
+            const updated = savedPlaylists.filter(pl => pl.id !== deleteTarget.id);
             localStorage.setItem('iron_chords_playlists', JSON.stringify(updated));
             setSavedPlaylists(updated);
-            setSelectedLists(prev => prev.filter(id => id !== deleteTarget.id));
+            if (authenticatedUser && listToDelete) {
+                deleteCloudPlaylist(authenticatedUser, listToDelete.name);
+            }
         } else if (deleteTarget.type === 'lista_multi') {
             const existing = JSON.parse(localStorage.getItem('iron_chords_playlists') || '[]');
             const idsToRemove = Array.isArray(deleteTarget.id) ? deleteTarget.id : [];
@@ -2593,6 +2665,14 @@ export default function App() {
 
         localStorage.setItem('iron_chords_playlists', JSON.stringify(updated));
         setSavedPlaylists(updated);
+        
+        // Cloud backup (Auto-save)
+        if (authenticatedUser) {
+            const listToSync = updated.find(pl => pl.name === playlistName);
+            if (listToSync) {
+                saveCloudPlaylist(authenticatedUser, listToSync.name, listToSync.songs);
+            }
+        }
     };
 
     // AUTO-SAVE EFFECT: Persists whenever songs or active playlist name changes
@@ -5560,8 +5640,18 @@ export default function App() {
                                 <button
                                     onClick={() => {
                                         if (!editListName.trim()) return;
-                                        const all = Array.isArray(savedPlaylists) ? savedPlaylists : JSON.parse(localStorage.getItem('iron_chords_playlists') || '[]');
-                                        const updated = all.map(pl => pl.id === editingList.id ? { ...pl, name: editListName } : pl);
+                                        const updated = all.map(pl => {
+                                            if (pl.id === editingList.id) {
+                                                const oldName = pl.name;
+                                                // If name changed, delete old one on cloud and save new one
+                                                if (oldName !== editListName) {
+                                                    deleteCloudPlaylist(authenticatedUser, oldName);
+                                                    saveCloudPlaylist(authenticatedUser, editListName, pl.songs);
+                                                }
+                                                return { ...pl, name: editListName };
+                                            }
+                                            return pl;
+                                        });
                                         localStorage.setItem('iron_chords_playlists', JSON.stringify(updated));
                                         setSavedPlaylists(updated);
                                         setEditingList(null);

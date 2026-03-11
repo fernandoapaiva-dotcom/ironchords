@@ -190,6 +190,29 @@ def authorize_user_endpoint(email: str):
 def get_users_endpoint():
     return {"users": get_all_users()}
 
+# PLAYLIST SYNC ENDPOINTS
+class PlaylistUpdate(BaseModel):
+    user_email: str
+    name: str
+    data: List[Dict[str, Any]]
+
+@app.get("/api/playlists/{email}")
+def get_playlists(email: str):
+    from database import get_user_playlists
+    return {"playlists": get_user_playlists(email)}
+
+@app.post("/api/playlists")
+def save_playlist(update: PlaylistUpdate):
+    from database import save_user_playlist
+    save_user_playlist(update.user_email, update.name, json.dumps(update.data))
+    return {"status": "success"}
+
+@app.delete("/api/playlists/{email}/{name}")
+def delete_playlist(email: str, name: str):
+    from database import delete_user_playlist
+    delete_user_playlist(email, name)
+    return {"status": "success"}
+
 @app.get("/")
 def health_check():
     return {"status": "online", "message": "IronChords API is running."}

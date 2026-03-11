@@ -84,6 +84,20 @@ def init_db():
             )
         ''')
         
+    # Playlists table
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='playlists'")
+    if cursor.fetchone() is None:
+        conn.execute('''
+            CREATE TABLE playlists (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_email TEXT NOT NULL,
+                name TEXT NOT NULL,
+                data TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(user_email, name)
+            )
+        ''')
+        
     # Always ensure admin is authorized
     admin_email = "fernandomaragao89@gmail.com"
     conn.execute('INSERT OR IGNORE INTO users (email, status) VALUES (?, ?)', (admin_email, 'authorized'))
@@ -176,3 +190,30 @@ def save_chord(song_name: str, artist_name: str, song_key: str, content: str, so
         conn.commit()
     finally:
         conn.close()
+
+def get_user_playlists(email: str):
+    conn = get_db_connection()
+    playlists = conn.execute("SELECT * FROM playlists WHERE user_email = ?", (email.strip(),)).fetchall()
+    conn.close()
+    return [dict(p) for p in playlists]
+
+def save_user_playlist(email: str, name: str, data_json: str):
+    conn = get_db_connection()
+    try:
+        conn.execute(
+            'INSERT INTO playlists (user_email, name, data) VALUES (?, ?, ?)',
+            (email.strip(), name.strip(), data_json)
+        )
+    except sqlite3.IntegrityError:
+        conn.execute(
+            'UPDATE playlists SET data = ? WHERE user_email = ? AND name = ?',
+            (data_json, email.strip(), name.strip())
+        )
+    conn.commit()
+    conn.close()
+
+def delete_user_playlist(email: str, name: str):
+    conn = get_db_connection()
+    conn.execute("DELETE FROM playlists WHERE user_email = ? AND name = ?", (email.strip(), name.strip()))
+    conn.commit()
+    conn.close()
