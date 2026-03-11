@@ -6,11 +6,21 @@ const LoginScreen = ({ onAuthorized }) => {
     const [status, setStatus] = useState('idle'); // idle, loading, pending, authorized, error
     const [message, setMessage] = useState('');
 
-    const API_BASE = (import.meta.env.VITE_API_BASE_URL || (
-        window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-            ? 'http://127.0.0.1:8000/api'
-            : (window.location.port ? `${window.location.protocol}//${window.location.hostname}:8000/api` : `${window.location.origin}/api`)
-    )).replace(/\/$/, '');
+    const getBaseUrl = () => {
+        const raw = import.meta.env.VITE_API_BASE_URL;
+        if (raw) return raw.replace(/\/$/, '');
+        
+        // Fallbacks for development
+        if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+            return 'http://127.0.0.1:8000';
+        }
+        if (window.location.port && window.location.port !== '80' && window.location.port !== '443') {
+             return `${window.location.protocol}//${window.location.hostname}:8000`;
+        }
+        return window.location.origin;
+    };
+
+    const API_BASE = `${getBaseUrl()}/api`.replace(/\/+$/, '/api');
 
     useEffect(() => {
         const savedEmail = localStorage.getItem('ironchords_user_email');
@@ -24,6 +34,7 @@ const LoginScreen = ({ onAuthorized }) => {
         setStatus('loading');
         try {
             const res = await fetch(`${API_BASE}/auth/status/${emailToCheck}`);
+            if (!res.ok) throw new Error(`Status ${res.status}`);
             const data = await res.json();
             
             if (data.status === 'authorized') {
@@ -36,8 +47,9 @@ const LoginScreen = ({ onAuthorized }) => {
                 setStatus('idle');
             }
         } catch (err) {
+            console.error("Status check error:", err);
             setStatus('error');
-            setMessage('Erro ao conectar com o servidor.');
+            setMessage(`Erro ao conectar com o servidor: ${err.message || 'Falha na rede'}`);
         }
     };
 
@@ -55,7 +67,9 @@ const LoginScreen = ({ onAuthorized }) => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email })
             });
+
             const data = await res.json();
+            if (!res.ok) throw new Error(data.message || data.detail || `Erro ${res.status}`);
 
             if (data.status === 'authorized') {
                 localStorage.setItem('ironchords_user_email', email);
@@ -69,8 +83,9 @@ const LoginScreen = ({ onAuthorized }) => {
                 setMessage(data.message || 'Erro ao registrar.');
             }
         } catch (err) {
+            console.error("Registration error:", err);
             setStatus('error');
-            setMessage('Erro ao processar cadastro.');
+            setMessage(`Erro ao processar cadastro: ${err.message || 'Falha na rede'}. Verifique sua conexão.`);
         }
     };
 

@@ -9,11 +9,14 @@ import { CifraParser } from './utils/CifraParser';
 import LoginScreen from './components/LoginScreen';
 
 // Dynamic API Base URL detection
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || (
-    window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-        ? 'http://127.0.0.1:8000'
-        : (window.location.port ? `${window.location.protocol}//${window.location.hostname}:8000` : window.location.origin)
-)).replace(/\/$/, '');
+const getBaseUrl = () => {
+    const raw = import.meta.env.VITE_API_BASE_URL;
+    if (raw) return raw.replace(/\/$/, '');
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') return 'http://127.0.0.1:8000';
+    if (window.location.port && window.location.port !== '80' && window.location.port !== '443') return `${window.location.protocol}//${window.location.hostname}:8000`;
+    return window.location.origin;
+};
+const API_BASE_URL = getBaseUrl().replace(/\/api\/?$/, '');
 
 // -------------------------------------------------------------------
 // CHORD DICTIONARY  (ported from chord_drawer.py)
