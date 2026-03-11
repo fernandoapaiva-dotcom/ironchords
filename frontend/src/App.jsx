@@ -1393,13 +1393,19 @@ export default function App() {
     }, [songForPrint]);
 
     const handlePrint = (songOverride = null) => {
-        const song = songOverride || manualPreviewSong || currentSong;
-        if (!song) {
+        const songToPrint = songOverride || manualPreviewSong || currentSong;
+        if (!songToPrint) {
             window.print();
             return;
         }
-        // Set a new object with a _printTimestamp so multiple prints of the same song still trigger the effect
-        setSongForPrint({ ...song, _printTimestamp: Date.now() });
+        
+        if (Array.isArray(songToPrint)) {
+            // Batch print mode
+            setSongForPrint({ isBatch: true, songs: songToPrint, _printTimestamp: Date.now() });
+        } else {
+            // Single song print mode
+            setSongForPrint({ ...songToPrint, _printTimestamp: Date.now() });
+        }
     };
 
     const [micEnabled, setMicEnabled] = useState(false);
@@ -5273,12 +5279,12 @@ export default function App() {
                                                         </a>
                                                         <button
                                                             onClick={() => {
-                                                                window.open(downloadUrl, '_blank');
+                                                                handlePrint(currentExportList?.songs || songs);
                                                             }}
-                                                            className="flex-1 py-6 bg-blue-600 hover:bg-blue-700 text-white text-center text-lg font-black uppercase tracking-[0.3em] rounded-[24px] transition-all shadow-xl shadow-blue-900/20 italic flex items-center justify-center"
+                                                            className="flex-1 py-6 bg-blue-600 hover:bg-blue-700 text-white text-center text-lg font-black uppercase tracking-[0.3em] rounded-[24px] transition-all shadow-xl shadow-blue-900/20 italic flex items-center justify-center cursor-pointer"
                                                         >
-                                                            <Eye className="w-7 h-7 mr-4" />
-                                                            ABRIR PDF
+                                                            <Printer className="w-7 h-7 mr-4" />
+                                                            IMPRIMIR EM PDF
                                                         </button>
                                                     </div>
                                                     <div className="w-full">
@@ -6032,11 +6038,14 @@ export default function App() {
                 createPortal(
                     <div id="dedicated-print-sheet" className="hidden print:block fixed inset-0 bg-white text-black z-[99999] overflow-y-auto">
                         {(() => {
-                            const songToPrint = songForPrint || manualPreviewSong || currentSong;
-                            if (!songToPrint) return null;
+                            const printData = songForPrint || manualPreviewSong || currentSong;
+                            if (!printData) return null;
 
-                            return (
-                                <div className="w-full max-w-5xl mx-auto px-12 py-8 print:px-4 print:py-4">
+                            // Determine if we are printing a single song or an array (batch)
+                            const songsToRender = printData.isBatch ? printData.songs : [printData];
+
+                            return songsToRender.map((songToPrint, idx) => (
+                                <div key={songToPrint.id || idx} className={`w-full max-w-5xl mx-auto px-12 py-8 print:px-4 print:py-4 ${idx > 0 ? 'print:break-before-page' : ''}`}>
                                     {/* Logo */}
                                     <div className="flex justify-between items-start mb-10 print:mb-8 pb-4 border-b-2 border-[#ea580c] print:border-[#ea580c]">
                                         <h1 className="text-5xl print:text-5xl font-black tracking-tighter leading-none text-black">
@@ -6181,7 +6190,7 @@ export default function App() {
                                         );
                                     })()}
                                 </div>
-                            );
+                            ));
                         })()}
                     </div>,
                     document.body
