@@ -3417,14 +3417,35 @@ export default function App() {
             {isGenerating && <MoltenLoading message={forgeMessage} current={batchProgress.current} total={batchProgress.total} />}
             <UserManagementModal isOpen={showUserManagement} onClose={() => setShowUserManagement(false)} API_BASE={`${API_BASE_URL}/api`} />
 
-            {/* Global Settings Gear Icon */}
-            <button 
-                onClick={() => setShowSettingsModal(true)}
-                className="fixed top-2 right-2 sm:top-4 sm:right-4 z-[400] p-2 sm:p-3 bg-[#16161D]/60 backdrop-blur-xl border border-white/5 rounded-xl text-slate-500 hover:text-[#B87333] hover:border-[#B87333]/40 transition-all shadow-xl group no-print flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12"
-                title="Configurações e Gestão"
-            >
-                <Settings2 className="w-5 h-5 sm:w-6 sm:h-6 group-hover:rotate-90 transition-transform duration-500" />
-            </button>
+            {/* Top-Left Global Controls Group */}
+            <div className="fixed top-2 left-2 sm:top-4 sm:left-4 z-[400] flex items-center gap-1.5 sm:gap-2 no-print">
+                {/* Global Settings Gear Icon */}
+                <button 
+                    onClick={() => setShowSettingsModal(true)}
+                    className="p-2 sm:p-3 bg-[#16161D]/60 backdrop-blur-xl border border-white/5 rounded-xl text-slate-500 hover:text-[#B87333] hover:border-[#B87333]/40 transition-all shadow-xl group flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12"
+                    title="Configurações e Gestão"
+                >
+                    <Settings2 className="w-5 h-5 sm:w-6 sm:h-6 group-hover:rotate-90 transition-transform duration-500" />
+                </button>
+
+                {/* Share Button (Always Visible) */}
+                <button 
+                    onClick={handleShareList} 
+                    className="p-2 sm:p-3 bg-[#16161D]/60 backdrop-blur-xl border border-white/5 rounded-xl text-slate-500 hover:text-white hover:border-[#B87333]/40 transition-all shadow-xl flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12" 
+                    title="Compartilhar"
+                >
+                    <Share2 className="w-4 h-4 sm:w-5 sm:h-5 text-slate-500" />
+                </button>
+
+                {/* Fullscreen Player Toggle */}
+                <button 
+                    onClick={() => { setIsImmersiveMode(!isImmersiveMode); setShowImmersiveControls(false); }} 
+                    className={`p-2 sm:p-3 rounded-xl border transition-all shadow-xl flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 backdrop-blur-xl ${isImmersiveMode ? 'bg-[#B87333]/20 border-[#B87333] text-[#B87333]' : 'bg-[#16161D]/60 border-white/5 text-slate-500 hover:text-white'}`} 
+                    title={isImmersiveMode ? "Sair Tela Cheia" : "Tela Cheia"}
+                >
+                    {isImmersiveMode ? <Minimize2 className="w-4 h-4 sm:w-5 sm:h-5" /> : <Maximize2 className="w-4 h-4 sm:w-5 sm:h-5" />}
+                </button>
+            </div>
 
             {/* Chord Tooltip Overlay */}
             {chordTooltip && chordTooltip.chord && (
@@ -3463,23 +3484,14 @@ export default function App() {
                         {/* PLAYER HEADER — CLEAN TOP BAR */}
                         <div className={`bg-black/60 border-b border-white/5 backdrop-blur-2xl shrink-0 no-print w-full z-[200] transition-all duration-300 ${isImmersiveMode && !showImmersiveControls ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
                             <div className="flex items-center justify-between px-3 py-2 w-full">
-                                {/* Left: Back + Info */}
-                                <div className="flex items-center gap-2">
-                                    <div className="flex flex-col min-w-0 max-w-[160px] sm:max-w-xs ml-2">
-                                        <h2 className="text-xs font-black text-white uppercase italic tracking-tighter leading-none truncate">{currentSong?.song_name || '—'}</h2>
-                                        <p className="text-[9px] font-bold text-[#B87333] uppercase truncate opacity-60 mt-0.5">{activePlaylistName}</p>
-                                    </div>
+                                {/* Center: Info */}
+                                <div className="flex-1 flex flex-col items-center justify-center min-w-0 px-12 sm:px-24">
+                                    <h2 className="text-[10px] sm:text-xs font-black text-white uppercase italic tracking-tighter leading-none truncate max-w-full">{currentSong?.song_name || '—'}</h2>
+                                    <p className="text-[8px] sm:text-[9px] font-bold text-[#B87333] uppercase truncate opacity-60 mt-1 max-w-full">{activePlaylistName}</p>
                                 </div>
 
-                                {/* Right: Share & Fullscreen */}
-                                <div className="flex items-center gap-2">
-                                    <button onClick={handleShareList} className="p-2.5 bg-white/5 border border-white/10 rounded-2xl text-slate-400 hover:text-white hover:bg-white/10 transition-all shrink-0" title="Compartilhar">
-                                        <Share2 className="w-4 h-4" />
-                                    </button>
-                                    <button onClick={() => { setIsImmersiveMode(!isImmersiveMode); setShowImmersiveControls(false); }} className={`p-2.5 rounded-2xl border transition-all shrink-0 ${isImmersiveMode ? 'bg-[#B87333]/20 border-[#B87333] text-[#B87333]' : 'bg-white/5 border-white/10 text-slate-500 hover:text-white'}`} title={isImmersiveMode ? "Sair Tela Cheia" : "Tela Cheia"}>
-                                        {isImmersiveMode ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-                                    </button>
-                                </div>
+                                {/* Right: Spacing placeholder */}
+                                <div className="w-12 sm:w-24 shrink-0"></div>
                             </div>
                         </div>
 
