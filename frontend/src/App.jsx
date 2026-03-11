@@ -3417,8 +3417,8 @@ export default function App() {
             {isGenerating && <MoltenLoading message={forgeMessage} current={batchProgress.current} total={batchProgress.total} />}
             <UserManagementModal isOpen={showUserManagement} onClose={() => setShowUserManagement(false)} API_BASE={`${API_BASE_URL}/api`} />
 
-            {/* Top-Left Global Controls Group */}
-            <div className="fixed top-2 left-2 sm:top-4 sm:left-4 z-[400] flex items-center gap-1.5 sm:gap-2 no-print">
+            {/* Top-Right Global Controls Group */}
+            <div className="fixed top-2 right-2 sm:top-4 sm:right-4 z-[400] flex items-center gap-1.5 sm:gap-2 no-print">
                 {/* Global Settings Gear Icon */}
                 <button 
                     onClick={() => setShowSettingsModal(true)}
@@ -3484,14 +3484,16 @@ export default function App() {
                         {/* PLAYER HEADER — CLEAN TOP BAR */}
                         <div className={`bg-black/60 border-b border-white/5 backdrop-blur-2xl shrink-0 no-print w-full z-[200] transition-all duration-300 ${isImmersiveMode && !showImmersiveControls ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
                             <div className="flex items-center justify-between px-3 py-2 w-full">
-                                {/* Center: Info */}
-                                <div className="flex-1 flex flex-col items-center justify-center min-w-0 px-12 sm:px-24">
-                                    <h2 className="text-[10px] sm:text-xs font-black text-white uppercase italic tracking-tighter leading-none truncate max-w-full">{currentSong?.song_name || '—'}</h2>
-                                    <p className="text-[8px] sm:text-[9px] font-bold text-[#B87333] uppercase truncate opacity-60 mt-1 max-w-full">{activePlaylistName}</p>
+                                {/* Left: Info */}
+                                <div className="flex items-center gap-2 ml-2">
+                                    <div className="flex flex-col min-w-0 max-w-[160px] sm:max-w-xs">
+                                        <h2 className="text-xs font-black text-white uppercase italic tracking-tighter leading-none truncate">{currentSong?.song_name || '—'}</h2>
+                                        <p className="text-[9px] font-bold text-[#B87333] uppercase truncate opacity-60 mt-0.5">{activePlaylistName}</p>
+                                    </div>
                                 </div>
 
-                                {/* Right: Spacing placeholder */}
-                                <div className="w-12 sm:w-24 shrink-0"></div>
+                                {/* Right: Spacing placeholder for buttons on right */}
+                                <div className="w-24 sm:w-32 shrink-0"></div>
                             </div>
                         </div>
 
@@ -3617,21 +3619,34 @@ export default function App() {
                             <div className="w-px h-6 bg-white/10" />
 
                             {/* Main Playback Controls */}
-                            <button onClick={() => { if (selectedManualIndex > 0) { setSelectedManualIndex(selectedManualIndex - 1); setCurrentLineIndex(0); currentLineIndexRef.current = 0; if (scrollContainerRef.current) scrollContainerRef.current.scrollTop = 0; } }} disabled={selectedManualIndex === 0} className="w-10 h-10 rounded-full flex items-center justify-center bg-white/5 hover:bg-white/10 transition-all text-slate-300 hover:text-white disabled:opacity-20 shrink-0"><SkipBack className="w-4 h-4 ml-0.5" /></button>
-                            
-                            <button onClick={() => { const s = !isAutoScrolling; setIsAutoScrolling(s); if (s) setIsDynamicSpeedActive(false); }} className={`w-14 h-14 rounded-full flex items-center justify-center transition-all shrink-0 ${isAutoScrolling ? 'bg-[#B87333] text-white shadow-[0_0_30px_rgba(184,115,51,0.6)]' : 'bg-white text-black hover:bg-slate-200'}`}>
-                                {isAutoScrolling ? <Pause className="w-6 h-6" /> : <Play className="w-7 h-7 ml-1 text-[#12121A]" />}
-                            </button>
+                             {/* Navigation Controls */}
+                             <div className="flex items-center gap-2">
+                                <button onClick={() => { if (selectedManualIndex > 0) { setSelectedManualIndex(selectedManualIndex - 1); setCurrentLineIndex(0); currentLineIndexRef.current = 0; if (scrollContainerRef.current) scrollContainerRef.current.scrollTop = 0; } }} disabled={selectedManualIndex === 0} className="w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center bg-white/5 hover:bg-white/10 transition-all text-slate-300 hover:text-white disabled:opacity-20 shrink-0"><SkipBack className="w-4 h-4 ml-0.5" /></button>
+                                
+                                {/* Vertical stack on mobile for Play + Size */}
+                                <div className="flex flex-col items-center gap-1">
+                                    <button onClick={() => { const s = !isAutoScrolling; setIsAutoScrolling(s); if (s) setIsDynamicSpeedActive(false); }} className={`w-12 h-12 sm:w-14 sm:h-14 rounded-full flex items-center justify-center transition-all shrink-0 ${isAutoScrolling ? 'bg-[#B87333] text-white shadow-[0_0_30px_rgba(184,115,51,0.6)]' : 'bg-white text-black hover:bg-slate-200'}`}>
+                                        {isAutoScrolling ? <Pause className="w-6 h-6" /> : <Play className="w-6 h-6 sm:w-7 sm:h-7 ml-1 text-[#12121A]" />}
+                                    </button>
+                                    
+                                    {/* Font Controls UNDER play button on Mobile */}
+                                    <div className="flex items-center space-x-1 bg-white/5 border border-white/5 rounded-full p-0.5 sm:hidden">
+                                        <button onClick={() => setPlayerFontSize(prev => Math.max(12, prev - 1))} className="px-2 py-1 text-slate-400 hover:text-white transition-all font-black text-[9px]">A-</button>
+                                        <button onClick={() => setPlayerFontSize(prev => Math.min(60, prev + 1))} className="px-2 py-1 text-slate-400 hover:text-white transition-all font-black text-[9px]">A+</button>
+                                    </div>
+                                </div>
 
-                            <button onClick={() => { if (selectedManualIndex < songs.length - 1) { setSelectedManualIndex(selectedManualIndex + 1); setCurrentLineIndex(0); currentLineIndexRef.current = 0; if (scrollContainerRef.current) scrollContainerRef.current.scrollTop = 0; } }} disabled={selectedManualIndex === songs.length - 1} className="w-10 h-10 rounded-full flex items-center justify-center bg-white/5 hover:bg-white/10 transition-all text-slate-300 hover:text-white disabled:opacity-20 shrink-0"><SkipForward className="w-4 h-4 mr-0.5" /></button>
+                                <button onClick={() => { if (selectedManualIndex < songs.length - 1) { setSelectedManualIndex(selectedManualIndex + 1); setCurrentLineIndex(0); currentLineIndexRef.current = 0; if (scrollContainerRef.current) scrollContainerRef.current.scrollTop = 0; } }} disabled={selectedManualIndex === songs.length - 1} className="w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center bg-white/5 hover:bg-white/10 transition-all text-slate-300 hover:text-white disabled:opacity-20 shrink-0"><SkipForward className="w-4 h-4 mr-0.5" /></button>
+                             </div>
                             
                             <div className="w-px h-6 bg-white/10" />
 
-                            <button onClick={() => { setCurrentLineIndex(0); currentLineIndexRef.current = 0; if (scrollContainerRef.current) scrollContainerRef.current.scrollTop = 0; }} className="w-10 h-10 rounded-full flex items-center justify-center bg-white/5 hover:bg-white/10 transition-all text-slate-400 hover:text-white shrink-0" title="Reiniciar do Topo"><RotateCcw className="w-4 h-4 -scale-x-100" /></button>
+                            <button onClick={() => { setCurrentLineIndex(0); currentLineIndexRef.current = 0; if (scrollContainerRef.current) scrollContainerRef.current.scrollTop = 0; }} className="w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center bg-white/5 hover:bg-white/10 transition-all text-slate-400 hover:text-white shrink-0" title="Reiniciar do Topo"><RotateCcw className="w-4 h-4 -scale-x-100" /></button>
 
                             <div className="w-px h-6 bg-white/10" />
 
-                            <div className="flex items-center space-x-1 bg-white/5 border border-white/5 rounded-full p-1">
+                            {/* Font Controls (Hidden on narrow mobile, visible on desktop/sm) */}
+                            <div className="hidden sm:flex items-center space-x-1 bg-white/5 border border-white/5 rounded-full p-1">
                                 <button onClick={() => setPlayerFontSize(prev => Math.max(12, prev - 1))} className="p-2 text-slate-400 hover:text-white transition-all font-black text-xs" title="Diminuir Zoom (Letra)">A-</button>
                                 <button onClick={() => setPlayerFontSize(prev => Math.min(60, prev + 1))} className="p-2 text-slate-400 hover:text-white transition-all font-black text-xs" title="Aumentar Zoom (Letra)">A+</button>
                             </div>
