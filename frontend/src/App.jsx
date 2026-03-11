@@ -21,6 +21,7 @@ const API_BASE_URL = getBaseUrl().replace(/\/api\/?$/, '');
 // -------------------------------------------------------------------
 // PINCH-TO-ZOOM HOOK – adjusts font size when user pinches on mobile
 // -------------------------------------------------------------------
+/*
 function usePinchZoom(containerRef, fontSize, setFontSize, minSize = 12, maxSize = 60) {
     const lastDistRef = React.useRef(null);
 
@@ -73,6 +74,7 @@ function usePinchZoom(containerRef, fontSize, setFontSize, minSize = 12, maxSize
         };
     }, [containerRef, setFontSize, minSize, maxSize]);
 }
+*/
 
 
 
@@ -1446,8 +1448,8 @@ export default function App() {
     }, []);
 
     // Apply Pinch-to-Zoom Hook to both containers
-    usePinchZoom(scrollContainerRef, playerFontSize, setPlayerFontSize, 12, 60);
-    usePinchZoom(manualScrollContainerRef, manualFontSize, setManualFontSize, 12, 60);
+    // usePinchZoom(scrollContainerRef, playerFontSize, setPlayerFontSize, 12, 60);
+    // usePinchZoom(manualScrollContainerRef, manualFontSize, setManualFontSize, 12, 60);
 
     // AutoScroll Effect with Mic interaction (Manual / Player / Presentation)
     useEffect(() => {
