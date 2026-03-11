@@ -639,7 +639,7 @@ const MoltenLoading = ({ message = "Forjando conteúdo...", current = 0, total =
 // -------------------------------------------------------------------
 // SHARE MODAL COMPONENT (Internal View)
 // -------------------------------------------------------------------
-const ShareModal = ({ isOpen, onClose, listName, link }) => {
+const ShareModal = ({ isOpen, onClose, listName, link, loading }) => {
     if (!isOpen) return null;
 
     const handleWhatsApp = () => {
@@ -696,7 +696,9 @@ const ShareModal = ({ isOpen, onClose, listName, link }) => {
                 <div className="bg-black/40 border border-white/5 rounded-2xl p-4 mb-6 flex items-center gap-3">
                     <div className="flex-1 min-w-0">
                         <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Link do Repert&oacute;rio</p>
-                        <p className="text-xs text-slate-300 font-mono truncate">{link}</p>
+                        <p className="text-xs text-slate-300 font-mono truncate">
+                            {loading ? "Gerando link curto..." : link}
+                        </p>
                     </div>
                     <button
                         onClick={handleCopy}
@@ -711,7 +713,8 @@ const ShareModal = ({ isOpen, onClose, listName, link }) => {
                     {/* WhatsApp */}
                     <button
                         onClick={handleWhatsApp}
-                        className="w-full py-4 bg-[#25D366]/10 hover:bg-[#25D366]/20 text-[#25D366] border border-[#25D366]/30 rounded-2xl font-black uppercase text-xs tracking-widest transition-all flex items-center justify-center gap-3"
+                        disabled={loading}
+                        className={`w-full py-4 bg-[#25D366]/10 hover:bg-[#25D366]/20 text-[#25D366] border border-[#25D366]/30 rounded-2xl font-black uppercase text-xs tracking-widest transition-all flex items-center justify-center gap-3 ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
                     >
                         <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
                         Compartilhar no WhatsApp
@@ -721,7 +724,8 @@ const ShareModal = ({ isOpen, onClose, listName, link }) => {
                     {navigator.share && (
                         <button
                             onClick={handleNativeShare}
-                            className="w-full py-4 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded-2xl font-black uppercase text-xs tracking-widest transition-all flex items-center justify-center gap-3"
+                            disabled={loading}
+                            className={`w-full py-4 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded-2xl font-black uppercase text-xs tracking-widest transition-all flex items-center justify-center gap-3 ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
                         >
                             <Share2 className="w-4 h-4" />
                             Compartilhar via...
@@ -731,7 +735,8 @@ const ShareModal = ({ isOpen, onClose, listName, link }) => {
                     {/* Email */}
                     <button
                         onClick={handleEmail}
-                        className="w-full py-4 bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white border border-white/5 rounded-2xl font-black uppercase text-xs tracking-widest transition-all flex items-center justify-center gap-3"
+                        disabled={loading}
+                        className={`w-full py-4 bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white border border-white/5 rounded-2xl font-black uppercase text-xs tracking-widest transition-all flex items-center justify-center gap-3 ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
                     >
                         <Mail className="w-4 h-4" />
                         Enviar por E-mail
@@ -1290,6 +1295,8 @@ function App() {
 
     // Share & Import State
     const [shareModalOpen, setShareModalOpen] = useState(false);
+    const [shareLoading, setShareLoading] = useState(false);
+    const [shareLink, setShareLink] = useState("");
     const [importData, setImportData] = useState(null); // { name, songs }
 
     // Deletion Modal State
@@ -1545,22 +1552,42 @@ function App() {
     const isPausedBySilenceRef = useRef(false);
     useEffect(() => { isPausedBySilenceRef.current = isPausedBySilence; }, [isPausedBySilence]);
 
-    // URL-Based Import Check
+    // URL-Based Import Check (Short Links & Legacy B64)
     useEffect(() => {
         const urlParams = new URLSearchParams(window.location.search);
         const importDataB64 = urlParams.get('import');
-        if (importDataB64) {
+        const shareSlug = urlParams.get('s');
+
+        if (shareSlug) {
+            // Handle shortened slug link from backend
+            const fetchSharedList = async () => {
+                try {
+                    const res = await fetch(`${API_BASE_URL}/api/share/${shareSlug}`);
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data && data.songs) {
+                            setImportData(data);
+                        }
+                    }
+                } catch (err) {
+                    console.error("Erro ao buscar lista compartilhada via slug:", err);
+                }
+            };
+            fetchSharedList();
+            // Clear URL param without refreshing
+            window.history.replaceState({}, document.title, window.location.pathname);
+        } else if (importDataB64) {
             try {
-                // Handle Base64 with UTF-8 support properly
+                // Handle Legacy Base64 with UTF-8 support properly
                 const decodedStr = decodeURIComponent(escape(atob(importDataB64)));
                 const decoded = JSON.parse(decodedStr);
                 if (decoded && decoded.songs) {
                     setImportData(decoded);
                 }
-                // Clear URL param without refreshing the page
+                // Clear URL param without refreshing
                 window.history.replaceState({}, document.title, window.location.pathname);
             } catch (err) {
-                console.error("Erro ao importar lista do link:", err);
+                console.error("Erro ao importar lista do link Base64:", err);
             }
         }
     }, []);
@@ -2791,33 +2818,59 @@ function App() {
         }
     };
 
-    const getShareLink = () => {
+    const getShareLink = async () => {
         if (songs.length === 0) return "";
+        setShareLoading(true);
         try {
-            // Only share metadata – no content! This keeps URLs short and WhatsApp-friendly.
-            // Recipients will fetch the cifras from the API when they open the link.
-            const data = JSON.stringify({
+            const payload = {
                 name: activePlaylistName || "Lista Compartilhada",
                 songs: songs.map(s => ({
                     song_name: s.song_name,
                     artist_name: s.artist_name,
                     song_key: s.sounding_key || s.requested_key || s.song_key,
                     capo: s.capo || 0
-                    // NOTE: content intentionally omitted to keep URL short
+                }))
+            };
+            
+            const res = await fetch(`${API_BASE_URL}/api/share`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            const url = `${API_BASE_URL}/s/${data.slug}`;
+            setShareLink(url);
+            return url;
+        } catch (err) {
+            console.error("Erro ao gerar slug de compartilhamento:", err);
+            // Fallback to legacy Base64 if API fails
+            const legacyData = JSON.stringify({
+                name: activePlaylistName || "Lista Compartilhada",
+                songs: songs.map(s => ({
+                    song_name: s.song_name,
+                    artist_name: s.artist_name,
+                    song_key: s.sounding_key || s.requested_key || s.song_key,
+                    capo: s.capo || 0
                 }))
             });
-            const b64 = btoa(unescape(encodeURIComponent(data)));
-            return `${window.location.origin}${window.location.pathname}?import=${b64}`;
-        } catch (err) {
-            console.error("Erro ao gerar link de compartilhamento:", err);
-            return "";
+            const b64 = btoa(unescape(encodeURIComponent(legacyData)));
+            const url = `${window.location.origin}${window.location.pathname}?import=${b64}`;
+            setShareLink(url);
+            return url;
+        } finally {
+            setShareLoading(false);
         }
     };
 
 
     const handleShareList = async () => {
         if (songs.length === 0) return;
-        const url = getShareLink();
+        
+        // Open modal immediately so user sees loading state
+        setShareModalOpen(true);
+        
+        const url = await getShareLink();
+        if (!url) return;
         
         if (navigator.share) {
             try {
@@ -2826,17 +2879,11 @@ function App() {
                     text: `Acesse minha lista de cifras no IronChords:`,
                     url: url
                 });
-                return;
             } catch (err) {
-                // If user cancelled, just silently return. If it failed for another reason, fallback to modal
                 if (err.name !== 'AbortError') {
-                    console.error("Erro no compartilhamento nativo, caindo para modal:", err);
-                    setShareModalOpen(true);
+                    console.error("Erro no compartilhamento nativo:", err);
                 }
             }
-        } else {
-            // Fallback for desktop or unsupported browsers
-            setShareModalOpen(true);
         }
     };
 
@@ -6164,7 +6211,8 @@ function App() {
                 isOpen={shareModalOpen}
                 onClose={() => setShareModalOpen(false)}
                 listName={activePlaylistName || "Repertório"}
-                link={getShareLink()}
+                link={shareLink}
+                loading={shareLoading}
             />
             <ImportModal
                 data={importData}

@@ -1,6 +1,7 @@
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, WebSocket, WebSocketDisconnect # type: ignore
 from fastapi.middleware.cors import CORSMiddleware # type: ignore
-from fastapi.responses import FileResponse # type: ignore
+from fastapi.responses import FileResponse, HTMLResponse # type: ignore
+from database import init_db, get_chord, save_chord, get_db_connection, get_all_chords, register_user, authorize_user, check_user_status, get_all_users, save_short_link, get_short_link, get_user_playlists, save_user_playlist, delete_user_playlist # type: ignore
 from pydantic import BaseModel # type: ignore
 from typing import List, Optional, Any, Dict, Union, cast
 import pandas as pd # type: ignore
@@ -53,7 +54,6 @@ def clean_song_name(name: str) -> str:
 
 import scraper # type: ignore
 from scraper import find_chord_cascade, get_cifraclub_versions # type: ignore
-from database import init_db, get_chord, save_chord, get_db_connection, get_all_chords, register_user, authorize_user, check_user_status, get_all_users # type: ignore
 import chord_utils # type: ignore
 from chord_utils import process_chords # type: ignore
 from document_generator import generate_docx # type: ignore
@@ -198,20 +198,86 @@ class PlaylistUpdate(BaseModel):
 
 @app.get("/api/playlists/{email}")
 def get_playlists(email: str):
-    from database import get_user_playlists
     return {"playlists": get_user_playlists(email)}
 
 @app.post("/api/playlists")
 def save_playlist(update: PlaylistUpdate):
-    from database import save_user_playlist
     save_user_playlist(update.user_email, update.name, json.dumps(update.data))
     return {"status": "success"}
 
 @app.delete("/api/playlists/{email}/{name}")
 def delete_playlist(email: str, name: str):
-    from database import delete_user_playlist
     delete_user_playlist(email, name)
     return {"status": "success"}
+
+# SHARE & SHORT LINKS
+class ShareRequest(BaseModel):
+    name: str
+    songs: List[Dict[str, Any]]
+
+def generate_slug(length=6):
+    import random
+    import string
+    chars = string.ascii_letters + string.digits
+    return ''.join(random.choice(chars) for _ in range(length))
+
+@app.post("/api/share")
+def create_share_link(request: ShareRequest):
+    slug = generate_slug()
+    # Ensure uniqueness (simple retry)
+    for _ in range(5):
+        try:
+            save_short_link(slug, json.dumps({"name": request.name, "songs": request.songs}))
+            break
+        except:
+            slug = generate_slug()
+    return {"slug": slug}
+
+@app.get("/api/share/{slug}")
+def get_share_data(slug: str):
+    data = get_short_link(slug)
+    if not data:
+        raise HTTPException(status_code=404, detail="Link não encontrado")
+    return json.loads(data)
+
+@app.get("/s/{slug}")
+def social_preview_bridge(slug: str):
+    data_str = get_short_link(slug)
+    if not data_str:
+        return FileResponse(os.path.join(os.path.dirname(__file__), "index.html")) # Fallback
+    
+    data = json.loads(data_str)
+    title = data.get("name", "Lista de Cifras")
+    song_count = len(data.get("songs", []))
+    description = f"Confira esta lista com {song_count} músicas no IronChords."
+    if song_count > 0:
+        first_songs = ", ".join([s.get("song_name", "") for s in data.get("songs", [])[:3]])
+        description = f"Inclui: {first_songs}... e mais. No IronChords."
+
+    # HTML with Open Graph tags and JS redirect
+    frontend_url = "https://ironchords.vercel.app"
+    redirect_url = f"{frontend_url}/?s={slug}"
+    
+    html_content = f"""
+    <!DOCTYPE html>
+    <html lang="pt-br">
+    <head>
+        <meta charset="UTF-8">
+        <title>{title} | IronChords</title>
+        <meta property="og:title" content="{title}">
+        <meta property="og:description" content="{description}">
+        <meta property="og:image" content="https://ironchords.vercel.app/og-image.png">
+        <meta property="og:url" content="{redirect_url}">
+        <meta property="og:type" content="website">
+        <meta name="twitter:card" content="summary_large_image">
+        <script>window.location.href = "{redirect_url}";</script>
+    </head>
+    <body>
+        <p>Redirecionando para {title}...</p>
+    </body>
+    </html>
+    """
+    return HTMLResponse(content=html_content)
 
 @app.get("/")
 def health_check():

@@ -98,6 +98,18 @@ def init_db():
             )
         ''')
         
+    # Short Links table
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='short_links'")
+    if cursor.fetchone() is None:
+        conn.execute('''
+            CREATE TABLE short_links (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                slug TEXT NOT NULL UNIQUE,
+                data TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+
     # Always ensure admin is authorized
     admin_email = "fernandomaragao89@gmail.com"
     conn.execute('INSERT OR IGNORE INTO users (email, status) VALUES (?, ?)', (admin_email, 'authorized'))
@@ -217,3 +229,15 @@ def delete_user_playlist(email: str, name: str):
     conn.execute("DELETE FROM playlists WHERE user_email = ? AND name = ?", (email.strip(), name.strip()))
     conn.commit()
     conn.close()
+
+def save_short_link(slug: str, data_json: str):
+    conn = get_db_connection()
+    conn.execute('INSERT INTO short_links (slug, data) VALUES (?, ?)', (slug, data_json))
+    conn.commit()
+    conn.close()
+
+def get_short_link(slug: str):
+    conn = get_db_connection()
+    res = conn.execute('SELECT data FROM short_links WHERE slug = ?', (slug,)).fetchone()
+    conn.close()
+    return res['data'] if res else None
