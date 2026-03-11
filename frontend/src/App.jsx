@@ -25,6 +25,12 @@ const API_BASE_URL = getBaseUrl().replace(/\/api\/?$/, '');
 function usePinchZoom(containerRef, fontSize, setFontSize, minSize = 12, maxSize = 60) {
     const lastDistRef = React.useRef(null);
     const frameRef = React.useRef(null);
+    const targetFontSizeRef = React.useRef(fontSize);
+
+    // Sync ref with external state when state changes from elsewhere (like buttons)
+    React.useEffect(() => {
+        targetFontSizeRef.current = fontSize;
+    }, [fontSize]);
 
     React.useEffect(() => {
         const el = containerRef?.current;
@@ -46,26 +52,28 @@ function usePinchZoom(containerRef, fontSize, setFontSize, minSize = 12, maxSize
         const onTouchMove = (e) => {
             if (e.touches.length !== 2 || lastDistRef.current === null) return;
             
-            // Only prevent default if we are actively zooming to stop scroll
+            const newDist = getTouchDist(e.touches);
+            const delta = newDist - lastDistRef.current;
+
+            // Only prevent default and block touch-action if we are actually pinching
             if (e.cancelable) {
                 e.preventDefault();
             }
 
-            const newDist = getTouchDist(e.touches);
-            const delta = newDist - lastDistRef.current;
-
-            // Require a smaller pinch movement to trigger a render for better sensitivity
-            if (Math.abs(delta) > 3) {
+            // Smoother threshold: only update if delta is significant to avoid jitter
+            if (Math.abs(delta) > 5) {
                 if (frameRef.current) cancelAnimationFrame(frameRef.current);
                 
-                // Throttle state updates to Animation Frames to prevent React white-screen crashes
+                // Use a multiplier to make the zoom feel more natural
+                const zoomFactor = delta > 0 ? 0.8 : -0.8;
+                
+                targetFontSizeRef.current = Math.min(maxSize, Math.max(minSize, targetFontSizeRef.current + zoomFactor));
+                
+                // Batch updates using requestAnimationFrame for performance
                 frameRef.current = requestAnimationFrame(() => {
-                    setFontSize(prev => {
-                        const nextSize = prev + (delta > 0 ? 1 : -1); // More robust increments
-                        return Math.min(maxSize, Math.max(minSize, nextSize));
-                    });
-                    // lastDistRef.current is already set above in the main loop to keep it responsive
+                    setFontSize(targetFontSizeRef.current);
                 });
+                
                 lastDistRef.current = newDist;
             }
         };
@@ -75,9 +83,13 @@ function usePinchZoom(containerRef, fontSize, setFontSize, minSize = 12, maxSize
             if (frameRef.current) cancelAnimationFrame(frameRef.current);
         };
 
+        // Passive false is required to call preventDefault()
         el.addEventListener('touchstart', onTouchStart, { passive: true });
         el.addEventListener('touchmove', onTouchMove, { passive: false });
         el.addEventListener('touchend', onTouchEnd, { passive: true });
+
+        // Add CSS to block native browser zoom behavior on this element during interaction
+        el.style.touchAction = 'pan-y'; 
 
         return () => {
             if (frameRef.current) cancelAnimationFrame(frameRef.current);
@@ -5243,15 +5255,37 @@ export default function App() {
                                                         </p>
                                                     </div>
 
-                                                    <div className="grid grid-cols-1 gap-4">
+                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full">
                                                         <a
                                                             href={downloadUrl}
+                                                            onClick={(e) => {
+                                                                // Programmatic fallback for stubborn mobile browsers
+                                                                if (!/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) return;
+                                                                
+                                                                const link = document.createElement('a');
+                                                                link.href = downloadUrl;
+                                                                link.download = `IronChords_${(currentExportList?.name || 'Livreto').replace(/\s+/g, '_')}.${exportFormat === 'pdf' ? 'pdf' : exportFormat === 'both' ? 'zip' : 'docx'}`;
+                                                                document.body.appendChild(link);
+                                                                link.click();
+                                                                document.body.removeChild(link);
+                                                            }}
                                                             download={`IronChords_${(currentExportList?.name || 'Livreto').replace(/\s+/g, '_')}.${exportFormat === 'pdf' ? 'pdf' : exportFormat === 'both' ? 'zip' : 'docx'}`}
-                                                            className="w-full py-6 bg-green-600 hover:bg-green-700 text-white text-center text-lg font-black uppercase tracking-[0.3em] rounded-[24px] transition-all shadow-xl shadow-green-900/20 italic flex items-center justify-center"
+                                                            className="flex-1 py-6 bg-green-600 hover:bg-green-700 text-white text-center text-lg font-black uppercase tracking-[0.3em] rounded-[24px] transition-all shadow-xl shadow-green-900/20 italic flex items-center justify-center"
                                                         >
                                                             <Download className="w-7 h-7 mr-4" />
-                                                            RECOLHER PEÇA
+                                                            SALVAR
                                                         </a>
+                                                        <button
+                                                            onClick={() => {
+                                                                window.open(downloadUrl, '_blank');
+                                                            }}
+                                                            className="flex-1 py-6 bg-blue-600 hover:bg-blue-700 text-white text-center text-lg font-black uppercase tracking-[0.3em] rounded-[24px] transition-all shadow-xl shadow-blue-900/20 italic flex items-center justify-center"
+                                                        >
+                                                            <Eye className="w-7 h-7 mr-4" />
+                                                            ABRIR PDF
+                                                        </button>
+                                                    </div>
+                                                    <div className="w-full">
                                                         <button
                                                             onClick={() => { setDownloadUrl(null); setExportStep(1); setShowExportModal(false); }}
                                                             className="w-full py-4 bg-white/5 hover:bg-white/10 text-slate-500 hover:text-white font-black uppercase tracking-widest rounded-2xl text-[10px] italic transition-all border border-white/5"
