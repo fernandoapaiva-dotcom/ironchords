@@ -1134,6 +1134,7 @@ function App() {
         }
     };
 
+    const [activePlaylistName, setActivePlaylistName] = useState('Lista Personalizada');
     const [activeTab, setActiveTab] = useState('manual');
     const [playerSidebarTab, setPlayerSidebarTab] = useState('fila'); // 'fila' | 'listas'
     const [listasSubTab, setListasSubTab] = useState('salvas');
@@ -1147,39 +1148,6 @@ function App() {
     const [playerSongSearch, setPlayerSongSearch] = useState('');
     const [playerSongSuggestions, setPlayerSongSuggestions] = useState([]);
     const [addingSongSlug, setAddingSongSlug] = useState(null);
-
-    // Auto-Save Effect for Active Playlist
-    useEffect(() => {
-        // Only auto-save if an explicit list is active (not the initial default state or a single song "Nova Cifra/Lista")
-        if (!activePlaylistName || activePlaylistName === "Nova Cifra/Lista") return;
-        
-        // Use a debounce to prevent spamming LocalStorage and the API on quick changes (like transposing)
-        const debounceSave = setTimeout(() => {
-            const allPlaylists = JSON.parse(localStorage.getItem('iron_chords_playlists') || '[]');
-            const existingIndex = allPlaylists.findIndex(p => p.name === activePlaylistName);
-            
-            // Only autosave if the playlist already exists in the saved playlists
-            if (existingIndex >= 0) {
-                const currentDataStr = JSON.stringify(allPlaylists[existingIndex].songs);
-                const newDataStr = JSON.stringify(songs);
-                
-                // Only write and sync if songs actually changed
-                if (currentDataStr !== newDataStr) {
-                    const updated = [...allPlaylists];
-                    updated[existingIndex].songs = songs;
-                    
-                    localStorage.setItem('iron_chords_playlists', JSON.stringify(updated));
-                    setSavedPlaylists(updated);
-                    
-                    if (authenticatedUser) {
-                        saveCloudPlaylist(authenticatedUser, activePlaylistName, songs);
-                    }
-                }
-            }
-        }, 800); // 800ms debounce
-
-        return () => clearTimeout(debounceSave);
-    }, [songs, activePlaylistName, authenticatedUser]);
 
     // Format song to CIFRA text format
     const playerSearchDebounceRef = useRef(null);
@@ -1560,7 +1528,6 @@ function App() {
     const [connectionStatus, setConnectionStatus] = useState('offline');
     const [lastVoiceMatchedIndex, setLastVoiceMatchedIndex] = useState(0);
 
-    const [activePlaylistName, setActivePlaylistName] = useState('Lista Personalizada');
     const isBpmSyncing = micEnabled && isRhythmicMode && fsmState.state === 'SINCRONIZANDO';
     const [currentStep, setCurrentStep] = useState(1);
 
