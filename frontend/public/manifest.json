@@ -3,7 +3,7 @@
     "name": "IronChords Forge",
     "icons": [
         {
-            "src": "logo.png",
+            "src": "ironchords_inox_icon.png",
             "sizes": "512x512",
             "type": "image/png",
             "purpose": "any maskable"

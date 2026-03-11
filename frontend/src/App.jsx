@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { PhoneticMatcher } from './utils/PhoneticMatcher';
-import { Music, UploadCloud, Plus, Minus, FileText, CheckCircle, AlertCircle, Eye, EyeOff, FileAudio, Info, X, Guitar, Settings2, Image as ImageIcon, Database, Edit3, Trash2, ArrowRight, Play, Maximize, Maximize2, Pause, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Download, ArrowLeft, SkipBack, SkipForward, Save, Share2, FolderHeart, Flame, Hammer, Sparkles, RefreshCw, Zap, ShieldCheck, Monitor, Tv, Check, Users, LayoutList, Layout, Mic, Search, RotateCcw, Printer, Archive, GripVertical, Minimize2, Link, MessageCircle, Mail, ExternalLink } from 'lucide-react';
+import { Music, UploadCloud, Plus, Minus, FileText, CheckCircle, AlertCircle, Eye, EyeOff, FileAudio, Info, X, Guitar, Settings2, Image as ImageIcon, Database, Edit3, Trash2, ArrowRight, Play, Maximize, Maximize2, Pause, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Download, ArrowLeft, SkipBack, SkipForward, Save, Share2, FolderHeart, Flame, Hammer, Sparkles, RefreshCw, Zap, ShieldCheck, Monitor, Tv, Check, Users, LayoutList, Layout, Mic, Search, RotateCcw, Printer, Archive, GripVertical, Minimize2, Link, MessageCircle, Mail, ExternalLink, Smartphone, Apple } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { SVGuitarChord } from 'svguitar';
 import { AudioTracker } from './utils/AudioTracker';
@@ -610,7 +610,7 @@ const ShareModal = ({ isOpen, onClose, listName, link }) => {
 // -------------------------------------------------------------------
 // SETTINGS MODAL
 // -------------------------------------------------------------------
-const SettingsModal = ({ isOpen, onClose, includeToc, setIncludeToc, includeDictionary, setIncludeDictionary, authenticatedUser, setShowUserManagement }) => {
+const SettingsModal = ({ isOpen, onClose, includeToc, setIncludeToc, includeDictionary, setIncludeDictionary, authenticatedUser, setShowUserManagement, deferredPrompt, handleInstallPWA }) => {
     if (!isOpen) return null;
 
     return createPortal(
@@ -674,6 +674,42 @@ const SettingsModal = ({ isOpen, onClose, includeToc, setIncludeToc, includeDict
                             </button>
                         </div>
                     )}
+
+                    <div className="bg-[#B87333]/5 border border-[#B87333]/20 rounded-[32px] p-8">
+                        <div className="flex items-center space-x-3 mb-6">
+                            <Smartphone className="w-5 h-5 text-[#B87333]" />
+                            <h3 className="text-xs font-black text-[#B87333] uppercase tracking-[0.3em] italic">Instalar no Celular</h3>
+                        </div>
+                        
+                        {deferredPrompt ? (
+                            <button 
+                                onClick={handleInstallPWA}
+                                className="w-full py-6 bg-[#B87333]/10 hover:bg-[#B87333]/20 text-[#B87333] rounded-2xl border border-[#B87333]/30 font-black uppercase text-xs tracking-[0.2em] transition-all flex items-center justify-center space-x-4 group"
+                            >
+                                <Download className="w-5 h-5" />
+                                <span>Instalar Aplicativo</span>
+                            </button>
+                        ) : (
+                            <div className="space-y-4">
+                                <div className="p-4 bg-white/5 rounded-2xl border border-white/5">
+                                    <p className="text-[10px] font-black text-white uppercase tracking-widest mb-2 flex items-center opacity-60">
+                                        <Apple className="w-3 h-3 mr-2" /> iOS (iPhone/iPad)
+                                    </p>
+                                    <p className="text-xs text-slate-400 font-bold leading-relaxed">
+                                        Toque no ícone de <span className="text-blue-400 mx-1 inline-block"><Share2 className="w-3 h-3 inline pb-0.5" /> compartilhar</span> no Safari e selecione <span className="text-white">"Adicionar à Tela de Início"</span>.
+                                    </p>
+                                </div>
+                                <div className="p-4 bg-white/5 rounded-2xl border border-white/5">
+                                    <p className="text-[10px] font-black text-white uppercase tracking-widest mb-2 flex items-center opacity-60">
+                                        <Smartphone className="w-3 h-3 mr-2" /> Android
+                                    </p>
+                                    <p className="text-xs text-slate-400 font-bold leading-relaxed">
+                                        Abra o menu do Chrome (<span className="text-white mx-1 inline-block">⋮</span>) e selecione <span className="text-white">"Instalar Aplicativo"</span>.
+                                    </p>
+                                </div>
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
         </div>,
@@ -827,6 +863,25 @@ const ImportModal = ({ data, onImport, onClose }) => {
 export default function App() {
     const [authenticatedUser, setAuthenticatedUser] = useState(null);
     const [isAuthenticating, setIsAuthenticating] = useState(true);
+    const [deferredPrompt, setDeferredPrompt] = useState(null);
+
+    useEffect(() => {
+        const handleBeforeInstallPrompt = (e) => {
+            e.preventDefault();
+            setDeferredPrompt(e);
+        };
+        window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+        return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    }, []);
+
+    const handleInstallPWA = async () => {
+        if (!deferredPrompt) return;
+        deferredPrompt.prompt();
+        const { outcome } = await deferredPrompt.userChoice;
+        if (outcome === 'accepted') {
+            setDeferredPrompt(null);
+        }
+    };
 
     useEffect(() => {
         const checkAuth = async () => {
@@ -4792,6 +4847,8 @@ export default function App() {
                 setIncludeDictionary={setIncludeDictionary}
                 authenticatedUser={authenticatedUser}
                 setShowUserManagement={setShowUserManagement}
+                deferredPrompt={deferredPrompt}
+                handleInstallPWA={handleInstallPWA}
             />
 
             {/* Export Livreto Modal */}
