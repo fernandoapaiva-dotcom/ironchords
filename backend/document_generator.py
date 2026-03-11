@@ -428,6 +428,15 @@ def generate_docx(songs: list, output_filename: str = "Livreto.docx", cover_imag
             add_header_logo(section)
         add_footer_with_branding(doc)
         
+        # Force TOC update on open
+        try:
+            settings = doc.settings.element
+            update_fields = OxmlElement('w:updateFields')
+            update_fields.set(qn('w:val'), 'true')
+            settings.append(update_fields)
+        except Exception as e:
+            print(f"DEBUG: Error setting updateFields - {e}")
+
         doc.save(out_p)
     finally:
         if os.path.exists(temp_dir): shutil.rmtree(temp_dir)
