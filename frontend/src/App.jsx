@@ -3465,10 +3465,7 @@ export default function App() {
                             <div className="flex items-center justify-between px-3 py-2 w-full">
                                 {/* Left: Back + Info */}
                                 <div className="flex items-center gap-2">
-                                    <button onClick={() => { resetSearchSession(); setIsFullScreenPlayer(false); setActiveTab('manual'); setMainNav('escolha'); setIsImmersiveMode(false); }} className="p-2.5 bg-white/5 hover:bg-white/10 rounded-2xl transition-all border border-white/5 text-slate-400 hover:text-white shrink-0" title="Voltar (Limpar Sessão)">
-                                        <ArrowLeft className="w-4 h-4 ml-0.5" />
-                                    </button>
-                                    <div className="flex flex-col min-w-0 max-w-[160px] sm:max-w-xs">
+                                    <div className="flex flex-col min-w-0 max-w-[160px] sm:max-w-xs ml-2">
                                         <h2 className="text-xs font-black text-white uppercase italic tracking-tighter leading-none truncate">{currentSong?.song_name || '—'}</h2>
                                         <p className="text-[9px] font-bold text-[#B87333] uppercase truncate opacity-60 mt-0.5">{activePlaylistName}</p>
                                     </div>
