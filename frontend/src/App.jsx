@@ -3231,7 +3231,7 @@ export default function App() {
             {/* Global Settings Gear Icon */}
             <button 
                 onClick={() => setShowSettingsModal(true)}
-                className="fixed top-8 right-8 z-[500] p-4 bg-[#16161D]/80 backdrop-blur-xl border border-white/10 rounded-2xl text-slate-400 hover:text-[#B87333] hover:border-[#B87333]/40 transition-all shadow-2xl group no-print"
+                className="fixed top-4 right-4 sm:top-8 sm:right-8 z-[500] p-3 sm:p-4 bg-[#16161D]/80 backdrop-blur-xl border border-white/10 rounded-2xl text-slate-400 hover:text-[#B87333] hover:border-[#B87333]/40 transition-all shadow-2xl group no-print"
                 title="Configurações e Gestão"
             >
                 <Settings2 className="w-6 h-6 group-hover:rotate-90 transition-transform duration-500" />
@@ -3255,7 +3255,7 @@ export default function App() {
                 </>
             )}
 
-            <main className="max-w-7xl mx-auto px-6 pt-32 pb-20 relative">
+            <main className="max-w-7xl mx-auto px-2 sm:px-6 pt-24 sm:pt-32 pb-20 relative">
                 {/* Visual Header */}
                 <div className="absolute top-10 left-1/2 -translate-x-1/2 flex flex-col items-center space-y-4 no-print">
                     <div className="flex items-center space-x-4">
@@ -3273,7 +3273,7 @@ export default function App() {
                     <div className="fixed inset-0 bg-[#070709] z-[100] flex flex-col animate-in fade-in zoom-in-95 duration-500">
                         {/* PLAYER HEADER — single scrollable row (Feature 4) */}
                         <div className={`bg-black/60 border-b border-white/5 backdrop-blur-2xl shrink-0 no-print w-full z-[200] transition-all duration-300 ${isImmersiveMode && !showImmersiveControls ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
-                            <div className="flex flex-wrap items-center px-3 py-2 gap-2">
+                            <div className="flex items-center px-3 py-2 gap-2 overflow-x-auto scrollbar-none w-full">
 
                                 {/* Logo + Back + info */}
                                 <div className="flex flex-col items-start shrink-0 mr-2">
@@ -3440,14 +3440,14 @@ export default function App() {
 
                         <div className="flex-1 flex overflow-hidden relative">
                             {/* PLAYER PLAYLIST SIDEBAR — hidden in immersive mode */}
-                            <div className={`${isSidebarCollapsed ? 'w-20 px-3' : 'w-80 px-6'} ${isImmersiveMode ? 'hidden' : ''} bg-black/40 border-r border-white/5 flex flex-col py-6 space-y-6 shrink-0 relative z-[150] no-print transition-all duration-300 ease-in-out`}>
+                            <div className={`${isSidebarCollapsed ? 'w-0 md:w-20 px-0 md:px-3 overflow-hidden md:overflow-visible' : 'w-[85vw] md:w-80 px-4 md:px-6'} ${isImmersiveMode ? 'hidden' : ''} bg-black/95 md:bg-black/40 backdrop-blur-3xl md:backdrop-blur-none border-r border-white/5 flex flex-col py-6 space-y-6 shrink-0 absolute md:relative h-full z-[150] no-print transition-all duration-300 ease-in-out`}>
                                 {/* Toggle Button */}
                                 <button
                                     onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-                                    className="absolute -right-3 top-6 w-6 h-6 bg-[#B87333] hover:bg-orange-500 text-white rounded-full flex items-center justify-center shadow-[0_0_15px_rgba(184,115,51,0.5)] transition-all z-50 border border-white/20"
+                                    className={`absolute ${isSidebarCollapsed ? '-right-10 md:-right-3' : '-right-3'} top-6 w-8 h-8 md:w-6 md:h-6 bg-[#B87333] hover:bg-orange-500 text-white rounded-full flex items-center justify-center shadow-[0_0_15px_rgba(184,115,51,0.5)] transition-all z-[200] border border-white/20`}
                                     title={isSidebarCollapsed ? "Expandir Lista" : "Recolher Lista"}
                                 >
-                                    {isSidebarCollapsed ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronLeft className="w-3.5 h-3.5" />}
+                                    {isSidebarCollapsed ? <ChevronRight className="w-5 h-5 md:w-3.5 md:h-3.5" /> : <ChevronLeft className="w-5 h-5 md:w-3.5 md:h-3.5" />}
                                 </button>
 
                                 {/* --- SIDEBAR TABS --- */}
@@ -3748,7 +3748,7 @@ export default function App() {
                                         <X className="w-5 h-5" />
                                     </button>
                                 )}
-                                <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-16 scroll-smooth scrollbar-none pb-64">
+                                <div ref={scrollContainerRef} className="flex-1 overflow-auto overflow-x-auto p-4 md:p-16 scroll-smooth scrollbar-none pb-64 w-full">
 
                                     <div className="max-w-4xl mx-auto space-y-1 printable-area">
                                         {/* Print Only Header */}
@@ -3800,7 +3800,7 @@ export default function App() {
                                                         style={{ fontSize: `${playerFontSize}px` }}
                                                     >
                                                         {isActive && <div className="absolute left-0 w-2 h-full bg-[#B87333] rounded-full shadow-[0_0_20px_rgba(184,115,51,0.8)] animate-pulse"></div>}
-                                                        <pre className={`font-mono leading-relaxed whitespace-pre-wrap transition-colors duration-500
+                                                        <pre className={`font-mono leading-relaxed whitespace-pre transition-colors duration-500
                                                         ${isActive ? 'text-white font-black' : isChordLine ? 'text-[#B87333] font-bold italic opacity-80' : 'text-slate-400 font-medium'}
                                                     `}>
                                                             {isChordLine
@@ -4285,8 +4285,8 @@ export default function App() {
                                                             <div
                                                                 ref={manualScrollContainerRef}
                                                                 className={`
-                                                                    flex-1 overflow-y-auto ${isManualFullscreen ? 'p-10 md:p-20 pt-16 md:pt-24' : 'p-10'}
-                                                                    scrollbar-none pb-32 transition-all
+                                                                    flex-1 overflow-auto overflow-x-auto ${isManualFullscreen ? 'p-4 md:p-20 pt-16 md:pt-24' : 'p-4 md:p-10'}
+                                                                    scrollbar-none pb-32 transition-all w-full
                                                                 `}
                                                                 style={{ maxHeight: isManualFullscreen ? '100vh' : '500px' }}
                                                             >
@@ -4328,7 +4328,7 @@ export default function App() {
                                                                                 const isChordLine = !!(line && line.trim().length > 0 && (line.match(CHORD_TOKEN_RE) || []).length > 0 && line.replace(CHORD_TOKEN_RE, '').replace(/[\s|()\-xX0-9:]/g, '').length < Math.max(2, line.trim().length * 0.5));
 
                                                                                 return (
-                                                                                    <pre key={lIdx} className={`font-mono leading-relaxed whitespace-pre-wrap break-inside-avoid ${isChordLine ? 'text-[#B87333] print:text-[#B87333] font-black italic tracking-tight mb-0' : 'text-slate-300 print:text-gray-900 font-medium mb-1'}`} style={{ fontSize: `${manualFontSize}px` }}>
+                                                                                    <pre key={lIdx} className={`font-mono leading-relaxed whitespace-pre break-inside-avoid ${isChordLine ? 'text-[#B87333] print:text-[#B87333] font-black italic tracking-tight mb-0' : 'text-slate-300 print:text-gray-900 font-medium mb-1'}`} style={{ fontSize: `${manualFontSize}px` }}>
                                                                                         {isChordLine
                                                                                             ? renderChordLine(line, (chord, anchor, isPersistent) => setChordTooltip({ chord, anchor, isPersistent }), manualPreviewSong.capo || 0)
                                                                                             : (line || ' ')}
