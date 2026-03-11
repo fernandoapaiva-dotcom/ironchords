@@ -2832,17 +2832,28 @@ function App() {
                 }))
             };
             
-            const res = await fetch(`${API_BASE_URL}/api/share`, {
+            // Ensure API_BASE_URL does not end with slash before appending
+            const baseUrl = API_BASE_URL.replace(/\/$/, '');
+            const res = await fetch(`${baseUrl}/api/share/`, { // Adding trailing slash robustly for FastAPI
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload)
             });
+            
+            if (!res.ok) {
+                throw new Error(`HTTP error! status: ${res.status}`);
+            }
+            
             const data = await res.json();
-            const url = `${API_BASE_URL}/s/${data.slug}`;
+            if (!data || !data.slug) {
+                throw new Error("Slug not returned from API");
+            }
+            
+            const url = `${baseUrl}/s/${data.slug}`;
             setShareLink(url);
             return url;
         } catch (err) {
-            console.error("Erro ao gerar slug de compartilhamento:", err);
+            console.error("Erro ao gerar slug de compartilhamento, usando fallback local:", err);
             // Fallback to legacy Base64 if API fails
             const legacyData = JSON.stringify({
                 name: activePlaylistName || "Lista Compartilhada",
@@ -2869,20 +2880,23 @@ function App() {
         // Open modal immediately so user sees loading state
         setShareModalOpen(true);
         
-        const url = await getShareLink();
-        if (!url) return;
-        
-        if (navigator.share) {
-            try {
+        try {
+            const url = await getShareLink();
+            if (!url) {
+                setShareModalOpen(false);
+                return;
+            }
+            
+            if (navigator.share) {
                 await navigator.share({
                     title: `IronChords: ${activePlaylistName || "Nova Cifra/Lista"}`,
                     text: `Acesse minha lista de cifras no IronChords:`,
                     url: url
                 });
-            } catch (err) {
-                if (err.name !== 'AbortError') {
-                    console.error("Erro no compartilhamento nativo:", err);
-                }
+            }
+        } catch (err) {
+            if (err.name !== 'AbortError') {
+                console.error("Erro no compartilhamento nativo:", err);
             }
         }
     };
