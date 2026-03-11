@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { PhoneticMatcher } from './utils/PhoneticMatcher';
-import { Music, UploadCloud, Plus, Minus, FileText, CheckCircle, AlertCircle, Eye, EyeOff, FileAudio, Info, X, Guitar, Settings2, Image as ImageIcon, Database, Edit3, Trash2, ArrowRight, Play, Maximize, Maximize2, Pause, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Download, ArrowLeft, SkipBack, SkipForward, Save, Share2, FolderHeart, Flame, Hammer, Sparkles, RefreshCw, Zap, ShieldCheck, Monitor, Tv, Check, Users, LayoutList, Layout, Mic, Search, RotateCcw, Printer, Archive, GripVertical, Minimize2, Link, MessageCircle, Mail, ExternalLink, Smartphone, Apple } from 'lucide-react';
+import { Music, UploadCloud, Plus, Minus, FileText, CheckCircle, AlertCircle, Eye, EyeOff, FileAudio, Info, X, Guitar, Settings2, Image as ImageIcon, Database, Edit3, Trash2, ArrowRight, Play, Maximize, Maximize2, Pause, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Download, ArrowLeft, SkipBack, SkipForward, Save, Share2, FolderHeart, Flame, Hammer, Sparkles, RefreshCw, Zap, ShieldCheck, Monitor, Tv, Check, Users, LayoutList, Layout, Mic, Search, RotateCcw, Printer, Archive, GripVertical, Minimize2, Link, MessageCircle, Mail, ExternalLink, Smartphone, Apple, Copy } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { SVGuitarChord } from 'svguitar';
 import { AudioTracker } from './utils/AudioTracker';
@@ -17,6 +17,55 @@ const getBaseUrl = () => {
     return window.location.origin;
 };
 const API_BASE_URL = getBaseUrl().replace(/\/api\/?$/, '');
+
+// -------------------------------------------------------------------
+// PINCH-TO-ZOOM HOOK – adjusts font size when user pinches on mobile
+// -------------------------------------------------------------------
+function usePinchZoom(containerRef, fontSize, setFontSize, minSize = 12, maxSize = 48) {
+    const lastDistRef = React.useRef(null);
+
+    React.useEffect(() => {
+        const el = containerRef.current;
+        if (!el) return;
+
+        const getTouchDist = (touches) => {
+            const dx = touches[0].clientX - touches[1].clientX;
+            const dy = touches[0].clientY - touches[1].clientY;
+            return Math.sqrt(dx * dx + dy * dy);
+        };
+
+        const onTouchStart = (e) => {
+            if (e.touches.length === 2) {
+                lastDistRef.current = getTouchDist(e.touches);
+            }
+        };
+
+        const onTouchMove = (e) => {
+            if (e.touches.length !== 2 || lastDistRef.current === null) return;
+            e.preventDefault(); // Prevent browser default zoom
+            const newDist = getTouchDist(e.touches);
+            const delta = newDist - lastDistRef.current;
+            if (Math.abs(delta) > 3) {
+                setFontSize(prev => Math.min(maxSize, Math.max(minSize, prev + delta * 0.05)));
+                lastDistRef.current = newDist;
+            }
+        };
+
+        const onTouchEnd = () => { lastDistRef.current = null; };
+
+        el.addEventListener('touchstart', onTouchStart, { passive: true });
+        el.addEventListener('touchmove', onTouchMove, { passive: false });
+        el.addEventListener('touchend', onTouchEnd, { passive: true });
+
+        return () => {
+            el.removeEventListener('touchstart', onTouchStart);
+            el.removeEventListener('touchmove', onTouchMove);
+            el.removeEventListener('touchend', onTouchEnd);
+        };
+    }, [containerRef, setFontSize, minSize, maxSize]);
+}
+
+
 
 // -------------------------------------------------------------------
 // CHORD DICTIONARY  (ported from chord_drawer.py)
@@ -603,12 +652,62 @@ const ShareModal = ({ isOpen, onClose, listName, link }) => {
                             <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{listName}</p>
                         </div>
                     </div>
+                    <button onClick={onClose} className="p-2 hover:bg-white/5 rounded-xl transition-all">
+                        <X className="w-5 h-5 text-slate-500" />
+                    </button>
+                </div>
+
+                {/* Link Preview */}
+                <div className="bg-black/40 border border-white/5 rounded-2xl p-4 mb-6 flex items-center gap-3">
+                    <div className="flex-1 min-w-0">
+                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Link do Repert&oacute;rio</p>
+                        <p className="text-xs text-slate-300 font-mono truncate">{link}</p>
+                    </div>
+                    <button
+                        onClick={handleCopy}
+                        className="shrink-0 p-2 bg-white/5 hover:bg-[#B87333]/20 text-slate-400 hover:text-[#B87333] rounded-xl transition-all border border-white/5"
+                        title="Copiar link"
+                    >
+                        <Copy className="w-4 h-4" />
+                    </button>
+                </div>
+
+                <div className="space-y-3">
+                    {/* WhatsApp */}
+                    <button
+                        onClick={handleWhatsApp}
+                        className="w-full py-4 bg-[#25D366]/10 hover:bg-[#25D366]/20 text-[#25D366] border border-[#25D366]/30 rounded-2xl font-black uppercase text-xs tracking-widest transition-all flex items-center justify-center gap-3"
+                    >
+                        <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+                        Compartilhar no WhatsApp
+                    </button>
+
+                    {/* Native Share (mobile) */}
+                    {navigator.share && (
+                        <button
+                            onClick={handleNativeShare}
+                            className="w-full py-4 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded-2xl font-black uppercase text-xs tracking-widest transition-all flex items-center justify-center gap-3"
+                        >
+                            <Share2 className="w-4 h-4" />
+                            Compartilhar via...
+                        </button>
+                    )}
+
+                    {/* Email */}
+                    <button
+                        onClick={handleEmail}
+                        className="w-full py-4 bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white border border-white/5 rounded-2xl font-black uppercase text-xs tracking-widest transition-all flex items-center justify-center gap-3"
+                    >
+                        <Mail className="w-4 h-4" />
+                        Enviar por E-mail
+                    </button>
                 </div>
             </div>
         </div>,
         document.body
     );
 };
+
 
 // -------------------------------------------------------------------
 // SETTINGS MODAL
@@ -677,6 +776,22 @@ const SettingsModal = ({ isOpen, onClose, includeToc, setIncludeToc, includeDict
                             </button>
                         </div>
                     )}
+
+                    <div className="bg-white/5 border border-white/10 rounded-[32px] p-8">
+                        <div className="flex items-center space-x-3 mb-6">
+                            <FileText className="w-5 h-5 text-slate-300" />
+                            <h3 className="text-xs font-black text-white uppercase tracking-[0.3em] italic">Documentação</h3>
+                        </div>
+                        <button 
+                            onClick={() => window.open('/manual.html', '_blank')}
+                            className="w-full py-6 bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white rounded-2xl border border-white/10 font-black uppercase text-xs tracking-[0.2em] transition-all flex items-center justify-center space-x-4 shadow-xl group"
+                        >
+                            <div className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center group-hover:bg-white/20 transition-all">
+                                <FileText className="w-5 h-5" />
+                            </div>
+                            <span>Manual de Operação (PDF)</span>
+                        </button>
+                    </div>
 
                     <div className="bg-[#B87333]/5 border border-[#B87333]/20 rounded-[32px] p-8">
                         <div className="flex items-center space-x-3 mb-6">
@@ -1307,8 +1422,9 @@ export default function App() {
         const importDataB64 = urlParams.get('import');
         if (importDataB64) {
             try {
-                // Handle Base64 with UTF-8 support
-                const decoded = JSON.parse(decodeURIComponent(escape(atob(importDataB64))));
+                // Handle Base64 with UTF-8 support properly
+                const decodedStr = decodeURIComponent(escape(atob(importDataB64)));
+                const decoded = JSON.parse(decodedStr);
                 if (decoded && decoded.songs) {
                     setImportData(decoded);
                 }
@@ -1319,6 +1435,10 @@ export default function App() {
             }
         }
     }, []);
+
+    // Apply Pinch-to-Zoom Hook to both containers
+    usePinchZoom(scrollContainerRef, playerFontSize, setPlayerFontSize, 12, 60);
+    usePinchZoom(manualScrollContainerRef, manualFontSize, setManualFontSize, 12, 60);
 
     // AutoScroll Effect with Mic interaction (Manual / Player / Presentation)
     useEffect(() => {
@@ -2535,17 +2655,18 @@ export default function App() {
     const getShareLink = () => {
         if (songs.length === 0) return "";
         try {
+            // Only share metadata – no content! This keeps URLs short and WhatsApp-friendly.
+            // Recipients will fetch the cifras from the API when they open the link.
             const data = JSON.stringify({
                 name: activePlaylistName || "Lista Compartilhada",
                 songs: songs.map(s => ({
                     song_name: s.song_name,
                     artist_name: s.artist_name,
                     song_key: s.sounding_key || s.requested_key || s.song_key,
-                    capo: s.capo || 0,
-                    content: s.content || ''
+                    capo: s.capo || 0
+                    // NOTE: content intentionally omitted to keep URL short
                 }))
             });
-            // Encode Base64 with UTF-8 support
             const b64 = btoa(unescape(encodeURIComponent(data)));
             return `${window.location.origin}${window.location.pathname}?import=${b64}`;
         } catch (err) {
@@ -2553,6 +2674,7 @@ export default function App() {
             return "";
         }
     };
+
 
     const handleShareList = async () => {
         if (songs.length === 0) return;
@@ -3253,10 +3375,10 @@ export default function App() {
             {/* Global Settings Gear Icon */}
             <button 
                 onClick={() => setShowSettingsModal(true)}
-                className="fixed top-4 right-4 sm:top-8 sm:right-8 z-[500] p-3 sm:p-4 bg-[#16161D]/80 backdrop-blur-xl border border-white/10 rounded-2xl text-slate-400 hover:text-[#B87333] hover:border-[#B87333]/40 transition-all shadow-2xl group no-print"
+                className="fixed top-6 right-4 sm:top-8 sm:right-8 z-[400] p-2.5 sm:p-4 bg-[#16161D]/80 backdrop-blur-xl border border-white/10 rounded-2xl text-slate-400 hover:text-[#B87333] hover:border-[#B87333]/40 transition-all shadow-2xl group no-print flex items-center justify-center w-11 h-11 sm:w-14 sm:h-14"
                 title="Configurações e Gestão"
             >
-                <Settings2 className="w-6 h-6 group-hover:rotate-90 transition-transform duration-500" />
+                <Settings2 className="w-5 h-5 sm:w-6 sm:h-6 group-hover:rotate-90 transition-transform duration-500" />
             </button>
 
             {/* Chord Tooltip Overlay */}
@@ -5450,13 +5572,21 @@ export default function App() {
                                                             </div>
                                                             <div className="min-w-0 flex-1">
                                                                 {item.status === 'success' ? (
-                                                                    <button
-                                                                        onClick={() => setBatchFixData({ idx, song_name: item.song_name, artist_name: item.artist_name, song_key: item.sounding_key || item.requested_key, content: item.content, capo: item.capo || 0, include_tabs: item.include_tabs || false })}
-                                                                        className="text-left w-full hover:underline decoration-[#B87333] decoration-2 underline-offset-4 outline-none group"
-                                                                        title="Clique para analisar a cifra"
-                                                                    >
-                                                                        <h5 className="font-black text-white uppercase italic tracking-tighter text-lg truncate group-hover:text-[#B87333] transition-colors">{item.song_name}</h5>
-                                                                    </button>
+                                                                    <div className="flex flex-col items-start gap-1">
+                                                                        <button
+                                                                            onClick={() => setBatchFixData({ idx, song_name: item.song_name, artist_name: item.artist_name, song_key: item.sounding_key || item.requested_key, content: item.content, capo: item.capo || 0, include_tabs: item.include_tabs || false })}
+                                                                            className={`text-left w-full hover:underline decoration-2 underline-offset-4 outline-none group ${(!item.content || String(item.content).trim().length < 50) ? 'decoration-red-500' : 'decoration-[#B87333]'}`}
+                                                                            title="Clique para analisar a cifra"
+                                                                        >
+                                                                            <h5 className={`font-black uppercase italic tracking-tighter text-lg truncate transition-colors ${(!item.content || String(item.content).trim().length < 50) ? 'text-red-500 group-hover:text-red-400' : 'text-white group-hover:text-[#B87333]'}`}>{item.song_name}</h5>
+                                                                        </button>
+                                                                        
+                                                                        {(!item.content || String(item.content).trim().length < 50) && (
+                                                                            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-red-900/30 border border-red-500/40 text-[9px] font-black text-red-400 uppercase tracking-widest mt-1">
+                                                                                <AlertCircle className="w-3 h-3" /> Cifra Vazia - Clique p/ Editar
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
                                                                 ) : (
                                                                     <h5 className="font-black text-slate-400 uppercase italic tracking-tighter text-lg truncate">{item.song_name}</h5>
                                                                 )}

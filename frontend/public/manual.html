@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manual de Operação - IronChords</title>
+    <style>
+        :root {
+            --brand: #B87333;
+            --dark: #070709;
+            --card: #16161D;
+            --text: #e2e8f0;
+            --text-muted: #94a3b8;
+        }
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background-color: var(--dark);
+            color: var(--text);
+            line-height: 1.6;
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+        Header {
+            text-align: center;
+            margin-bottom: 50px;
+            padding-bottom: 30px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        h1 {
+            color: #fff;
+            font-size: 2.5rem;
+            text-transform: uppercase;
+            font-style: italic;
+            letter-spacing: -1px;
+            margin: 0;
+        }
+        h1 span {
+            color: var(--brand);
+        }
+        h2 {
+            color: var(--brand);
+            font-size: 1.5rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-top: 40px;
+            border-bottom: 1px solid rgba(184,115,51,0.3);
+            padding-bottom: 10px;
+        }
+        h3 {
+            color: #fff;
+            font-size: 1.1rem;
+            margin-top: 25px;
+        }
+        p, li {
+            color: var(--text-muted);
+            font-size: 0.95rem;
+        }
+        ul {
+            padding-left: 20px;
+        }
+        li {
+            margin-bottom: 8px;
+        }
+        .card {
+            background-color: var(--card);
+            border: 1px solid rgba(255,255,255,0.05);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .print-btn {
+            display: block;
+            width: 100%;
+            max-width: 250px;
+            margin: 0 auto 40px;
+            padding: 15px 20px;
+            background-color: var(--brand);
+            color: #fff;
+            text-align: center;
+            text-decoration: none;
+            text-transform: uppercase;
+            font-weight: bold;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            letter-spacing: 1px;
+        }
+        .print-btn:hover {
+            background-color: #A86323;
+        }
+        
+        /* Tema de Impressão (PDF) */
+        @media print {
+            body {
+                background-color: #fff;
+                color: #000;
+            }
+            .container {
+                max-width: 100%;
+                padding: 0;
+            }
+            .print-btn {
+                display: none;
+            }
+            h1, h2, h3 {
+                color: #000;
+            }
+            h1 span {
+                color: #555;
+            }
+            p, li {
+                color: #333;
+            }
+            .card {
+                background-color: transparent;
+                border: none;
+                padding: 0;
+                margin-bottom: 15px;
+            }
+            h2 {
+                border-bottom: 1px solid #ccc;
+            }
+            @page {
+                margin: 2cm;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>IRON<span>CHORDS</span></h1>
+            <p>Manual de Operação do Sistema - Guia de Referência</p>
+        </header>
+
+        <button class="print-btn" onclick="window.print()">
+            Salvar como PDF / Imprimir
+        </button>
+
+        <section class="card">
+            <h2>1. Busca de Músicas (Modo Manual)</h2>
+            <p>A aba "Escolha de Músicas" permite buscar cifras e tablaturas de forma rápida do CifraClub.</p>
+            <ul>
+                <li><strong>Auto-completar:</strong> Digite pelo menos duas letras do nome da música para ver as sugestões extraídas automaticamente do banco de dados na nuvem.</li>
+                <li><strong>Versões:</strong> Caso a cifra principal não esteja boa, clique em "Verificar Outras Versões" (ícone de camadas) no painel de cifras.</li>
+                <li><strong>Capotraste / Tom:</strong> Antes de enviar a cifra para a Fila ou Acervo, você pode ajustar o Tom e o Capo na própria janela de revisão.</li>
+                <li><strong>Tablaturas:</strong> Utilize o botão de tablaturas para incluí-las ou removê-las da visualização.</li>
+            </ul>
+        </section>
+
+        <section class="card">
+            <h2>2. Forja em Lote (Importação PDF/XLSX/CSV)</h2>
+            <p>O recurso de Forja em Lote é útil para importar playlists antigas ou arquivos massivos de uma vez.</p>
+            <ul>
+                <li><strong>Formatos Suportados:</strong> Envie planilhas Excel (XLSX, CSV) ou PDFs formatados com nome e artista.</li>
+                <li><strong>Mapeamento:</strong> Ao subir o arquivo, indique qual coluna representa o "Nome da Música", "Artista" e "Tom".</li>
+                <li><strong>Aviso de Cifra Vazia:</strong> Músicas não encontradas ou que extraíram um conteúdo irregular ficarão marcadas em <strong>vermelho</strong> e exibirão um alerta na fase de revisão. Clique nelas para buscar a cifra manualmente antes de integrar ao Acervo.</li>
+            </ul>
+        </section>
+
+        <section class="card">
+            <h2>3. O Player (Ao Vivo)</h2>
+            <p>A interface de Player foi desenvolvida para uso em shows ou ensaios, sendo totalmente responsiva em tablets e celulares.</p>
+            <ul>
+                <li><strong>IA Sync (Rítmico):</strong> Ative o microfone ("IA Sync") para que a Cifra role pela tela acompanhando os acordes exatos de cada verso em tempo real. Pressione o aviso de permissão de microfone se necessário.</li>
+                <li><strong>Zoom Inteligente (Pinch):</strong> Em telas touch screen (celular ou tablet), você pode ajustar o tamanho da letra e da cifra <strong>fazendo o gesto de pinça</strong> em cima do texto (afastar os dedos aumenta, juntar os dedos diminui).</li>
+                <li><strong>Gaveta de Configurações Mobile:</strong> O botão de engrenagem na barra inferior flutuante permite abrir o painel rápio de ajuste de Capo, Tom, e troca rápida da cifra, sem esconder a tela central.</li>
+            </ul>
+        </section>
+
+        <section class="card">
+            <h2>4. Compartilhamento e Listas</h2>
+            <p>O IronChords centraliza seus repertórios (Setlists) em listas que podem ser exportadas ou enviadas a parceiros de banda.</p>
+            <ul>
+                <li><strong>Adicionando à Lista:</strong> Após revisar a cifra na busca manual ou em lote, salve criando uma "Nova Lista" ou integrando a uma "Lista Existente".</li>
+                <li><strong>Compartilhamento WhatsApp:</strong> Na exibição de listas, clique no botão "Compartilhar". Um modal aparecerá, gerando um Link Curto Exclusivo que enviará o repertório aos seus parceiros - eles apenas clicarão no link para abrir a playlist inteira no celular deles (sem necessidade de enviar arquivos pesados).</li>
+            </ul>
+        </section>
+
+        <section class="card">
+            <h2>5. Geração e Exportação (Livreto PDF e Word)</h2>
+            <p>Para quem prefere ou precisa de cópias físicas (papel) ou arquivos digitais finalizados de alta qualidade.</p>
+            <ul>
+                <li><strong>Geração do Documento:</strong> Dentro da lista finalizada, clique em "Gerar Documento / Livreto". O servidor consolidará todo o texto.</li>
+                <li><strong>Impressão de Dicionário de Acordes:</strong> O IronChords conta com o recurso único de analisar as cifras e desenhar de forma dinâmica <strong>todos os Shapes/Gráficos dos Acordes</strong> no final de cada página ou arquivo PDF gerado, caso você ative isso nas Configurações Gerais.</li>
+                <li><strong>Layout Automático em 2 Colunas:</strong> Para otimizar o papel, músicas muito longas serão automaticamente distribuídas em 2 colunas.</li>
+            </ul>
+        </section>
+
+        <section class="card">
+            <h2>6. Gestão de Contas Automáticas</h2>
+            <p>O sistema conta com um banco de usuários.</p>
+            <ul>
+                <li>O "Entrar via Google" unifica os emails e registra imediatamente.</li>
+                <li>Se a sua conta não constar como pré-aprovada pelo Fernando, no primeiro acesso seu e-mail ficará com "Acesso Pendente" aguardando autorização.</li>
+            </ul>
+        </section>
+
+    </div>
+</body>
+</html>

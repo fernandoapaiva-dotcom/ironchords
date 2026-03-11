@@ -119,24 +119,44 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+def normalize_gmail(email: str) -> str:
+    """Normalize Gmail addresses so dots and +aliases are equivalent.
+    Only applies to @gmail.com and @googlemail.com domains.
+    e.g. Fernando.M.Aragao89@gmail.com -> fernandomaragao89@gmail.com
+         user+test@gmail.com           -> user@gmail.com
+    """
+    if not email:
+        return email.lower().strip()
+    email = email.lower().strip()
+    local, _, domain = email.partition('@')
+    if domain in ('gmail.com', 'googlemail.com'):
+        # Remove +alias
+        local = local.split('+')[0]
+        # Remove dots
+        local = local.replace('.', '')
+        return f"{local}@gmail.com"
+    return email
+
 class RegistrationRequest(BaseModel):
     email: str
 
 @app.post("/api/auth/register")
 def register_user_endpoint(request: RegistrationRequest):
-    success = register_user(request.email)
+    norm_email = normalize_gmail(request.email)
+    success = register_user(norm_email)
     if not success:
         # Check if already authorized or pending
-        status = check_user_status(request.email)
+        status = check_user_status(norm_email)
         if status:
             return {"status": status, "message": f"Usuário já possui status: {status}"}
         return {"status": "error", "message": "Falha ao registrar usuário."}
     
     # Notify admin
     admin_email = "fernando.m.aragao89@gmail.com"
-    auth_link = f"http://localhost:8000/api/auth/authorize/{request.email}"
+    render_url = os.environ.get("RENDER_EXTERNAL_URL", "http://localhost:8000")
+    auth_link = f"{render_url}/api/auth/authorize/{norm_email}"
     print(f"\n[AUTH NOTIFICATION]")
-    print(f"Novo usuário registrado: {request.email}")
+    print(f"Novo usuário registrado: {norm_email} (original: {request.email})")
     print(f"Para autorizar, acesse: {auth_link}")
     print(f"Sent notification to: {admin_email}\n")
     
@@ -144,7 +164,8 @@ def register_user_endpoint(request: RegistrationRequest):
 
 @app.get("/api/auth/status/{email}")
 def check_status_endpoint(email: str):
-    status = check_user_status(email)
+    norm_email = normalize_gmail(email)
+    status = check_user_status(norm_email)
     if not status:
         return {"status": "unregistered"}
     return {"status": status}
@@ -191,9 +212,27 @@ async def videoke_stream(websocket: WebSocket):
         except:
             pass
 
+def _keep_alive_worker():
+    """Pings the server every 14 minutes to prevent Render from sleeping."""
+    import threading, time as _time
+    INTERVAL = 14 * 60  # 14 minutes in seconds
+    _time.sleep(30)  # Wait for server to be fully up before first ping
+    while True:
+        try:
+            self_url = os.environ.get("RENDER_EXTERNAL_URL", "http://localhost:8000")
+            requests.get(f"{self_url}/", timeout=10)
+            print(f"[KeepAlive] Pinged {self_url}/ successfully.")
+        except Exception as e:
+            print(f"[KeepAlive] Ping failed: {e}")
+        _time.sleep(INTERVAL)
+
 @app.on_event("startup")
 def startup_event():
     init_db()
+    import threading
+    t = threading.Thread(target=_keep_alive_worker, daemon=True, name="KeepAlive")
+    t.start()
+    print("[KeepAlive] Background keep-alive thread started (interval: 14min).")
 
 class ManualEntryRequest(BaseModel):
     song_name: str

@@ -1,16 +1,41 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Mail, CheckCircle2, Clock, ArrowRight, ShieldCheck, Flame } from 'lucide-react';
+
+// Google Client ID – set your own in VITE_GOOGLE_CLIENT_ID env var
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || ''; 
+
+/** Normalize Gmail: remove dots + strip +alias (mirrors backend normalize_gmail) */
+function normalizeGmail(email) {
+    if (!email) return '';
+    email = email.toLowerCase().trim();
+    const [local, domain] = email.split('@');
+    if (domain === 'gmail.com' || domain === 'googlemail.com') {
+        const cleaned = local.split('+')[0].replace(/\./g, '');
+        return `${cleaned}@gmail.com`;
+    }
+    return email;
+}
+
+/** Decode a Google JWT ID token without a library */
+function decodeGoogleJwt(token) {
+    try {
+        const base64Url = token.split('.')[1];
+        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+        return JSON.parse(decodeURIComponent(atob(base64).split('').map(c =>
+            '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)
+        ).join('')));
+    } catch { return null; }
+}
 
 const LoginScreen = ({ onAuthorized }) => {
     const [email, setEmail] = useState('');
     const [status, setStatus] = useState('idle'); // idle, loading, pending, authorized, error
     const [message, setMessage] = useState('');
+    const googleBtnRef = useRef(null);
 
     const getBaseUrl = () => {
         const raw = import.meta.env.VITE_API_BASE_URL;
         if (raw) return raw.replace(/\/$/, '');
-        
-        // Fallbacks for development
         if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
             return 'http://127.0.0.1:8000';
         }
@@ -30,6 +55,57 @@ const LoginScreen = ({ onAuthorized }) => {
         }
     }, []);
 
+    // Initialize Google Sign-In once the GSI script is available
+    useEffect(() => {
+        if (!GOOGLE_CLIENT_ID) return; // No client ID configured - skip Google login
+
+        const initGoogle = () => {
+            if (!window.google?.accounts?.id) return;
+            window.google.accounts.id.initialize({
+                client_id: GOOGLE_CLIENT_ID,
+                callback: handleGoogleCredential,
+                auto_select: false,
+                cancel_on_tap_outside: true,
+            });
+            if (googleBtnRef.current) {
+                window.google.accounts.id.renderButton(googleBtnRef.current, {
+                    theme: 'filled_black',
+                    size: 'large',
+                    shape: 'pill',
+                    text: 'signin_with',
+                    logo_alignment: 'left',
+                    width: googleBtnRef.current.offsetWidth || 320,
+                });
+            }
+        };
+
+        if (window.google?.accounts?.id) {
+            initGoogle();
+        } else {
+            // Load the GSI script dynamically
+            const script = document.createElement('script');
+            script.src = 'https://accounts.google.com/gsi/client';
+            script.async = true;
+            script.defer = true;
+            script.onload = initGoogle;
+            document.head.appendChild(script);
+            return () => { document.head.removeChild(script); };
+        }
+    }, [GOOGLE_CLIENT_ID, status]);
+
+    const handleGoogleCredential = async (response) => {
+        const payload = decodeGoogleJwt(response.credential);
+        if (!payload?.email) {
+            setStatus('error');
+            setMessage('Não foi possível obter o e-mail da conta Google.');
+            return;
+        }
+        const googleEmail = normalizeGmail(payload.email);
+        setEmail(googleEmail);
+        localStorage.setItem('ironchords_user_email', googleEmail);
+        await checkStatus(googleEmail);
+    };
+
     const checkStatus = async (emailToCheck) => {
         setStatus('loading');
         try {
@@ -44,12 +120,41 @@ const LoginScreen = ({ onAuthorized }) => {
                 setStatus('pending');
                 setMessage('Seu acesso está aguardando autorização do administrador.');
             } else {
-                setStatus('idle');
+                // Auto-register on first Google login
+                await handleRegisterWithEmail(emailToCheck);
             }
         } catch (err) {
             console.error("Status check error:", err);
             setStatus('error');
             setMessage(`Erro ao conectar com o servidor: ${err.message || 'Falha na rede'}`);
+        }
+    };
+
+    const handleRegisterWithEmail = async (emailToUse) => {
+        setStatus('loading');
+        try {
+            const res = await fetch(`${API_BASE}/auth/register`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email: emailToUse })
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.message || data.detail || `Erro ${res.status}`);
+
+            if (data.status === 'authorized') {
+                localStorage.setItem('ironchords_user_email', emailToUse);
+                onAuthorized(emailToUse);
+            } else if (data.status === 'pending') {
+                localStorage.setItem('ironchords_user_email', emailToUse);
+                setStatus('pending');
+                setMessage(data.message);
+            } else {
+                setStatus('error');
+                setMessage(data.message || 'Erro ao registrar.');
+            }
+        } catch (err) {
+            setStatus('error');
+            setMessage(`Erro ao processar cadastro: ${err.message || 'Falha na rede'}`);
         }
     };
 
@@ -59,34 +164,7 @@ const LoginScreen = ({ onAuthorized }) => {
             setMessage('Por favor, insira um e-mail válido.');
             return;
         }
-
-        setStatus('loading');
-        try {
-            const res = await fetch(`${API_BASE}/auth/register`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email })
-            });
-
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.message || data.detail || `Erro ${res.status}`);
-
-            if (data.status === 'authorized') {
-                localStorage.setItem('ironchords_user_email', email);
-                onAuthorized(email);
-            } else if (data.status === 'pending') {
-                localStorage.setItem('ironchords_user_email', email);
-                setStatus('pending');
-                setMessage(data.message);
-            } else {
-                setStatus('error');
-                setMessage(data.message || 'Erro ao registrar.');
-            }
-        } catch (err) {
-            console.error("Registration error:", err);
-            setStatus('error');
-            setMessage(`Erro ao processar cadastro: ${err.message || 'Falha na rede'}. Verifique sua conexão.`);
-        }
+        await handleRegisterWithEmail(email);
     };
 
     return (
@@ -105,7 +183,6 @@ const LoginScreen = ({ onAuthorized }) => {
 
                 {/* Main Card */}
                 <div className="bg-[#16161D] border border-white/10 rounded-[40px] p-10 shadow-2xl relative overflow-hidden group">
-                    {/* Decorative Elements */}
                     <div className="absolute top-0 right-0 w-32 h-32 bg-[#ea580c]/5 blur-[60px] rounded-full -translate-y-1/2 translate-x-1/2"></div>
                     
                     {status === 'pending' ? (
@@ -139,55 +216,73 @@ const LoginScreen = ({ onAuthorized }) => {
                             </div>
                         </div>
                     ) : (
-                        <form onSubmit={handleRegister} className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-500">
+                        <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-500">
                             <div>
                                 <h2 className="text-2xl font-black text-white uppercase italic tracking-tighter mb-2">Boas-vindas</h2>
-                                <p className="text-slate-500 text-xs font-bold uppercase tracking-wider">Insira seu e-mail para solicitar acesso</p>
+                                <p className="text-slate-500 text-xs font-bold uppercase tracking-wider">Entre com sua conta Google ou e-mail</p>
                             </div>
 
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">E-mail Corporativo/Pessoal</label>
-                                <div className="relative group/input">
-                                    <Mail className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500 group-focus-within/input:text-[#ea580c] transition-colors" />
-                                    <input 
-                                        type="email"
-                                        value={email}
-                                        onChange={(e) => setEmail(e.target.value)}
-                                        placeholder="seu@email.com"
-                                        className="w-full bg-black/40 border border-white/5 focus:border-[#ea580c]/50 focus:ring-4 focus:ring-[#ea580c]/10 rounded-[20px] py-5 pl-14 pr-6 text-white text-sm font-medium transition-all outline-none placeholder:text-slate-700"
-                                        required
+                            {/* Google Sign-In Button */}
+                            {GOOGLE_CLIENT_ID && (
+                                <div className="space-y-3">
+                                    <div 
+                                        ref={googleBtnRef} 
+                                        className="w-full flex justify-center" 
+                                        style={{ minHeight: 44 }}
                                     />
-                                </div>
-                            </div>
-
-                            {message && status === 'error' && (
-                                <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 text-xs font-bold text-red-500 flex items-center gap-3">
-                                    <ShieldCheck className="w-4 h-4 shrink-0" />
-                                    {message}
+                                    <div className="flex items-center gap-4">
+                                        <div className="h-px flex-1 bg-white/10" />
+                                        <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest">ou</span>
+                                        <div className="h-px flex-1 bg-white/10" />
+                                    </div>
                                 </div>
                             )}
 
-                            <button 
-                                type="submit"
-                                disabled={status === 'loading'}
-                                className="w-full py-5 bg-[#ea580c] hover:bg-[#ff6a1a] disabled:opacity-50 disabled:hover:bg-[#ea580c] text-white font-black uppercase text-xs tracking-[0.2em] rounded-[20px] shadow-[0_10px_30px_rgba(234,88,12,0.3)] hover:shadow-[0_15px_40px_rgba(234,88,12,0.4)] transition-all active:scale-[0.98] flex items-center justify-center space-x-3"
-                            >
-                                {status === 'loading' ? (
-                                    <div className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
-                                ) : (
-                                    <>
-                                        <span>Solicitar Acesso</span>
-                                        <ArrowRight className="w-4 h-4" />
-                                    </>
-                                )}
-                            </button>
+                            <form onSubmit={handleRegister} className="space-y-6">
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">E-mail</label>
+                                    <div className="relative group/input">
+                                        <Mail className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500 group-focus-within/input:text-[#ea580c] transition-colors" />
+                                        <input 
+                                            type="email"
+                                            value={email}
+                                            onChange={(e) => setEmail(e.target.value)}
+                                            placeholder="seu@email.com"
+                                            className="w-full bg-black/40 border border-white/5 focus:border-[#ea580c]/50 focus:ring-4 focus:ring-[#ea580c]/10 rounded-[20px] py-5 pl-14 pr-6 text-white text-sm font-medium transition-all outline-none placeholder:text-slate-700"
+                                            required
+                                        />
+                                    </div>
+                                </div>
 
-                            <div className="pt-4 text-center">
+                                {message && status === 'error' && (
+                                    <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 text-xs font-bold text-red-500 flex items-center gap-3">
+                                        <ShieldCheck className="w-4 h-4 shrink-0" />
+                                        {message}
+                                    </div>
+                                )}
+
+                                <button 
+                                    type="submit"
+                                    disabled={status === 'loading'}
+                                    className="w-full py-5 bg-[#ea580c] hover:bg-[#ff6a1a] disabled:opacity-50 disabled:hover:bg-[#ea580c] text-white font-black uppercase text-xs tracking-[0.2em] rounded-[20px] shadow-[0_10px_30px_rgba(234,88,12,0.3)] hover:shadow-[0_15px_40px_rgba(234,88,12,0.4)] transition-all active:scale-[0.98] flex items-center justify-center space-x-3"
+                                >
+                                    {status === 'loading' ? (
+                                        <div className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
+                                    ) : (
+                                        <>
+                                            <span>Solicitar Acesso</span>
+                                            <ArrowRight className="w-4 h-4" />
+                                        </>
+                                    )}
+                                </button>
+                            </form>
+
+                            <div className="pt-2 text-center">
                                 <p className="text-slate-600 text-[9px] leading-relaxed uppercase tracking-tighter font-bold">
                                     Ao solicitar, fernando receberá uma notificação para autorizar seu dispositivo.
                                 </p>
                             </div>
-                        </form>
+                        </div>
                     )}
                 </div>
 
