@@ -83,9 +83,11 @@ def init_db():
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
-        # Auto-authorize admin
-        admin_email = "fernando.m.aragao89@gmail.com"
-        conn.execute('INSERT OR IGNORE INTO users (email, status) VALUES (?, ?)', (admin_email, 'authorized'))
+        
+    # Always ensure admin is authorized
+    admin_email = "fernando.m.aragao89@gmail.com"
+    conn.execute('INSERT OR IGNORE INTO users (email, status) VALUES (?, ?)', (admin_email, 'authorized'))
+    conn.execute("UPDATE users SET status = 'authorized' WHERE email = ?", (admin_email,))
         
     conn.commit()
     conn.close()

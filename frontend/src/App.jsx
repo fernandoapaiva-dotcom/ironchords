@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { PhoneticMatcher } from './utils/PhoneticMatcher';
-import { Music, UploadCloud, Plus, Minus, FileText, CheckCircle, AlertCircle, Eye, EyeOff, FileAudio, Info, X, Guitar, Settings2, Image as ImageIcon, Database, Edit3, Trash2, ArrowRight, Play, Maximize, Maximize2, Pause, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Download, ArrowLeft, SkipBack, SkipForward, Save, Share2, FolderHeart, Flame, Hammer, Sparkles, RefreshCw, Zap, ShieldCheck, Monitor, Tv, Check, LayoutList, Layout, Mic, Search, RotateCcw, Printer, Archive, GripVertical, Minimize2, Link, MessageCircle, Mail, ExternalLink } from 'lucide-react';
+import { Music, UploadCloud, Plus, Minus, FileText, CheckCircle, AlertCircle, Eye, EyeOff, FileAudio, Info, X, Guitar, Settings2, Image as ImageIcon, Database, Edit3, Trash2, ArrowRight, Play, Maximize, Maximize2, Pause, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Download, ArrowLeft, SkipBack, SkipForward, Save, Share2, FolderHeart, Flame, Hammer, Sparkles, RefreshCw, Zap, ShieldCheck, Monitor, Tv, Check, Users, LayoutList, Layout, Mic, Search, RotateCcw, Printer, Archive, GripVertical, Minimize2, Link, MessageCircle, Mail, ExternalLink } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { SVGuitarChord } from 'svguitar';
 import { AudioTracker } from './utils/AudioTracker';
@@ -600,35 +600,168 @@ const ShareModal = ({ isOpen, onClose, listName, link }) => {
                             <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{listName}</p>
                         </div>
                     </div>
-                    <button onClick={onClose} className="p-2 bg-white/5 hover:bg-white/10 rounded-xl transition-all"><X className="w-5 h-5 text-slate-400" /></button>
+                </div>
+            </div>
+        </div>,
+        document.body
+    );
+};
+
+// -------------------------------------------------------------------
+// SETTINGS MODAL
+// -------------------------------------------------------------------
+const SettingsModal = ({ isOpen, onClose, includeToc, setIncludeToc, includeDictionary, setIncludeDictionary, authenticatedUser, setShowUserManagement }) => {
+    if (!isOpen) return null;
+
+    return createPortal(
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-[#070709]/90 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-300 p-4">
+            <div className="bg-[#16161D] border border-[#B87333]/30 p-8 rounded-[40px] shadow-[0_0_50px_rgba(0,0,0,0.8)] w-full max-w-2xl flex flex-col max-h-[90vh] relative">
+                <div className="flex items-center justify-between mb-8 shrink-0">
+                    <div className="flex items-center space-x-4">
+                        <div className="w-2 h-10 bg-[#B87333] rounded-full shadow-[0_0_15px_rgba(184,115,51,0.4)]"></div>
+                        <h2 className="text-3xl font-black text-white uppercase italic tracking-tighter">Configurações</h2>
+                    </div>
+                    <button onClick={onClose} className="p-3 bg-white/5 hover:bg-white/10 rounded-2xl transition-all border border-white/5">
+                        <X className="w-6 h-6 text-slate-400" />
+                    </button>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4 mb-8">
-                    <button onClick={handleWhatsApp} className="flex flex-col items-center justify-center p-6 bg-green-500/10 hover:bg-green-500/20 border border-green-500/20 rounded-3xl transition-all group">
-                        <MessageCircle className="w-8 h-8 text-green-500 mb-3 group-hover:scale-110 transition-transform" />
-                        <span className="text-[9px] font-black text-green-500 uppercase">WhatsApp</span>
-                    </button>
-                    <button onClick={handleEmail} className="flex flex-col items-center justify-center p-6 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 rounded-3xl transition-all group">
-                        <Mail className="w-8 h-8 text-red-500 mb-3 group-hover:scale-110 transition-transform" />
-                        <span className="text-[9px] font-black text-red-500 uppercase">E-mail</span>
-                    </button>
-                </div>
+                <div className="overflow-y-auto pr-4 space-y-8 scrollbar-thin scrollbar-thumb-white/10 pb-10">
+                    <div className="bg-black/40 border border-white/5 rounded-[32px] p-8">
+                        <div className="flex items-center space-x-3 mb-6">
+                            <Settings2 className="w-5 h-5 text-[#B87333]" />
+                            <h3 className="text-xs font-black text-white uppercase tracking-widest italic">Padrões de Exportação</h3>
+                        </div>
+                        <div className="space-y-4">
+                            <label className="flex items-center justify-between p-5 bg-white/5 border border-white/5 rounded-2xl cursor-pointer hover:border-[#B87333]/40 transition-all group">
+                                <div>
+                                    <p className="text-sm font-black text-white uppercase tracking-widest">Incluir Sumário</p>
+                                    <p className="text-[10px] font-bold text-slate-500 uppercase mt-1">Gerar índice clicável no PDF e Word</p>
+                                </div>
+                                <div className={`w-12 h-6 rounded-full p-1 transition-colors ${includeToc ? 'bg-[#B87333]' : 'bg-slate-700'}`}>
+                                    <div className={`w-4 h-4 rounded-full bg-white transition-transform ${includeToc ? 'translate-x-6' : 'translate-x-0'}`}></div>
+                                </div>
+                                <input type="checkbox" className="hidden" checked={includeToc} onChange={(e) => setIncludeToc(e.target.checked)} />
+                            </label>
 
-                <div className="space-y-3">
-                    <button onClick={handleCopy} className="w-full flex items-center justify-between p-4 bg-white/5 hover:bg-white/10 border border-white/5 rounded-2xl transition-all">
-                        <div className="flex items-center space-x-3">
-                            <Link className="w-4 h-4 text-slate-400" />
-                            <span className="text-xs font-bold text-white">Copiar Link</span>
+                            <label className="flex items-center justify-between p-5 bg-white/5 border border-white/5 rounded-2xl cursor-pointer hover:border-[#B87333]/40 transition-all group">
+                                <div>
+                                    <p className="text-sm font-black text-white uppercase tracking-widest">Dicionário de Acordes</p>
+                                    <p className="text-[10px] font-bold text-slate-500 uppercase mt-1">Renderizar vamps ao final de cada música</p>
+                                </div>
+                                <div className={`w-12 h-6 rounded-full p-1 transition-colors ${includeDictionary ? 'bg-[#B87333]' : 'bg-slate-700'}`}>
+                                    <div className={`w-4 h-4 rounded-full bg-white transition-transform ${includeDictionary ? 'translate-x-6' : 'translate-x-0'}`}></div>
+                                </div>
+                                <input type="checkbox" className="hidden" checked={includeDictionary} onChange={(e) => setIncludeDictionary(e.target.checked)} />
+                            </label>
                         </div>
-                        <div className="text-[9px] font-black text-[#B87333] uppercase">Ctrl+C</div>
-                    </button>
-                    <button onClick={handleNativeShare} className="w-full flex items-center justify-between p-4 bg-[#B87333]/10 hover:bg-[#B87333]/20 border border-[#B87333]/20 rounded-2xl transition-all">
-                        <div className="flex items-center space-x-3">
-                            <ExternalLink className="w-4 h-4 text-[#B87333]" />
-                            <span className="text-xs font-bold text-white">Outras Redes</span>
+                    </div>
+
+                    {authenticatedUser === 'fernando.m.aragao89@gmail.com' && (
+                        <div className="bg-blue-600/5 border border-blue-500/20 rounded-[32px] p-8 shadow-[0_0_30px_rgba(59,130,246,0.05)]">
+                            <div className="flex items-center space-x-3 mb-6">
+                                <ShieldCheck className="w-5 h-5 text-blue-500" />
+                                <h3 className="text-xs font-black text-blue-500 uppercase tracking-[0.3em] italic">Administração</h3>
+                            </div>
+                            <button 
+                                onClick={() => { setShowUserManagement(true); onClose(); }}
+                                className="w-full py-6 bg-blue-500/10 hover:bg-blue-500/20 text-blue-500 rounded-2xl border border-blue-500/30 font-black uppercase text-xs tracking-[0.2em] transition-all flex items-center justify-center space-x-4 shadow-xl shadow-blue-900/10 group"
+                            >
+                                <div className="w-10 h-10 bg-blue-500/20 rounded-xl flex items-center justify-center group-hover:bg-blue-500/40 transition-all">
+                                    <Users className="w-5 h-5" />
+                                </div>
+                                <span>Gestão de Acessos</span>
+                            </button>
                         </div>
-                        <ArrowRight className="w-4 h-4 text-[#B87333]" />
-                    </button>
+                    )}
+                </div>
+            </div>
+        </div>,
+        document.body
+    );
+};
+
+// -------------------------------------------------------------------
+// USER MANAGEMENT MODAL (Admin Only)
+// -------------------------------------------------------------------
+const UserManagementModal = ({ isOpen, onClose, API_BASE }) => {
+    const [users, setUsers] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    const fetchUsers = async () => {
+        setLoading(true);
+        try {
+            const res = await fetch(`${API_BASE}/auth/users`);
+            const data = await res.json();
+            setUsers(data.users || []);
+        } catch (err) {
+            console.error("Failed to fetch users:", err);
+        }
+        setLoading(false);
+    };
+
+    useEffect(() => {
+        if (isOpen) fetchUsers();
+    }, [isOpen]);
+
+    const handleAuthorize = async (email) => {
+        try {
+            await fetch(`${API_BASE}/auth/authorize/${email}`);
+            fetchUsers();
+        } catch (err) {
+            console.error("Auth failed:", err);
+        }
+    };
+
+    if (!isOpen) return null;
+
+    return createPortal(
+        <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-[#070709]/95 backdrop-blur-2xl animate-in fade-in duration-300" onClick={onClose} />
+            <div className="relative w-full max-w-2xl bg-[#16161D] border border-white/10 rounded-[50px] overflow-hidden shadow-2xl animate-in slide-in-from-bottom-8 duration-500">
+                <div className="p-12">
+                    <div className="flex items-center justify-between mb-10">
+                        <div className="flex items-center space-x-6">
+                            <div className="w-16 h-16 bg-blue-500/20 rounded-[24px] border border-blue-500/30 flex items-center justify-center">
+                                <ShieldCheck className="w-8 h-8 text-blue-500" />
+                            </div>
+                            <div>
+                                <h3 className="text-3xl font-black text-white italic uppercase tracking-tighter">Gerenciar Usuários</h3>
+                                <p className="text-xs font-bold text-blue-500 uppercase tracking-[0.3em] mt-1">Controle de Acessos</p>
+                            </div>
+                        </div>
+                        <button onClick={onClose} className="p-4 hover:bg-white/5 rounded-full transition-colors group">
+                            <X className="w-6 h-6 text-slate-500 group-hover:text-white" />
+                        </button>
+                    </div>
+
+                    <div className="max-h-[50vh] overflow-y-auto pr-4 space-y-4 scrollbar-thin scrollbar-thumb-white/10">
+                        {loading ? (
+                            <div className="text-center py-20 text-slate-500 font-bold uppercase tracking-widest text-xs">Carregando usuários...</div>
+                        ) : users.length === 0 ? (
+                            <div className="text-center py-20 text-slate-500 font-bold uppercase tracking-widest text-xs">Nenhum usuário encontrado.</div>
+                        ) : (
+                            users.map((u, i) => (
+                                <div key={i} className="flex items-center justify-between p-6 bg-white/5 border border-white/5 rounded-3xl hover:bg-white/[0.08] transition-all group">
+                                    <div className="flex items-center space-x-4">
+                                        <div className={`w-3 h-3 rounded-full ${u.status === 'authorized' ? 'bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.5)]' : 'bg-yellow-500 animate-pulse'}`}></div>
+                                        <div>
+                                            <p className="text-white font-black uppercase tracking-widest text-sm">{u.email}</p>
+                                            <p className={`text-[9px] font-bold uppercase tracking-widest ${u.status === 'authorized' ? 'text-green-500' : 'text-yellow-500'}`}>{u.status}</p>
+                                        </div>
+                                    </div>
+                                    {u.status !== 'authorized' && (
+                                        <button 
+                                            onClick={() => handleAuthorize(u.email)}
+                                            className="px-6 py-3 bg-blue-500 hover:bg-blue-600 text-white rounded-xl font-black uppercase text-[10px] tracking-widest transition-all shadow-lg shadow-blue-500/20 active:scale-95"
+                                        >
+                                            Autorizar
+                                        </button>
+                                    )}
+                                </div>
+                            ))
+                        )}
+                    </div>
                 </div>
             </div>
         </div>,
@@ -690,97 +823,6 @@ const ImportModal = ({ data, onImport, onClose }) => {
     );
 };
 
-// -------------------------------------------------------------------
-// USER MANAGEMENT MODAL (Admin Only)
-// -------------------------------------------------------------------
-const UserManagementModal = ({ onClose, API_BASE }) => {
-    const [users, setUsers] = useState([]);
-    const [loading, setLoading] = useState(true);
-
-    const fetchUsers = async () => {
-        setLoading(true);
-        try {
-            const res = await fetch(`${API_BASE}/auth/users`);
-            const data = await res.json();
-            setUsers(data.users || []);
-        } catch (err) {
-            console.error("Failed to fetch users:", err);
-        }
-        setLoading(false);
-    };
-
-    useEffect(() => {
-        fetchUsers();
-    }, []);
-
-    const handleAuthorize = async (email) => {
-        try {
-            await fetch(`${API_BASE}/auth/authorize/${email}`);
-            fetchUsers();
-        } catch (err) {
-            console.error("Auth failed:", err);
-        }
-    };
-
-    return createPortal(
-        <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4">
-            <div className="absolute inset-0 bg-[#070709]/95 backdrop-blur-2xl animate-in fade-in duration-300" />
-            <div className="relative w-full max-w-2xl bg-[#16161D] border border-white/10 rounded-[50px] overflow-hidden shadow-2xl animate-in slide-in-from-bottom-8 duration-500">
-                <div className="p-12">
-                    <div className="flex items-center justify-between mb-10">
-                        <div className="flex items-center space-x-6">
-                            <div className="w-16 h-16 bg-blue-500/20 rounded-[24px] border border-blue-500/30 flex items-center justify-center">
-                                <ShieldCheck className="w-8 h-8 text-blue-500" />
-                            </div>
-                            <div>
-                                <h3 className="text-3xl font-black text-white italic uppercase tracking-tighter">Gerenciar Usuários</h3>
-                                <p className="text-xs font-bold text-blue-500 uppercase tracking-[0.3em] mt-1">Controle de Acessos</p>
-                            </div>
-                        </div>
-                        <button onClick={onClose} className="p-4 hover:bg-white/5 rounded-full transition-colors group">
-                            <X className="w-6 h-6 text-slate-500 group-hover:text-white" />
-                        </button>
-                    </div>
-
-                    <div className="max-h-[50vh] overflow-y-auto pr-4 space-y-4 scrollbar-thin scrollbar-thumb-white/10">
-                        {loading ? (
-                            <div className="text-center py-20 text-slate-500 font-bold uppercase tracking-widest text-xs">Carregando usuários...</div>
-                        ) : users.length === 0 ? (
-                            <div className="text-center py-20 text-slate-500 font-bold uppercase tracking-widest text-xs">Nenhum usuário encontrado.</div>
-                        ) : (
-                            users.map((u) => (
-                                <div key={u.id} className="bg-black/40 border border-white/5 rounded-3xl p-6 flex items-center justify-between group hover:border-white/10 transition-all">
-                                    <div className="flex items-center space-x-5">
-                                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${u.status === 'authorized' ? 'bg-green-500/10 text-green-500' : 'bg-orange-500/10 text-orange-500'}`}>
-                                            {u.status === 'authorized' ? <CheckCircle className="w-6 h-6" /> : <Clock className="w-6 h-6" />}
-                                        </div>
-                                        <div>
-                                            <p className="text-white font-black text-sm">{u.email}</p>
-                                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">Status: {u.status === 'authorized' ? 'Autorizado' : 'Pendente'}</p>
-                                        </div>
-                                    </div>
-                                    {u.status === 'pending' && (
-                                        <button 
-                                            onClick={() => handleAuthorize(u.email)}
-                                            className="px-6 py-3 bg-[#B87333] hover:bg-[#8B4513] text-white rounded-xl font-black uppercase text-[10px] tracking-widest transition-all shadow-lg shadow-[#B87333]/20"
-                                        >
-                                            Autorizar
-                                        </button>
-                                    )}
-                                </div>
-                            ))
-                        )}
-                    </div>
-
-                    <div className="mt-10 pt-8 border-t border-white/5 text-center">
-                        <button onClick={onClose} className="text-slate-500 hover:text-white font-black uppercase text-[10px] tracking-widest transition-colors">Fechar Painel</button>
-                    </div>
-                </div>
-            </div>
-        </div>,
-        document.body
-    );
-};
 
 export default function App() {
     const [authenticatedUser, setAuthenticatedUser] = useState(null);
@@ -863,6 +905,7 @@ export default function App() {
     const [showPlayerControls, setShowPlayerControls] = useState(true);
     const [scrollProgress, setScrollProgress] = useState(0);
     const [showUserManagement, setShowUserManagement] = useState(false);
+    const [showSettingsModal, setShowSettingsModal] = useState(false);
     const [isManualColumns, setIsManualColumns] = useState(false);
     const playerControlsTimerRef = useRef(null);
     const [manualCapo, setManualCapo] = useState(0);
@@ -3125,7 +3168,16 @@ export default function App() {
     return (
         <div className="min-h-screen bg-[#070709] bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] text-slate-300 font-sans selection:bg-[#B87333]/30 selection:text-white overflow-x-hidden">
             {isGenerating && <MoltenLoading message={forgeMessage} current={batchProgress.current} total={batchProgress.total} />}
-            {showUserManagement && <UserManagementModal onClose={() => setShowUserManagement(false)} API_BASE={API_BASE_URL} />}
+            <UserManagementModal isOpen={showUserManagement} onClose={() => setShowUserManagement(false)} API_BASE={`${API_BASE_URL}/api`} />
+
+            {/* Global Settings Gear Icon */}
+            <button 
+                onClick={() => setShowSettingsModal(true)}
+                className="fixed top-8 right-8 z-[500] p-4 bg-[#16161D]/80 backdrop-blur-xl border border-white/10 rounded-2xl text-slate-400 hover:text-[#B87333] hover:border-[#B87333]/40 transition-all shadow-2xl group no-print"
+                title="Configurações e Gestão"
+            >
+                <Settings2 className="w-6 h-6 group-hover:rotate-90 transition-transform duration-500" />
+            </button>
 
             {/* Chord Tooltip Overlay */}
             {chordTooltip && chordTooltip.chord && (
@@ -3194,7 +3246,7 @@ export default function App() {
                                     </button>
                                     <div className="flex flex-col">
                                         <span className="text-[6px] font-black text-slate-600 uppercase tracking-widest leading-none mb-1">Speed {scrollSpeed}x</span>
-                                        <input type="range" min="0.5" max="5" step="0.5" value={scrollSpeed} onChange={e => setScrollSpeed(parseFloat(e.target.value))} className="w-16 h-1 bg-white/5 rounded-full appearance-none cursor-pointer accent-[#B87333]" />
+                                        <input type="range" min="0.1" max="5" step="0.1" value={scrollSpeed} onChange={e => setScrollSpeed(parseFloat(e.target.value))} className="w-16 h-1 bg-white/5 rounded-full appearance-none cursor-pointer accent-[#B87333]" />
                                     </div>
                                 </div>
 
@@ -3769,9 +3821,11 @@ export default function App() {
                                                 <div className="w-2 h-10 bg-[#B87333] rounded-full shadow-[0_0_15px_rgba(184,115,51,0.4)]"></div>
                                                 <h2 className="text-2xl font-black text-white uppercase italic tracking-tighter">Escolha suas Peças</h2>
                                             </div>
-                                            <div className="flex p-1.5 space-x-1.5 bg-black/60 rounded-2xl border border-white/5">
-                                                <button onClick={() => setActiveTab('manual')} className={`px-6 py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all duration-500 ${activeTab === 'manual' ? 'bg-[#B87333] text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}><Plus className="w-3 h-3 mr-2 inline" /> Manual</button>
-                                                <button onClick={() => setActiveTab('acervo')} className={`px-6 py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all duration-500 ${activeTab === 'acervo' ? 'bg-[#B87333] text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}><Database className="w-3 h-3 mr-2 inline" /> Acervo</button>
+                                            <div className="flex items-center space-x-4">
+                                                <div className="flex p-1.5 space-x-1.5 bg-black/60 rounded-2xl border border-white/5">
+                                                    <button onClick={() => setActiveTab('manual')} className={`px-6 py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all duration-500 ${activeTab === 'manual' ? 'bg-[#B87333] text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}><Plus className="w-3 h-3 mr-2 inline" /> Manual</button>
+                                                    <button onClick={() => setActiveTab('acervo')} className={`px-6 py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all duration-500 ${activeTab === 'acervo' ? 'bg-[#B87333] text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}><Database className="w-3 h-3 mr-2 inline" /> Acervo</button>
+                                                </div>
                                             </div>
                                         </div>
                                         <div className="min-h-[400px]">
@@ -4080,7 +4134,7 @@ export default function App() {
                                                                                 {isManualAutoScrolling ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
                                                                             </button>
                                                                             <div className="w-16 hidden sm:block">
-                                                                                <input type="range" min="0.5" max="5" step="0.5" value={manualScrollSpeed} onChange={(e) => setManualScrollSpeed(parseFloat(e.target.value))} className="w-full h-1 bg-white/5 rounded-full appearance-none cursor-pointer accent-[#B87333]" />
+                                                                                <input type="range" min="0.1" max="5" step="0.1" value={manualScrollSpeed} onChange={(e) => setManualScrollSpeed(parseFloat(e.target.value))} className="w-full h-1 bg-white/5 rounded-full appearance-none cursor-pointer accent-[#B87333]" />
                                                                             </div>
                                                                         </div>
                                                                     </div>
@@ -4216,7 +4270,7 @@ export default function App() {
                                                                                 const isChordLine = !!(line && line.trim().length > 0 && (line.match(CHORD_TOKEN_RE) || []).length > 0 && line.replace(CHORD_TOKEN_RE, '').replace(/[\s|()\-xX0-9:]/g, '').length < Math.max(2, line.trim().length * 0.5));
 
                                                                                 return (
-                                                                                    <pre key={lIdx} className={`font-mono leading-relaxed whitespace-pre-wrap break-inside-avoid ${isChordLine ? 'text-[#B87333] font-black italic tracking-tight mb-0' : 'text-slate-300 font-medium mb-1'}`} style={{ fontSize: `${manualFontSize}px` }}>
+                                                                                    <pre key={lIdx} className={`font-mono leading-relaxed whitespace-pre-wrap break-inside-avoid ${isChordLine ? 'text-[#B87333] print:text-[#B87333] font-black italic tracking-tight mb-0' : 'text-slate-300 print:text-gray-900 font-medium mb-1'}`} style={{ fontSize: `${manualFontSize}px` }}>
                                                                                         {isChordLine
                                                                                             ? renderChordLine(line, (chord, anchor, isPersistent) => setChordTooltip({ chord, anchor, isPersistent }), manualPreviewSong.capo || 0)
                                                                                             : (line || ' ')}
@@ -4515,8 +4569,7 @@ export default function App() {
                             )}
 
 
-                            {/* Save List Modal */}
-                            null
+                             {/* Modals end */}
 
 
 
@@ -4724,11 +4777,22 @@ export default function App() {
                                 )
                             }
 
-                            </div>
                         </div>
-                    )
-                }
+                    </div>
+                )}
             </main>
+
+            {/* SettingsModal - Always rendered, visibility controlled by isOpen */}
+            <SettingsModal
+                isOpen={showSettingsModal}
+                onClose={() => setShowSettingsModal(false)}
+                includeToc={includeToc}
+                setIncludeToc={setIncludeToc}
+                includeDictionary={includeDictionary}
+                setIncludeDictionary={setIncludeDictionary}
+                authenticatedUser={authenticatedUser}
+                setShowUserManagement={setShowUserManagement}
+            />
 
             {/* Export Livreto Modal */}
             {
@@ -4814,18 +4878,6 @@ export default function App() {
                                                                 <input type="checkbox" className="hidden" checked={includeDictionary} onChange={(e) => setIncludeDictionary(e.target.checked)} />
                                                             </label>
 
-                                                            {authenticatedUser === 'fernando.m.aragao89@gmail.com' && (
-                                                                <div className="pt-6 border-t border-white/5">
-                                                                    <p className="text-[10px] font-black text-blue-500 uppercase tracking-[0.3em] mb-4">Gestão de Acessos</p>
-                                                                    <button 
-                                                                        onClick={() => setShowUserManagement(true)}
-                                                                        className="w-full py-5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-500 rounded-2xl border border-blue-500/20 font-black uppercase text-[10px] tracking-widest transition-all flex items-center justify-center space-x-3 group"
-                                                                    >
-                                                                        <ShieldCheck className="w-4 h-4 group-hover:scale-110 transition-transform" />
-                                                                        <span>Ver Solicitações de Acesso</span>
-                                                                    </button>
-                                                                </div>
-                                                             )}
 
                                                             <div className="pt-4 border-t border-white/5">
                                                                 <p className="text-[10px] font-black text-[#B87333] uppercase tracking-[0.3em] mb-4">Ordem das Músicas</p>
