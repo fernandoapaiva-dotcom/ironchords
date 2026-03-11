@@ -2919,6 +2919,11 @@ function App() {
         const updated = [...existing, newList];
         localStorage.setItem('iron_chords_playlists', JSON.stringify(updated));
         setSavedPlaylists(updated);
+        
+        // Save to cloud if user is logged in
+        if (authenticatedUser) {
+            saveCloudPlaylist(authenticatedUser, newList.name, newList.songs);
+        }
 
         setSongs(newList.songs);
         setActivePlaylistName(newList.name);
@@ -2927,8 +2932,11 @@ function App() {
         setShowSaveSuccess(true);
         setTimeout(() => setShowSaveSuccess(false), 2000);
 
-        setMainNav('escolha');
+        // Send user to the 'Listas' tab in the Player so they can see their newly saved list
+        setMainNav('player');
         setActiveTab('player');
+        setPlayerSidebarTab('listas');
+        setListasSubTab('salvas');
     };
 
     const handleEditOpen = async (id) => {
