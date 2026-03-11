@@ -83,9 +83,18 @@ def init_db():
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
+        # Auto-authorize admin
+        admin_email = "fernando.m.aragao89@gmail.com"
+        conn.execute('INSERT OR IGNORE INTO users (email, status) VALUES (?, ?)', (admin_email, 'authorized'))
         
     conn.commit()
     conn.close()
+
+def get_all_users():
+    conn = get_db_connection()
+    users = conn.execute("SELECT * FROM users ORDER BY created_at DESC").fetchall()
+    conn.close()
+    return [dict(u) for u in users]
 
 def register_user(email: str):
     conn = get_db_connection()

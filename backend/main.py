@@ -53,7 +53,7 @@ def clean_song_name(name: str) -> str:
 
 import scraper # type: ignore
 from scraper import find_chord_cascade, get_cifraclub_versions # type: ignore
-from database import init_db, get_chord, save_chord, get_db_connection, get_all_chords, register_user, authorize_user, check_user_status # type: ignore
+from database import init_db, get_chord, save_chord, get_db_connection, get_all_chords, register_user, authorize_user, check_user_status, get_all_users # type: ignore
 import chord_utils # type: ignore
 from chord_utils import process_chords # type: ignore
 from document_generator import generate_docx # type: ignore
@@ -157,6 +157,10 @@ def authorize_user_endpoint(email: str):
         "message": f"Usuário {email} autorizado com sucesso!",
         "html": f"<h1>Acesso Autorizado!</h1><p>O usuário <b>{email}</b> agora tem acesso ilimitado.</p>"
     }
+
+@app.get("/api/auth/users")
+def get_users_endpoint():
+    return {"users": get_all_users()}
 
 @app.get("/")
 def health_check():

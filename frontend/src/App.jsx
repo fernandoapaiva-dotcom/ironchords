@@ -690,6 +690,98 @@ const ImportModal = ({ data, onImport, onClose }) => {
     );
 };
 
+// -------------------------------------------------------------------
+// USER MANAGEMENT MODAL (Admin Only)
+// -------------------------------------------------------------------
+const UserManagementModal = ({ onClose, API_BASE }) => {
+    const [users, setUsers] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    const fetchUsers = async () => {
+        setLoading(true);
+        try {
+            const res = await fetch(`${API_BASE}/auth/users`);
+            const data = await res.json();
+            setUsers(data.users || []);
+        } catch (err) {
+            console.error("Failed to fetch users:", err);
+        }
+        setLoading(false);
+    };
+
+    useEffect(() => {
+        fetchUsers();
+    }, []);
+
+    const handleAuthorize = async (email) => {
+        try {
+            await fetch(`${API_BASE}/auth/authorize/${email}`);
+            fetchUsers();
+        } catch (err) {
+            console.error("Auth failed:", err);
+        }
+    };
+
+    return createPortal(
+        <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-[#070709]/95 backdrop-blur-2xl animate-in fade-in duration-300" />
+            <div className="relative w-full max-w-2xl bg-[#16161D] border border-white/10 rounded-[50px] overflow-hidden shadow-2xl animate-in slide-in-from-bottom-8 duration-500">
+                <div className="p-12">
+                    <div className="flex items-center justify-between mb-10">
+                        <div className="flex items-center space-x-6">
+                            <div className="w-16 h-16 bg-blue-500/20 rounded-[24px] border border-blue-500/30 flex items-center justify-center">
+                                <ShieldCheck className="w-8 h-8 text-blue-500" />
+                            </div>
+                            <div>
+                                <h3 className="text-3xl font-black text-white italic uppercase tracking-tighter">Gerenciar Usuários</h3>
+                                <p className="text-xs font-bold text-blue-500 uppercase tracking-[0.3em] mt-1">Controle de Acessos</p>
+                            </div>
+                        </div>
+                        <button onClick={onClose} className="p-4 hover:bg-white/5 rounded-full transition-colors group">
+                            <X className="w-6 h-6 text-slate-500 group-hover:text-white" />
+                        </button>
+                    </div>
+
+                    <div className="max-h-[50vh] overflow-y-auto pr-4 space-y-4 scrollbar-thin scrollbar-thumb-white/10">
+                        {loading ? (
+                            <div className="text-center py-20 text-slate-500 font-bold uppercase tracking-widest text-xs">Carregando usuários...</div>
+                        ) : users.length === 0 ? (
+                            <div className="text-center py-20 text-slate-500 font-bold uppercase tracking-widest text-xs">Nenhum usuário encontrado.</div>
+                        ) : (
+                            users.map((u) => (
+                                <div key={u.id} className="bg-black/40 border border-white/5 rounded-3xl p-6 flex items-center justify-between group hover:border-white/10 transition-all">
+                                    <div className="flex items-center space-x-5">
+                                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${u.status === 'authorized' ? 'bg-green-500/10 text-green-500' : 'bg-orange-500/10 text-orange-500'}`}>
+                                            {u.status === 'authorized' ? <CheckCircle className="w-6 h-6" /> : <Clock className="w-6 h-6" />}
+                                        </div>
+                                        <div>
+                                            <p className="text-white font-black text-sm">{u.email}</p>
+                                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">Status: {u.status === 'authorized' ? 'Autorizado' : 'Pendente'}</p>
+                                        </div>
+                                    </div>
+                                    {u.status === 'pending' && (
+                                        <button 
+                                            onClick={() => handleAuthorize(u.email)}
+                                            className="px-6 py-3 bg-[#B87333] hover:bg-[#8B4513] text-white rounded-xl font-black uppercase text-[10px] tracking-widest transition-all shadow-lg shadow-[#B87333]/20"
+                                        >
+                                            Autorizar
+                                        </button>
+                                    )}
+                                </div>
+                            ))
+                        )}
+                    </div>
+
+                    <div className="mt-10 pt-8 border-t border-white/5 text-center">
+                        <button onClick={onClose} className="text-slate-500 hover:text-white font-black uppercase text-[10px] tracking-widest transition-colors">Fechar Painel</button>
+                    </div>
+                </div>
+            </div>
+        </div>,
+        document.body
+    );
+};
+
 export default function App() {
     const [authenticatedUser, setAuthenticatedUser] = useState(null);
     const [isAuthenticating, setIsAuthenticating] = useState(true);
@@ -770,6 +862,7 @@ export default function App() {
     const [availableVersions, setAvailableVersions] = useState([{ name: 'Principal', key: 'Principal' }]);
     const [showPlayerControls, setShowPlayerControls] = useState(true);
     const [scrollProgress, setScrollProgress] = useState(0);
+    const [showUserManagement, setShowUserManagement] = useState(false);
     const [isManualColumns, setIsManualColumns] = useState(false);
     const playerControlsTimerRef = useRef(null);
     const [manualCapo, setManualCapo] = useState(0);
@@ -3032,6 +3125,7 @@ export default function App() {
     return (
         <div className="min-h-screen bg-[#070709] bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] text-slate-300 font-sans selection:bg-[#B87333]/30 selection:text-white overflow-x-hidden">
             {isGenerating && <MoltenLoading message={forgeMessage} current={batchProgress.current} total={batchProgress.total} />}
+            {showUserManagement && <UserManagementModal onClose={() => setShowUserManagement(false)} API_BASE={API_BASE_URL} />}
 
             {/* Chord Tooltip Overlay */}
             {chordTooltip && chordTooltip.chord && (
@@ -4719,6 +4813,19 @@ export default function App() {
                                                                 </div>
                                                                 <input type="checkbox" className="hidden" checked={includeDictionary} onChange={(e) => setIncludeDictionary(e.target.checked)} />
                                                             </label>
+
+                                                            {authenticatedUser === 'fernando.m.aragao89@gmail.com' && (
+                                                                <div className="pt-6 border-t border-white/5">
+                                                                    <p className="text-[10px] font-black text-blue-500 uppercase tracking-[0.3em] mb-4">Gestão de Acessos</p>
+                                                                    <button 
+                                                                        onClick={() => setShowUserManagement(true)}
+                                                                        className="w-full py-5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-500 rounded-2xl border border-blue-500/20 font-black uppercase text-[10px] tracking-widest transition-all flex items-center justify-center space-x-3 group"
+                                                                    >
+                                                                        <ShieldCheck className="w-4 h-4 group-hover:scale-110 transition-transform" />
+                                                                        <span>Ver Solicitações de Acesso</span>
+                                                                    </button>
+                                                                </div>
+                                                             )}
 
                                                             <div className="pt-4 border-t border-white/5">
                                                                 <p className="text-[10px] font-black text-[#B87333] uppercase tracking-[0.3em] mb-4">Ordem das Músicas</p>

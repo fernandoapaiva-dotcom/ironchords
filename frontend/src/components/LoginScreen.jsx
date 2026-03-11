@@ -6,7 +6,11 @@ const LoginScreen = ({ onAuthorized }) => {
     const [status, setStatus] = useState('idle'); // idle, loading, pending, authorized, error
     const [message, setMessage] = useState('');
 
-    const API_BASE = 'http://localhost:8000/api';
+    const API_BASE = (import.meta.env.VITE_API_BASE_URL || (
+        window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+            ? 'http://127.0.0.1:8000/api'
+            : (window.location.port ? `${window.location.protocol}//${window.location.hostname}:8000/api` : `${window.location.origin}/api`)
+    )).replace(/\/$/, '');
 
     useEffect(() => {
         const savedEmail = localStorage.getItem('ironchords_user_email');
