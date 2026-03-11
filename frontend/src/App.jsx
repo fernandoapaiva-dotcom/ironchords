@@ -27,7 +27,6 @@ const API_BASE_URL = getBaseUrl().replace(/\/api\/?$/, '');
 // -------------------------------------------------------------------
 function usePinchZoom(containerRef, fontSize, setFontSize, minSize = 12, maxSize = 60) {
     const lastDistRef = React.useRef(null);
-    const frameRef = React.useRef(null);
     const targetFontSizeRef = React.useRef(fontSize);
 
     // Sync ref with external state when state changes from elsewhere (like buttons)
@@ -63,18 +62,22 @@ function usePinchZoom(containerRef, fontSize, setFontSize, minSize = 12, maxSize
                 e.preventDefault();
             }
 
-            // Immediately set state without requestAnimationFrame for direct response
-            if (Math.abs(delta) > 1) { // Very low threshold for high sensitivity
-                const zoomFactor = delta > 0 ? 0.5 : -0.5; // Small increments
+            // Direct DOM manipulation for instant feedback with ZERO React re-renders!
+            if (Math.abs(delta) > 1) { 
+                const zoomFactor = delta > 0 ? 0.5 : -0.5; 
                 targetFontSizeRef.current = Math.min(maxSize, Math.max(minSize, targetFontSizeRef.current + zoomFactor));
-                setFontSize(targetFontSizeRef.current);
+                
+                // Apply directly to the DOM for 60fps performance
+                el.style.fontSize = `${targetFontSizeRef.current}px`;
+                
                 lastDistRef.current = newDist;
             }
         };
 
         const onTouchEnd = () => {
             lastDistRef.current = null;
-            if (frameRef.current) cancelAnimationFrame(frameRef.current);
+            // Sync the final size with React state ONLY when the gesture finishes
+            setFontSize(targetFontSizeRef.current);
         };
 
         // Passive false is required to call preventDefault()
@@ -86,7 +89,6 @@ function usePinchZoom(containerRef, fontSize, setFontSize, minSize = 12, maxSize
         el.style.touchAction = 'pan-y'; 
 
         return () => {
-            if (frameRef.current) cancelAnimationFrame(frameRef.current);
             el.removeEventListener('touchstart', onTouchStart);
             el.removeEventListener('touchmove', onTouchMove);
             el.removeEventListener('touchend', onTouchEnd);
