@@ -14,7 +14,8 @@ const getBaseUrl = () => {
     if (raw) return raw.replace(/\/$/, '');
     if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') return 'http://127.0.0.1:8000';
     if (window.location.port && window.location.port !== '80' && window.location.port !== '443') return `${window.location.protocol}//${window.location.hostname}:8000`;
-    return window.location.origin;
+    // Fallback to Render if Vercel doesn't have the env var set
+    return 'https://ironchords.onrender.com';
 };
 const API_BASE_URL = getBaseUrl().replace(/\/api\/?$/, '');
 
@@ -50,6 +51,9 @@ function usePinchZoom(containerRef, fontSize, setFontSize, minSize = 12, maxSize
                 e.preventDefault();
             }
 
+            const newDist = getTouchDist(e.touches);
+            const delta = newDist - lastDistRef.current;
+
             // Require a smaller pinch movement to trigger a render for better sensitivity
             if (Math.abs(delta) > 3) {
                 if (frameRef.current) cancelAnimationFrame(frameRef.current);
@@ -60,7 +64,7 @@ function usePinchZoom(containerRef, fontSize, setFontSize, minSize = 12, maxSize
                         const nextSize = prev + (delta > 0 ? 0.5 : -0.5); // Smoother increments
                         return Math.min(maxSize, Math.max(minSize, nextSize));
                     });
-                    lastDistRef.current = newDist;
+                    lastDistRef.current = newDist; // Inside animation frame to keep state synced
                 });
             }
         };
