@@ -50,17 +50,14 @@ function usePinchZoom(containerRef, fontSize, setFontSize, minSize = 12, maxSize
                 e.preventDefault();
             }
 
-            const newDist = getTouchDist(e.touches);
-            const delta = newDist - lastDistRef.current;
-            
-            // Require a slightly larger pinch movement to trigger a render, avoiding micro-locks
-            if (Math.abs(delta) > 8) {
+            // Require a smaller pinch movement to trigger a render for better sensitivity
+            if (Math.abs(delta) > 3) {
                 if (frameRef.current) cancelAnimationFrame(frameRef.current);
                 
                 // Throttle state updates to Animation Frames to prevent React white-screen crashes
                 frameRef.current = requestAnimationFrame(() => {
                     setFontSize(prev => {
-                        const nextSize = prev + (delta > 0 ? 1 : -1);
+                        const nextSize = prev + (delta > 0 ? 0.5 : -0.5); // Smoother increments
                         return Math.min(maxSize, Math.max(minSize, nextSize));
                     });
                     lastDistRef.current = newDist;
@@ -3396,7 +3393,7 @@ export default function App() {
             {/* Global Settings Gear Icon */}
             <button 
                 onClick={() => setShowSettingsModal(true)}
-                className="fixed top-6 right-4 sm:top-8 sm:right-8 z-[50] p-2.5 sm:p-4 bg-[#16161D]/80 backdrop-blur-xl border border-white/10 rounded-2xl text-slate-400 hover:text-[#B87333] hover:border-[#B87333]/40 transition-all shadow-2xl group no-print flex items-center justify-center w-11 h-11 sm:w-14 sm:h-14"
+                className="fixed top-2 right-2 sm:top-4 sm:right-4 z-[400] p-2 sm:p-3 bg-[#16161D]/60 backdrop-blur-xl border border-white/5 rounded-xl text-slate-500 hover:text-[#B87333] hover:border-[#B87333]/40 transition-all shadow-xl group no-print flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12"
                 title="Configurações e Gestão"
             >
                 <Settings2 className="w-5 h-5 sm:w-6 sm:h-6 group-hover:rotate-90 transition-transform duration-500" />
