@@ -85,7 +85,7 @@ def init_db():
         ''')
         
     # Always ensure admin is authorized
-    admin_email = "fernando.m.aragao89@gmail.com"
+    admin_email = "fernandomaragao89@gmail.com"
     conn.execute('INSERT OR IGNORE INTO users (email, status) VALUES (?, ?)', (admin_email, 'authorized'))
     conn.execute("UPDATE users SET status = 'authorized' WHERE email = ?", (admin_email,))
         

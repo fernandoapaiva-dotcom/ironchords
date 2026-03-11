@@ -152,7 +152,7 @@ def register_user_endpoint(request: RegistrationRequest):
         return {"status": "error", "message": "Falha ao registrar usuário."}
     
     # Notify admin
-    admin_email = "fernando.m.aragao89@gmail.com"
+    admin_email = "fernandomaragao89@gmail.com"
     render_url = os.environ.get("RENDER_EXTERNAL_URL", "http://localhost:8000")
     auth_link = f"{render_url}/api/auth/authorize/{norm_email}"
     print(f"\n[AUTH NOTIFICATION]")
