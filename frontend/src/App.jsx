@@ -9,16 +9,20 @@ import { CifraParser } from './utils/CifraParser';
 import LoginScreen from './components/LoginScreen';
 
 // Dynamic API Base URL detection
+// Dynamic API Base URL detection
 const getBaseUrl = () => {
-    // If running in production (e.g. Vercel), force Render URL
-    if (import.meta.env.PROD) return 'https://ironchords.onrender.com';
+    const hostname = window.location.hostname;
+    const isLocal = hostname === 'localhost' || hostname === '127.0.0.1';
     
-    // Otherwise fallback logic for development
+    // If not local, ALWAYS force the production Render URL to avoid env var issues
+    if (!isLocal) {
+        return 'https://ironchords.onrender.com';
+    }
+    
+    // In local dev, use the env var or default to 8000
     const raw = import.meta.env.VITE_API_BASE_URL;
     if (raw) return raw.replace(/\/$/, '');
-    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') return 'http://127.0.0.1:8000';
-    if (window.location.port && window.location.port !== '80' && window.location.port !== '443') return `${window.location.protocol}//${window.location.hostname}:8000`;
-    return 'https://ironchords.onrender.com';
+    return 'http://127.0.0.1:8000';
 };
 const API_BASE_URL = getBaseUrl().replace(/\/api\/?$/, '');
 
@@ -3376,7 +3380,11 @@ export default function App() {
             const blob = await res.blob();
             setDownloadUrl(window.URL.createObjectURL(blob));
         } catch (err) {
-            alert(err.message);
+            if (err.message.includes('fetch')) {
+                alert("Falha de Conexão: O servidor pode estar acordando (estilo frio do Render). Aguarde 30 segundos e tente novamente.");
+            } else {
+                alert(err.message);
+            }
         } finally {
             clearInterval(progressInterval);
             setIsGenerating(false);
