@@ -1073,8 +1073,9 @@ export default function App() {
 
     const syncCloudPlaylists = async (email) => {
         if (!email) return;
+        const normalized = normalize_google_email(email);
         try {
-            const res = await fetch(`${API_BASE_URL}/api/playlists/${email}`);
+            const res = await fetch(`${API_BASE_URL}/api/playlists/${normalized}`);
             const data = await res.json();
             if (data.playlists) {
                 const cloudPlaylists = data.playlists.map(p => ({
@@ -1090,7 +1091,7 @@ export default function App() {
                     if (!merged.some(cp => cp.name === lp.name)) {
                         merged.push(lp);
                         // Also upload this local-only list to cloud for backup
-                        saveCloudPlaylist(email, lp.name, lp.songs);
+                        saveCloudPlaylist(normalized, lp.name, lp.songs);
                     }
                 });
                 
@@ -1104,11 +1105,12 @@ export default function App() {
 
     const saveCloudPlaylist = async (email, name, songsData) => {
         if (!email) return;
+        const normalized = normalize_google_email(email);
         try {
             await fetch(`${API_BASE_URL}/api/playlists`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ user_email: email, name, data: songsData })
+                body: JSON.stringify({ user_email: normalized, name, data: songsData })
             });
         } catch (err) {
             console.error("Save to cloud failed:", err);
@@ -1117,8 +1119,9 @@ export default function App() {
 
     const deleteCloudPlaylist = async (email, name) => {
         if (!email) return;
+        const normalized = normalize_google_email(email);
         try {
-            await fetch(`${API_BASE_URL}/api/playlists/${email}/${encodeURIComponent(name)}`, {
+            await fetch(`${API_BASE_URL}/api/playlists/${normalized}/${encodeURIComponent(name)}`, {
                 method: 'DELETE'
             });
         } catch (err) {
@@ -3504,7 +3507,10 @@ export default function App() {
     }
 
     if (!authenticatedUser) {
-        return <LoginScreen onAuthorized={(email) => setAuthenticatedUser(email)} />;
+        return <LoginScreen onAuthorized={(email) => {
+            setAuthenticatedUser(email);
+            syncCloudPlaylists(email);
+        }} />;
     }
 
     return (
