@@ -3434,6 +3434,35 @@ export default function App() {
 
             {/* Top-Right Global Controls Group */}
             <div className="fixed top-2 right-2 sm:top-4 sm:right-4 z-[400] flex items-center gap-1.5 sm:gap-2 no-print">
+                {/* Batch Button */}
+                <button 
+                    onClick={() => setBatchModalOpen(true)}
+                    className="hidden sm:flex p-2 sm:p-3 bg-[#16161D]/60 backdrop-blur-xl border border-white/5 rounded-xl text-slate-500 hover:text-[#B87333] hover:border-[#B87333]/40 transition-all shadow-xl items-center justify-center gap-2 px-4"
+                    title="Adicionar em Lote"
+                >
+                    <UploadCloud className="w-4 h-4 sm:w-5 sm:h-5" />
+                    <span className="text-[10px] font-black uppercase tracking-widest hidden lg:block">Em Lote</span>
+                </button>
+
+                {/* Booklet Button */}
+                <button 
+                    onClick={() => {
+                        setCurrentExportList({ name: "Fila Atual", songs: songs || [] });
+                        setExportStep(1);
+                        setDownloadUrl(null);
+                        setExportFormat('docx');
+                        setCoverImage(null);
+                        setShowExportModal(true);
+                    }}
+                    className="p-2 sm:p-3 bg-[#16161D]/60 backdrop-blur-xl border border-white/5 rounded-xl text-slate-500 hover:text-[#B87333] hover:border-[#B87333]/40 transition-all shadow-xl flex items-center justify-center gap-2 px-4"
+                    title="Gerar Livreto"
+                >
+                    <FileText className="w-4 h-4 sm:w-5 sm:h-5" />
+                    <span className="text-[10px] font-black uppercase tracking-widest hidden lg:block">Livreto</span>
+                </button>
+
+                <div className="w-px h-6 bg-white/10 mx-1" />
+
                 {/* Global Settings Gear Icon */}
                 <button 
                     onClick={() => setShowSettingsModal(true)}
@@ -3887,31 +3916,7 @@ export default function App() {
                                                 </div>
                                             ))}
                                         </div>
-                                        <div className="flex space-x-2 shrink-0 mt-4">
-                                            <button
-                                                onClick={() => setBatchModalOpen(true)}
-                                                className="flex-1 py-3 bg-[#B87333]/10 hover:bg-[#B87333] border border-[#B87333]/20 hover:border-[#B87333] text-[#B87333] hover:text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center space-x-2"
-                                                title="Adicionar múltiplas músicas de uma vez"
-                                            >
-                                                <UploadCloud className="w-3.5 h-3.5" />
-                                                <span>Em Lote</span>
-                                            </button>
-                                            <button
-                                                onClick={() => {
-                                                    setCurrentExportList({ name: "Fila Atual", songs: songs || [] });
-                                                    setExportStep(1);
-                                                    setDownloadUrl(null);
-                                                    setExportFormat('docx');
-                                                    setCoverImage(null);
-                                                    setShowExportModal(true);
-                                                }}
-                                                className="flex-1 py-3 bg-[#B87333]/10 hover:bg-[#B87333] border border-[#B87333]/20 hover:border-[#B87333] text-[#B87333] hover:text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center space-x-2"
-                                                title="Gerar Livreto da Fila Atual"
-                                            >
-                                                <FileText className="w-3.5 h-3.5" />
-                                                <span>Livreto</span>
-                                            </button>
-                                        </div>
+                                        <div className="h-4" />
                                     </div>
                                 )}
 
@@ -3954,16 +3959,7 @@ export default function App() {
                                                 ));
                                             })()}
                                         </div>
-                                        {/* Actions */}
-                                        <div className="flex space-x-2 shrink-0">
-                                            <button
-                                                onClick={() => setBatchModalOpen(true)}
-                                                className="flex-1 py-3 bg-[#B87333]/10 hover:bg-[#B87333] border border-[#B87333]/20 hover:border-[#B87333] text-[#B87333] hover:text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center space-x-2"
-                                            >
-                                                <UploadCloud className="w-3.5 h-3.5" />
-                                                <span>Em Lote</span>
-                                            </button>
-                                        </div>
+                                        <div className="h-4" />
                                     </div>
                                 )}
                             </div>
