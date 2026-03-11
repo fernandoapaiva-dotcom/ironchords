@@ -1024,9 +1024,8 @@ async def generate_book(
                     debug_f.write(f"Abrindo documento: {full_docx_path}\n")
                     doc_obj = word.Documents.Open(full_docx_path)
                     
-                    # Garantir que estamos no modo de visualização de impressão para que os números de página sejam calculados
-                    debug_f.write("Mudando visualização para PrintView...\n")
-                    word.ActiveWindow.View.Type = 3 # wdPrintView
+                    # Não podemos acessar ActiveWindow se Visible=False, a repaginação padrão deve bastar
+                    # word.ActiveWindow.View.Type = 3 # wdPrintView
                     
                     # Força a repaginação
                     debug_f.write("Repaginando...\n")
