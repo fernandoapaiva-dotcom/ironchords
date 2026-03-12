@@ -1,6 +1,6 @@
 fastapi
 uvicorn
-pandas
+uvicorn
 requests
 beautifulsoup4
 python-docx

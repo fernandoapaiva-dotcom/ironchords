@@ -1,8 +1,6 @@
 import json
 import logging
 import numpy as np
-import librosa
-import torch
 import io
 
 logging.basicConfig(level=logging.INFO)
@@ -28,8 +26,9 @@ class IronChordsPlayer:
     def _load_vad(self):
         if hasattr(self, 'model') and self.model is not None:
             return
-        logger.info("Lazy loading Silero VAD...")
+        logger.info("Lazy loading Silero VAD (torch)...")
         try:
+            import torch
             self.model, utils = torch.hub.load(repo_or_dir='snakers4/silero-vad',
                                               model='silero_vad',
                                               force_reload=False,
@@ -81,6 +80,8 @@ class IronChordsPlayer:
             return float(rms) > self.vocal_energy_threshold, 0.0
             
         try:
+            import torch
+            import librosa
             rms = np.sqrt(np.mean(audio_data**2))
             if rms < 0.0001:
                 return False, 0.0
@@ -118,6 +119,7 @@ class IronChordsPlayer:
             return False
             
         try:
+            import librosa
             rms = np.sqrt(np.mean(audio_data**2))
             
             # Increased threshold to ignore background noise/fans

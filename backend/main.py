@@ -4,7 +4,6 @@ from fastapi.responses import FileResponse, HTMLResponse # type: ignore
 from database import init_db, get_chord, save_chord, get_db_connection, get_all_chords, register_user, authorize_user, deauthorize_user, delete_user, check_user_status, get_all_users, save_short_link, get_short_link, get_user_playlists, save_user_playlist, delete_user_playlist # type: ignore
 from pydantic import BaseModel # type: ignore
 from typing import List, Optional, Any, Dict, Union, cast
-import pandas as pd # type: ignore
 import io
 import os
 import time
