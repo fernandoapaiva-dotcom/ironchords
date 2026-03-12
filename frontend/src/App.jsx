@@ -1203,21 +1203,27 @@ function App() {
         const checkAuth = async () => {
             const savedEmail = localStorage.getItem('ironchords_user_email');
             if (savedEmail) {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 7000); // 7s timeout
+                
                 try {
-                    const res = await fetch(`${API_BASE_URL}/api/auth/status/${savedEmail}`);
+                    const res = await fetch(`${API_BASE_URL}/api/auth/status/${savedEmail}`, {
+                        signal: controller.signal
+                    });
+                    clearTimeout(timeoutId);
+                    
                     if (!res.ok) throw new Error("Server error");
                     const data = await res.json();
                     if (data.status === 'authorized') {
                         setAuthenticatedUser(savedEmail);
                         syncCloudPlaylists(savedEmail);
                     } else {
-                        // If not authorized (rejected or pending), clear local state to allow re-login
                         localStorage.removeItem('ironchords_user_email');
                     }
                 } catch (err) {
-                    console.error("Auth check failed:", err);
-                    // On connection error, we keep the UI state but don't clear email 
-                    // to allow offline use if it was already authorized
+                    console.error("Auth check failed or timed out:", err);
+                    // On error/timeout, we allow entrance if we have local data 
+                    // or force login if needed. For now, keep state to allow offline.
                 }
             }
             setIsAuthenticating(false);
