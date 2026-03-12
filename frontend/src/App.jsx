@@ -1174,17 +1174,6 @@ const getSafeJSON = (key, defaultValue) => {
     }
 };
 
-const normalize_google_email = (email) => {
-    if (!email) return '';
-    email = email.toLowerCase().trim();
-    const [local, domain] = email.split('@');
-    if (domain === 'gmail.com' || domain === 'googlemail.com') {
-        const cleaned = local.split('+')[0].replace(/\./g, '');
-        return `${cleaned}@gmail.com`;
-    }
-    return email;
-};
-
 function App() {
     const [authenticatedUser, setAuthenticatedUser] = useState(null);
     const [isAuthenticating, setIsAuthenticating] = useState(true);
