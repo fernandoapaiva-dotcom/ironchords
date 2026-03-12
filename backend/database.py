@@ -228,24 +228,51 @@ def check_user_status(email: str):
 
 def get_chord(song_name: str, artist_name: str, song_key: Optional[str] = None, version: Optional[str] = "Principal"):
     conn = get_db_connection()
+    is_postgres = DATABASE_URL is not None
     v = version if version else "Principal"
-    chord = conn.execute(
-        'SELECT * FROM chords WHERE song_name = ? AND artist_name = ? AND version = ?',
-        (song_name.strip(), artist_name.strip(), v)
-    ).fetchone()
+    
+    if is_postgres:
+        from psycopg2.extras import RealDictCursor
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor.execute(
+            'SELECT * FROM chords WHERE song_name = %s AND artist_name = %s AND version = %s',
+            (song_name.strip(), artist_name.strip(), v)
+        )
+    else:
+        cursor = conn.execute(
+            'SELECT * FROM chords WHERE song_name = ? AND artist_name = ? AND version = ?',
+            (song_name.strip(), artist_name.strip(), v)
+        )
+        
+    chord = cursor.fetchone()
     
     if not chord and (not version or version == "Principal"):
-         chord = conn.execute(
-            'SELECT * FROM chords WHERE song_name = ? AND artist_name = ? LIMIT 1',
-            (song_name.strip(), artist_name.strip())
-        ).fetchone()
+         if is_postgres:
+             cursor.execute(
+                'SELECT * FROM chords WHERE song_name = %s AND artist_name = %s LIMIT 1',
+                (song_name.strip(), artist_name.strip())
+            )
+         else:
+             cursor = conn.execute(
+                'SELECT * FROM chords WHERE song_name = ? AND artist_name = ? LIMIT 1',
+                (song_name.strip(), artist_name.strip())
+            )
+         chord = cursor.fetchone()
 
     conn.close()
     return dict(chord) if chord else None
 
 def get_all_chords():
     conn = get_db_connection()
-    chords = conn.execute('SELECT * FROM chords ORDER BY id DESC').fetchall()
+    is_postgres = DATABASE_URL is not None
+    if is_postgres:
+        from psycopg2.extras import RealDictCursor
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor.execute('SELECT * FROM chords ORDER BY id DESC')
+    else:
+        cursor = conn.execute('SELECT * FROM chords ORDER BY id DESC')
+    
+    chords = cursor.fetchall()
     conn.close()
     return [dict(c) for c in chords]
 
@@ -266,55 +293,77 @@ def save_chord(song_name: str, artist_name: str, song_key: str, content: str, so
         key_to_save = key_to_save.upper()
     
     try:
-        conn.execute(
-            'INSERT INTO chords (song_name, artist_name, song_key, content, source, capo, include_tabs, version) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-            (name, artist, key_to_save, content, source, capo, tabs_val, v)
-        )
+        cursor = conn.cursor()
+        sql = 'INSERT INTO chords (song_name, artist_name, song_key, content, source, capo, include_tabs, version) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+        if DATABASE_URL:
+            sql = sql.replace('?', '%s')
+        cursor.execute(sql, (name, artist, key_to_save, content, source, capo, tabs_val, v))
         conn.commit()
-    except sqlite3.IntegrityError:
-        conn.execute(
-            'UPDATE chords SET song_key = ?, content = ?, source = ?, capo = ?, include_tabs = ? WHERE song_name = ? AND artist_name = ? AND version = ?',
-            (key_to_save, content, source, capo, tabs_val, name, artist, v)
-        )
+    except Exception:
+        sql = 'UPDATE chords SET song_key = ?, content = ?, source = ?, capo = ?, include_tabs = ? WHERE song_name = ? AND artist_name = ? AND version = ?'
+        if DATABASE_URL:
+            sql = sql.replace('?', '%s')
+        cursor.execute(sql, (key_to_save, content, source, capo, tabs_val, name, artist, v))
         conn.commit()
     finally:
         conn.close()
 
 def get_user_playlists(email: str):
     conn = get_db_connection()
-    playlists = conn.execute("SELECT * FROM playlists WHERE user_email = ?", (email.strip(),)).fetchall()
+    is_postgres = DATABASE_URL is not None
+    if is_postgres:
+        from psycopg2.extras import RealDictCursor
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor.execute("SELECT * FROM playlists WHERE user_email = %s", (email.strip(),))
+    else:
+        cursor = conn.execute("SELECT * FROM playlists WHERE user_email = ?", (email.strip(),))
+    
+    playlists = cursor.fetchall()
     conn.close()
     return [dict(p) for p in playlists]
 
 def save_user_playlist(email: str, name: str, data_json: str):
     conn = get_db_connection()
+    cursor = conn.cursor()
     try:
-        conn.execute(
-            'INSERT INTO playlists (user_email, name, data) VALUES (?, ?, ?)',
-            (email.strip(), name.strip(), data_json)
-        )
-    except sqlite3.IntegrityError:
-        conn.execute(
-            'UPDATE playlists SET data = ? WHERE user_email = ? AND name = ?',
-            (data_json, email.strip(), name.strip())
-        )
+        sql = 'INSERT INTO playlists (user_email, name, data) VALUES (?, ?, ?)'
+        if DATABASE_URL: sql = sql.replace('?', '%s')
+        cursor.execute(sql, (email.strip(), name.strip(), data_json))
+    except Exception:
+        sql = 'UPDATE playlists SET data = ? WHERE user_email = ? AND name = ?'
+        if DATABASE_URL: sql = sql.replace('?', '%s')
+        cursor.execute(sql, (data_json, email.strip(), name.strip()))
     conn.commit()
     conn.close()
 
 def delete_user_playlist(email: str, name: str):
     conn = get_db_connection()
-    conn.execute("DELETE FROM playlists WHERE user_email = ? AND name = ?", (email.strip(), name.strip()))
+    cursor = conn.cursor()
+    sql = "DELETE FROM playlists WHERE user_email = ? AND name = ?"
+    if DATABASE_URL: sql = sql.replace('?', '%s')
+    cursor.execute(sql, (email.strip(), name.strip()))
     conn.commit()
     conn.close()
 
 def save_short_link(slug: str, data_json: str):
     conn = get_db_connection()
-    conn.execute('INSERT INTO short_links (slug, data) VALUES (?, ?)', (slug, data_json))
+    cursor = conn.cursor()
+    sql = 'INSERT INTO short_links (slug, data) VALUES (?, ?)'
+    if DATABASE_URL: sql = sql.replace('?', '%s')
+    cursor.execute(sql, (slug, data_json))
     conn.commit()
     conn.close()
 
 def get_short_link(slug: str):
     conn = get_db_connection()
-    res = conn.execute('SELECT data FROM short_links WHERE slug = ?', (slug,)).fetchone()
+    is_postgres = DATABASE_URL is not None
+    if is_postgres:
+        from psycopg2.extras import RealDictCursor
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor.execute('SELECT data FROM short_links WHERE slug = %s', (slug,))
+    else:
+        cursor = conn.execute('SELECT data FROM short_links WHERE slug = ?', (slug,))
+        
+    res = cursor.fetchone()
     conn.close()
     return res['data'] if res else None

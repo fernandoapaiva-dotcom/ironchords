@@ -130,23 +130,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-def normalize_gmail(email: str) -> str:
-    """Normalize Gmail addresses so dots and +aliases are equivalent.
-    Only applies to @gmail.com and @googlemail.com domains.
-    e.g. Fernando.M.Aragao89@gmail.com -> fernandomaragao89@gmail.com
-         user+test@gmail.com           -> user@gmail.com
-    """
-    if not email:
-        return email.lower().strip()
-    email = email.lower().strip()
-    local, _, domain = email.partition('@')
-    if domain in ('gmail.com', 'googlemail.com'):
-        # Remove +alias
-        local = local.split('+')[0]
-        # Remove dots
-        local = local.replace('.', '')
-        return f"{local}@gmail.com"
-    return email
 
 class RegistrationRequest(BaseModel):
     email: str

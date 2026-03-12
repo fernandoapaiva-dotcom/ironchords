@@ -1,6 +1,5 @@
 fastapi
 uvicorn
-uvicorn
 requests
 beautifulsoup4
 python-docx
@@ -15,5 +14,4 @@ torch
 soundfile
 numpy
 gunicorn
-uvicorn
 psycopg2-binary
