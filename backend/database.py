@@ -8,7 +8,6 @@ DATABASE_URL = os.environ.get("DATABASE_URL")
 
 def get_db_connection():
     if DATABASE_URL:
-        import urllib.parse
         import psycopg2
         from psycopg2.extras import RealDictCursor
         import time as _time
@@ -17,6 +16,11 @@ def get_db_connection():
         url = DATABASE_URL
         if url.startswith("postgres://"):
             url = url.replace("postgres://", "postgresql://", 1)
+            
+        # Enforce SSL for hosted providers if not specified
+        if "sslmode" not in url:
+            separator = "&" if "?" in url else "?"
+            url += f"{separator}sslmode=require"
         
         # Retry logic for robust startup
         last_err = None
@@ -28,7 +32,9 @@ def get_db_connection():
                 last_err = e
                 print(f"[DB] Connection attempt {attempt+1} failed: {e}")
                 _time.sleep(2)
-        raise last_err
+        if last_err:
+            raise last_err
+        raise Exception("Failed to connect to database")
     else:
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
@@ -57,143 +63,148 @@ def init_db():
         else:
             cursor.execute(sql)
 
-    # Check if table exists (portable-ish)
-    if is_postgres:
-        cursor.execute("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'chords')")
-        has_chords = cursor.fetchone()[0]
-    else:
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='chords'")
-        has_chords = cursor.fetchone() is not None
-
-    if not has_chords:
-        db_exec('''
-            CREATE TABLE chords (
-                id SERIAL PRIMARY KEY,
-                song_name TEXT NOT NULL,
-                artist_name TEXT NOT NULL,
-                song_key TEXT NOT NULL,
-                content TEXT NOT NULL,
-                source TEXT NOT NULL,
-                version TEXT NOT NULL DEFAULT 'Principal',
-                capo INTEGER DEFAULT 0,
-                include_tabs INTEGER DEFAULT 1,
-                UNIQUE(song_name, artist_name, version)
-            )
-        ''')
-    else:
-        # Migration logic simplified for Postgres (assuming fresh start or already migrated)
-        # For SQLite we keep the old logic but use db_exec
-        if not is_postgres:
-            cursor.execute("PRAGMA table_info(chords)")
-            cols_info = cursor.fetchall()
-            col_names = [c[1] for c in cols_info]
-            
-            if 'version' not in col_names:
-                cursor.execute("ALTER TABLE chords ADD COLUMN version TEXT NOT NULL DEFAULT 'Principal'")
-            if 'capo' not in col_names:
-                cursor.execute("ALTER TABLE chords ADD COLUMN capo INTEGER DEFAULT 0")
-            if 'include_tabs' not in col_names:
-                cursor.execute("ALTER TABLE chords ADD COLUMN include_tabs INTEGER DEFAULT 1")
-
-    # Users table
-    if is_postgres:
-        cursor.execute("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'users')")
-        has_users = cursor.fetchone()[0]
-    else:
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='users'")
-        has_users = cursor.fetchone() is not None
-
-    if not has_users:
-        db_exec('''
-            CREATE TABLE users (
-                id SERIAL PRIMARY KEY,
-                email TEXT NOT NULL UNIQUE,
-                status TEXT NOT NULL DEFAULT 'pending',
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        
-    # Playlists table
-    if is_postgres:
-        cursor.execute("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'playlists')")
-        has_playlists = cursor.fetchone()[0]
-    else:
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='playlists'")
-        has_playlists = cursor.fetchone() is not None
-
-    if not has_playlists:
-        db_exec('''
-            CREATE TABLE playlists (
-                id SERIAL PRIMARY KEY,
-                user_email TEXT NOT NULL,
-                name TEXT NOT NULL,
-                data TEXT NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(user_email, name)
-            )
-        ''')
-        
-    # Short Links table
-    if is_postgres:
-        cursor.execute("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'short_links')")
-        has_links = cursor.fetchone()[0]
-    else:
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='short_links'")
-        has_links = cursor.fetchone() is not None
-
-    if not has_links:
-        db_exec('''
-            CREATE TABLE short_links (
-                id SERIAL PRIMARY KEY,
-                slug TEXT NOT NULL UNIQUE,
-                data TEXT NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-
-    # Always ensure admin is authorized
-    admin_email = "fernandomaragao89@gmail.com"
     try:
-        db_exec('INSERT INTO users (email, status) VALUES (?, ?) ON CONFLICT (email) DO UPDATE SET status = EXCLUDED.status', (admin_email, 'authorized'))
-        conn.commit()
-    except Exception as e:
-        if is_postgres: 
-            conn.rollback()
-            print(f"[DB] Postgres ON CONFLICT failed, trying separate steps: {e}")
-        
-        # Fallback for SQLite or if Postgres ON CONFLICT had issues
-        try:
-            if is_postgres:
-                db_exec('INSERT INTO users (email, status) VALUES (%s, %s) ON CONFLICT DO NOTHING', (admin_email, 'authorized'))
-            else:
-                db_exec('INSERT OR IGNORE INTO users (email, status) VALUES (?, ?)', (admin_email, 'authorized'))
-            
-            db_exec("UPDATE users SET status = 'authorized' WHERE email = " + ("%s" if is_postgres else "?"), (admin_email,))
-            conn.commit()
-        except Exception as e2:
-            if is_postgres: conn.rollback()
-            print(f"[DB] Final admin auth fallback failed: {e2}")
+        # Check if table exists (portable-ish)
+        if is_postgres:
+            cursor.execute("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'chords')")
+            has_chords = cursor.fetchone()[0]
+        else:
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='chords'")
+            has_chords = cursor.fetchone() is not None
 
-    conn.close()
+        if not has_chords:
+            db_exec('''
+                CREATE TABLE chords (
+                    id SERIAL PRIMARY KEY,
+                    song_name TEXT NOT NULL,
+                    artist_name TEXT NOT NULL,
+                    song_key TEXT NOT NULL,
+                    content TEXT NOT NULL,
+                    source TEXT NOT NULL,
+                    version TEXT NOT NULL DEFAULT 'Principal',
+                    capo INTEGER DEFAULT 0,
+                    include_tabs INTEGER DEFAULT 1,
+                    UNIQUE(song_name, artist_name, version)
+                )
+            ''')
+        else:
+            # Migration logic simplified for Postgres
+            if not is_postgres:
+                cursor.execute("PRAGMA table_info(chords)")
+                cols_info = cursor.fetchall()
+                col_names = [c[1] for c in cols_info]
+                
+                if 'version' not in col_names:
+                    cursor.execute("ALTER TABLE chords ADD COLUMN version TEXT NOT NULL DEFAULT 'Principal'")
+                if 'capo' not in col_names:
+                    cursor.execute("ALTER TABLE chords ADD COLUMN capo INTEGER DEFAULT 0")
+                if 'include_tabs' not in col_names:
+                    cursor.execute("ALTER TABLE chords ADD COLUMN include_tabs INTEGER DEFAULT 1")
+
+        # Users table
+        if is_postgres:
+            cursor.execute("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'users')")
+            has_users = cursor.fetchone()[0]
+        else:
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='users'")
+            has_users = cursor.fetchone() is not None
+
+        if not has_users:
+            db_exec('''
+                CREATE TABLE users (
+                    id SERIAL PRIMARY KEY,
+                    email TEXT NOT NULL UNIQUE,
+                    status TEXT NOT NULL DEFAULT 'pending',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+        # Playlists table
+        if is_postgres:
+            cursor.execute("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'playlists')")
+            has_playlists = cursor.fetchone()[0]
+        else:
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='playlists'")
+            has_playlists = cursor.fetchone() is not None
+
+        if not has_playlists:
+            db_exec('''
+                CREATE TABLE playlists (
+                    id SERIAL PRIMARY KEY,
+                    user_email TEXT NOT NULL,
+                    name TEXT NOT NULL,
+                    data TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(user_email, name)
+                )
+            ''')
+            
+        # Short Links table
+        if is_postgres:
+            cursor.execute("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'short_links')")
+            has_links = cursor.fetchone()[0]
+        else:
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='short_links'")
+            has_links = cursor.fetchone() is not None
+
+        if not has_links:
+            db_exec('''
+                CREATE TABLE short_links (
+                    id SERIAL PRIMARY KEY,
+                    slug TEXT NOT NULL UNIQUE,
+                    data TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+
+        # Always ensure admin is authorized
+        admin_email = "fernandomaragao89@gmail.com"
+        try:
+            db_exec('INSERT INTO users (email, status) VALUES (?, ?) ON CONFLICT (email) DO UPDATE SET status = EXCLUDED.status', (admin_email, 'authorized'))
+        except Exception as e:
+            if is_postgres: conn.rollback()
+            print(f"[DB] Initial admin auth failed, trying fallback: {e}")
+            try:
+                if is_postgres:
+                    db_exec('INSERT INTO users (email, status) VALUES (%s, %s) ON CONFLICT DO NOTHING', (admin_email, 'authorized'))
+                else:
+                    db_exec('INSERT OR IGNORE INTO users (email, status) VALUES (?, ?)', (admin_email, 'authorized'))
+                db_exec("UPDATE users SET status = 'authorized' WHERE email = " + ("%s" if is_postgres else "?"), (admin_email,))
+            except Exception as e2:
+                if is_postgres: conn.rollback()
+                print(f"[DB] Final admin auth fallback failed: {e2}")
+
+        conn.commit()
+    except Exception as general_err:
+        if is_postgres: conn.rollback()
+        print(f"[CRITICAL] Database initialization failed: {general_err}")
+        raise general_err
+    finally:
+        conn.close()
 
 def _exec_select(sql, params=None):
     conn = get_db_connection()
     is_postgres = DATABASE_URL is not None
-    if is_postgres:
-        from psycopg2.extras import RealDictCursor
-        cursor = conn.cursor(cursor_factory=RealDictCursor)
-        sql = sql.replace('?', '%s')
-    else:
-        cursor = conn.cursor()
-    
-    if params:
-        cursor.execute(sql, params)
-    else:
-        cursor.execute(sql)
-    
-    results = cursor.fetchall()
-    conn.close()
-    return [dict(r) for r in results]
+    try:
+        if is_postgres:
+            from psycopg2.extras import RealDictCursor
+            cursor = conn.cursor(cursor_factory=RealDictCursor)
+            sql = sql.replace('?', '%s')
+        else:
+            cursor = conn.cursor()
+        
+        if params:
+            cursor.execute(sql, params)
+        else:
+            cursor.execute(sql)
+        
+        results = cursor.fetchall()
+        return [dict(r) for r in results]
+    except Exception as e:
+        print(f"[DB] Select error: {e}")
+        return []
+    finally:
+        conn.close()
 
 def _exec_write(sql, params=None):
     conn = get_db_connection()
@@ -210,8 +221,9 @@ def _exec_write(sql, params=None):
         conn.commit()
         return True
     except Exception as e:
-        print(f"Write error: {e}")
-        conn.rollback()
+        print(f"[DB] Write error: {e}")
+        if is_postgres:
+            conn.rollback()
         return False
     finally:
         conn.close()
@@ -243,53 +255,67 @@ def get_chord(song_name: str, artist_name: str, song_key: Optional[str] = None, 
     is_postgres = DATABASE_URL is not None
     v = version if version else "Principal"
     
-    if is_postgres:
-        from psycopg2.extras import RealDictCursor
-        cursor = conn.cursor(cursor_factory=RealDictCursor)
-        cursor.execute(
-            'SELECT * FROM chords WHERE song_name = %s AND artist_name = %s AND version = %s',
-            (song_name.strip(), artist_name.strip(), v)
-        )
-    else:
-        cursor = conn.execute(
-            'SELECT * FROM chords WHERE song_name = ? AND artist_name = ? AND version = ?',
-            (song_name.strip(), artist_name.strip(), v)
-        )
+    try:
+        if is_postgres:
+            from psycopg2.extras import RealDictCursor
+            cursor = conn.cursor(cursor_factory=RealDictCursor)
+            cursor.execute(
+                'SELECT * FROM chords WHERE song_name = %s AND artist_name = %s AND version = %s',
+                (song_name.strip(), artist_name.strip(), v)
+            )
+        else:
+            cursor = conn.cursor()
+            cursor.execute(
+                'SELECT * FROM chords WHERE song_name = ? AND artist_name = ? AND version = ?',
+                (song_name.strip(), artist_name.strip(), v)
+            )
+            
+        chord = cursor.fetchone()
         
-    chord = cursor.fetchone()
-    
-    if not chord and (not version or version == "Principal"):
-         if is_postgres:
-             cursor.execute(
-                'SELECT * FROM chords WHERE song_name = %s AND artist_name = %s LIMIT 1',
-                (song_name.strip(), artist_name.strip())
-            )
-         else:
-             cursor = conn.execute(
-                'SELECT * FROM chords WHERE song_name = ? AND artist_name = ? LIMIT 1',
-                (song_name.strip(), artist_name.strip())
-            )
-         chord = cursor.fetchone()
+        if not chord and (not version or version == "Principal"):
+             if is_postgres:
+                 cursor.execute(
+                    'SELECT * FROM chords WHERE song_name = %s AND artist_name = %s LIMIT 1',
+                    (song_name.strip(), artist_name.strip())
+                )
+             else:
+                 cursor.execute(
+                    'SELECT * FROM chords WHERE song_name = ? AND artist_name = ? LIMIT 1',
+                    (song_name.strip(), artist_name.strip())
+                )
+             chord = cursor.fetchone()
 
-    conn.close()
-    return dict(chord) if chord else None
+        return dict(chord) if chord else None
+    except Exception as e:
+        print(f"[DB] Get chord error: {e}")
+        return None
+    finally:
+        conn.close()
 
 def get_all_chords():
     conn = get_db_connection()
     is_postgres = DATABASE_URL is not None
-    if is_postgres:
-        from psycopg2.extras import RealDictCursor
-        cursor = conn.cursor(cursor_factory=RealDictCursor)
-        cursor.execute('SELECT * FROM chords ORDER BY id DESC')
-    else:
-        cursor = conn.execute('SELECT * FROM chords ORDER BY id DESC')
-    
-    chords = cursor.fetchall()
-    conn.close()
-    return [dict(c) for c in chords]
+    try:
+        if is_postgres:
+            from psycopg2.extras import RealDictCursor
+            cursor = conn.cursor(cursor_factory=RealDictCursor)
+            cursor.execute('SELECT * FROM chords ORDER BY id DESC')
+        else:
+            cursor = conn.cursor()
+            cursor.execute('SELECT * FROM chords ORDER BY id DESC')
+        
+        chords = cursor.fetchall()
+        return [dict(c) for c in chords]
+    except Exception as e:
+        print(f"[DB] Get all chords error: {e}")
+        return []
+    finally:
+        conn.close()
 
 def save_chord(song_name: str, artist_name: str, song_key: str, content: str, source: str, capo: int = 0, include_tabs: bool = True, version: str = "Principal"):
     conn = get_db_connection()
+    is_postgres = DATABASE_URL is not None
+    cursor = conn.cursor()
     name = song_name.strip()
     artist = artist_name.strip()
     v = version if version else "Principal"
@@ -305,77 +331,111 @@ def save_chord(song_name: str, artist_name: str, song_key: str, content: str, so
         key_to_save = key_to_save.upper()
     
     try:
-        cursor = conn.cursor()
         sql = 'INSERT INTO chords (song_name, artist_name, song_key, content, source, capo, include_tabs, version) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-        if DATABASE_URL:
-            sql = sql.replace('?', '%s')
+        if is_postgres: sql = sql.replace('?', '%s')
         cursor.execute(sql, (name, artist, key_to_save, content, source, capo, tabs_val, v))
         conn.commit()
     except Exception:
-        sql = 'UPDATE chords SET song_key = ?, content = ?, source = ?, capo = ?, include_tabs = ? WHERE song_name = ? AND artist_name = ? AND version = ?'
-        if DATABASE_URL:
-            sql = sql.replace('?', '%s')
-        cursor.execute(sql, (key_to_save, content, source, capo, tabs_val, name, artist, v))
-        conn.commit()
+        if is_postgres: conn.rollback()
+        try:
+            sql = 'UPDATE chords SET song_key = ?, content = ?, source = ?, capo = ?, include_tabs = ? WHERE song_name = ? AND artist_name = ? AND version = ?'
+            if is_postgres: sql = sql.replace('?', '%s')
+            cursor.execute(sql, (key_to_save, content, source, capo, tabs_val, name, artist, v))
+            conn.commit()
+        except Exception as e:
+            if is_postgres: conn.rollback()
+            print(f"[DB] Save chord error: {e}")
     finally:
         conn.close()
 
 def get_user_playlists(email: str):
     conn = get_db_connection()
     is_postgres = DATABASE_URL is not None
-    if is_postgres:
-        from psycopg2.extras import RealDictCursor
-        cursor = conn.cursor(cursor_factory=RealDictCursor)
-        cursor.execute("SELECT * FROM playlists WHERE user_email = %s", (email.strip(),))
-    else:
-        cursor = conn.execute("SELECT * FROM playlists WHERE user_email = ?", (email.strip(),))
-    
-    playlists = cursor.fetchall()
-    conn.close()
-    return [dict(p) for p in playlists]
+    try:
+        if is_postgres:
+            from psycopg2.extras import RealDictCursor
+            cursor = conn.cursor(cursor_factory=RealDictCursor)
+            cursor.execute("SELECT * FROM playlists WHERE user_email = %s", (email.strip(),))
+        else:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM playlists WHERE user_email = ?", (email.strip(),))
+        
+        playlists = cursor.fetchall()
+        return [dict(p) for p in playlists]
+    except Exception as e:
+        print(f"[DB] Get playlists error: {e}")
+        return []
+    finally:
+        conn.close()
 
 def save_user_playlist(email: str, name: str, data_json: str):
     conn = get_db_connection()
+    is_postgres = DATABASE_URL is not None
     cursor = conn.cursor()
     try:
         sql = 'INSERT INTO playlists (user_email, name, data) VALUES (?, ?, ?)'
-        if DATABASE_URL: sql = sql.replace('?', '%s')
+        if is_postgres: sql = sql.replace('?', '%s')
         cursor.execute(sql, (email.strip(), name.strip(), data_json))
+        conn.commit()
     except Exception:
-        sql = 'UPDATE playlists SET data = ? WHERE user_email = ? AND name = ?'
-        if DATABASE_URL: sql = sql.replace('?', '%s')
-        cursor.execute(sql, (data_json, email.strip(), name.strip()))
-    conn.commit()
-    conn.close()
+        if is_postgres: conn.rollback()
+        try:
+            sql = 'UPDATE playlists SET data = ? WHERE user_email = ? AND name = ?'
+            if is_postgres: sql = sql.replace('?', '%s')
+            cursor.execute(sql, (data_json, email.strip(), name.strip()))
+            conn.commit()
+        except Exception as e:
+            if is_postgres: conn.rollback()
+            print(f"[DB] Save playlist error: {e}")
+    finally:
+        conn.close()
 
 def delete_user_playlist(email: str, name: str):
     conn = get_db_connection()
+    is_postgres = DATABASE_URL is not None
     cursor = conn.cursor()
-    sql = "DELETE FROM playlists WHERE user_email = ? AND name = ?"
-    if DATABASE_URL: sql = sql.replace('?', '%s')
-    cursor.execute(sql, (email.strip(), name.strip()))
-    conn.commit()
-    conn.close()
+    try:
+        sql = "DELETE FROM playlists WHERE user_email = ? AND name = ?"
+        if is_postgres: sql = sql.replace('?', '%s')
+        cursor.execute(sql, (email.strip(), name.strip()))
+        conn.commit()
+    except Exception as e:
+        if is_postgres: conn.rollback()
+        print(f"[DB] Delete playlist error: {e}")
+    finally:
+        conn.close()
 
 def save_short_link(slug: str, data_json: str):
     conn = get_db_connection()
+    is_postgres = DATABASE_URL is not None
     cursor = conn.cursor()
-    sql = 'INSERT INTO short_links (slug, data) VALUES (?, ?)'
-    if DATABASE_URL: sql = sql.replace('?', '%s')
-    cursor.execute(sql, (slug, data_json))
-    conn.commit()
-    conn.close()
+    try:
+        sql = 'INSERT INTO short_links (slug, data) VALUES (?, ?)'
+        if is_postgres: sql = sql.replace('?', '%s')
+        cursor.execute(sql, (slug, data_json))
+        conn.commit()
+    except Exception as e:
+        if is_postgres: conn.rollback()
+        print(f"[DB] Save short link error: {e}")
+    finally:
+        conn.close()
 
 def get_short_link(slug: str):
     conn = get_db_connection()
     is_postgres = DATABASE_URL is not None
-    if is_postgres:
-        from psycopg2.extras import RealDictCursor
-        cursor = conn.cursor(cursor_factory=RealDictCursor)
-        cursor.execute('SELECT data FROM short_links WHERE slug = %s', (slug,))
-    else:
-        cursor = conn.execute('SELECT data FROM short_links WHERE slug = ?', (slug,))
-        
-    res = cursor.fetchone()
-    conn.close()
-    return res['data'] if res else None
+    try:
+        if is_postgres:
+            from psycopg2.extras import RealDictCursor
+            cursor = conn.cursor(cursor_factory=RealDictCursor)
+            cursor.execute('SELECT data FROM short_links WHERE slug = %s', (slug,))
+        else:
+            cursor = conn.cursor()
+            cursor.execute('SELECT data FROM short_links WHERE slug = ?', (slug,))
+            
+        res = cursor.fetchone()
+        return res['data'] if res else None
+    except Exception as e:
+        print(f"[DB] Get short link error: {e}")
+        return None
+    finally:
+        conn.close()
