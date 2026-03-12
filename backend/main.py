@@ -1081,7 +1081,7 @@ async def generate_book(
         pdf_path = None
         with open("debug.log", "a") as debug_f:
             debug_f.write(f"\n--- Início Processamento COM: {export_format} ---\n")
-            if HAS_PYWIN32:
+            if HAS_PYWIN32 and platform.system() == "Windows":
                 pythoncom.CoInitialize()
                 word = None
                 doc_obj = None
@@ -1089,24 +1089,18 @@ async def generate_book(
                     debug_f.write("Acessando Word.Application...\n")
                     word = win32com.client.DispatchEx("Word.Application")
                     word.Visible = False
-                    word.DisplayAlerts = 0 # wdAlertsNone
+                    word.DisplayAlerts = 0 
                     
                     full_docx_path = os.path.abspath(file_path)
                     debug_f.write(f"Abrindo documento: {full_docx_path}\n")
                     doc_obj = word.Documents.Open(full_docx_path)
                     
-                    # Não podemos acessar ActiveWindow se Visible=False, a repaginação padrão deve bastar
-                    # word.ActiveWindow.View.Type = 3 # wdPrintView
-                    
-                    # Força a repaginação
                     debug_f.write("Repaginando...\n")
                     doc_obj.Repaginate()
                     
-                    # Atualiza todos os campos
                     debug_f.write("Atualizando campos...\n")
                     doc_obj.Fields.Update()
                     
-                    # Atualiza o índice especificamente
                     if doc_obj.TablesOfContents.Count > 0:
                         debug_f.write("Atualizando TOC...\n")
                         doc_obj.TablesOfContents(1).UpdatePageNumbers()
@@ -1120,16 +1114,14 @@ async def generate_book(
                         pdf_dest = os.path.join(os.path.dirname(__file__), pdf_filename)
                         pdf_path = os.path.abspath(pdf_dest)
                         debug_f.write(f"Exportando PDF para: {pdf_path}\n")
-                        # ExportFormat=17 is wdExportFormatPDF
                         doc_obj.ExportAsFixedFormat(pdf_path, 17)
-                        debug_f.write("PDF Exportado com sucesso via ExportAsFixedFormat.\n")
+                        debug_f.write("PDF Exportado com sucesso.\n")
                     
                     doc_obj.Close(SaveChanges=True)
                 except Exception as e:
                     import traceback
                     error_msg = f"Erro no Word COM: {str(e)}\n{traceback.format_exc()}"
                     debug_f.write(error_msg + "\n")
-                    print(error_msg)
                 finally:
                     if word:
                         try:
@@ -1139,8 +1131,9 @@ async def generate_book(
                     pythoncom.CoUninitialize()
                     debug_f.write("COM Finalizado.\n")
             else:
-                debug_f.write("HAS_PYWIN32 é False.\n")
-                print("pywin32 não disponível no main.py.")
+                reason = "pywin32 não disponível" if not HAS_PYWIN32 else "Sistema não é Windows"
+                debug_f.write(f"Conversão disparada: {reason}. O sumário pode não estar atualizado e apenas o DOCX será retornado.\n")
+                print(f"DEBUG: {reason}. Ignorando processamento Word COM.")
                 
         # Clean up temporary cover image
         if cover_path:

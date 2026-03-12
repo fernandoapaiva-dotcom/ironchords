@@ -187,24 +187,25 @@ def generate_docx(songs: list, output_filename: str = "Livreto.docx", cover_imag
     from docx.oxml import OxmlElement
     from docx.oxml.ns import qn
     from chord_drawer import build_chord_dictionary
-    doc = Document()
-    for section in doc.sections:
-        section.top_margin = Cm(0.7)
-        section.bottom_margin = Cm(0.7)
-        section.left_margin = Cm(0.7)
-        section.right_margin = Cm(0.7)
-    
+    doc = Document()    # Configuração inicial das margens na primeira seção
+    main_section = doc.sections[0]
+    main_section.top_margin = Cm(0.7)
+    main_section.bottom_margin = Cm(0.7)
+    main_section.left_margin = Cm(0.7)
+    main_section.right_margin = Cm(0.7)
+
+    # Configuração de Cabeçalho e Rodapé apenas uma vez (propagará por herança)
+    add_header_logo(main_section)
+    add_footer_with_branding(doc) # Internamente já itera ou aplica à primeira
+
     # Capa & TOC (Minimalist)
     if cover_image_path and os.path.exists(cover_image_path):
-        # Create a paragraph for the image
         p_img = doc.add_paragraph()
         p_img.alignment = WD_ALIGN_PARAGRAPH.CENTER
         p_img.paragraph_format.space_before = Pt(80) 
         run_img = p_img.add_run()
         run_img.add_picture(cover_image_path, width=Inches(4.5))
         p_img.paragraph_format.space_after = Pt(20)
-        
-        # Create a separate paragraph for the title BELOW the image
         p_capa = doc.add_paragraph()
     else:
         p_capa = doc.add_paragraph()
@@ -230,7 +231,7 @@ def generate_docx(songs: list, output_filename: str = "Livreto.docx", cover_imag
         doc.add_page_break()
     
     if sort_order == "alphabetical":
-        songs_sorted = sorted(songs, key=lambda x: str(x['song_name']).lower())
+        songs_sorted = sorted(songs, key=lambda x: str(x.get('song_name', '')).lower())
     else:
         songs_sorted = songs # Keep queue order
         
@@ -238,36 +239,31 @@ def generate_docx(songs: list, output_filename: str = "Livreto.docx", cover_imag
     out_p = os.path.join(os.path.dirname(__file__), output_filename)
     
     # --- GLOBAL CHORD CACHE OPTIMIZATION ---
-    # Pre-generate all unique chords across all songs to avoid O(N*M) lookups
     global_chord_images = {}
     if include_dictionary:
         all_chords = set()
         for song in songs_sorted:
             if not song.get('show_chords', True): continue
-            
-            content = str(song.get('content') or '')
-            lines = content.split('\n')
+            lines = str(song.get('content', '')).split('\n')
             for l in lines:
                 for m in CHORD_REGEX.findall(l):
-                    if is_valid_chord(m): 
-                        all_chords.add(m)
+                    if is_valid_chord(m): all_chords.add(m)
         
         if all_chords:
             from chord_drawer import build_chord_dictionary
             generated_list = build_chord_dictionary(sorted(list(all_chords)), temp_dir)
             global_chord_images = {name: path for name, path in generated_list}
-    # ---------------------------------------
 
     try:
         for idx, song in enumerate(songs_sorted):
-            # Page Anchor Constants (V31 Iron Box: 26.0cm safety limit)
-            # A4 Height is 29.7cm. With 0.7cm margins, we have 28.3cm.
-            # 26.0cm gives us a generous buffer for Word's internal logic.
+            if idx > 0:
+                doc.add_page_break()
+
             A4_H: float = 26.0 
             CM_PT: float = 0.03528
-            L_SPACING: float = 0.90
+            LEADING_FACTOR: float = 1.30
             
-            lines = [l.rstrip() for l in str(song['content']).split('\n')]
+            lines = [l.rstrip() for l in str(song.get('content', '')).split('\n')]
             line_cnt = len(lines)
             max_line_w = max(len(l) for l in lines) if lines else 1
             
@@ -279,90 +275,59 @@ def generate_docx(songs: list, output_filename: str = "Livreto.docx", cover_imag
             show_diag = song.get('show_chords', True) and include_dictionary
             num_chords = len(unique_chords)
             
-            # 1. FIXED DICTIONARY SPACE
             dict_h: float = 0.0
             if show_diag and num_chords > 0:
                 rows = (num_chords + 5) // 6
-                # V31: Reduced base height of dictionary cells to be more compact
                 dict_h = 0.4 + (rows * 3.3)
             
-            # 2. FIXED HEADER SPACE
             header_h: float = 1.6 
-            
-            # 3. CALCULATE MUSIC SPACE
             music_avail_h = A4_H - dict_h - header_h
-            
-            # 4. OPTIMIZE LAYOUT (V32: Proportional Font & Smart Columns)
-            # Thresholds: 1 column is preferred unless it's too long
             n_cols = 1
             eff_l = float(line_cnt)
+            f_size = 16.0 
+            L_SPACING = 1.05
             
-            # V31: SAFETY FACTOR (Consolas 1pt height is approx 1.30pt including leading)
-            LEADING_FACTOR: float = 1.30
-            
-            # Search for best Font/Spacing/Column triplet
-            f_size = 16.0  # Increased max font for proportional filling
-            L_SPACING = 1.05 # Start with slightly more space for small songs
-            
-            avail_h: float = music_avail_h
-
             def calculate_layout(fs, ls, nc, el):
                 h = (el * fs * ls * LEADING_FACTOR * CM_PT)
                 cw = 19.6 if nc == 1 else 9.2
-                wrapped = (max_line_w * fs * 0.0225) > cw # Slightly wider for Consolas
+                wrapped = (max_line_w * fs * 0.0225) > cw
                 return h, wrapped
 
-            # Optimization Loop
             while f_size > 7.5:
                 cur_h, is_wrapped = calculate_layout(f_size, L_SPACING, n_cols, eff_l)
-                
-                if cur_h <= avail_h and not is_wrapped:
-                    # If we have a fit, we are done (started from large font)
-                    break
-                
-                # If 1 column doesn't fit even at 10pt, try 2 columns
-                if n_cols == 1 and (cur_h > avail_h or is_wrapped) and f_size <= 10.0:
+                if cur_h <= music_avail_h and not is_wrapped: break
+                if n_cols == 1 and (cur_h > music_avail_h or is_wrapped) and f_size <= 10.0:
                     n_cols = 2
-                    eff_l = (float(line_cnt) / 2.0) + 0.8 # Recalculate effective length
-                    f_size = 13.0 # Reset font for 2-column attempt
-                    L_SPACING = 0.95
+                    eff_l = (float(line_cnt) / 2.0) + 0.8
+                    f_size = 13.0
                     continue
-                
-                # If line count is very high, force 2 columns earlier
                 if n_cols == 1 and line_cnt > 28:
                     n_cols = 2
                     eff_l = (float(line_cnt) / 2.0) + 0.8
                     f_size = 13.0
-                    L_SPACING = 0.95
                     continue
 
-                # Step down
-                if float(L_SPACING) > 0.85:
-                    L_SPACING = float(L_SPACING) - 0.02
+                if float(L_SPACING) > 0.85: L_SPACING -= 0.02
                 else:
-                    f_size = float(f_size) - 0.5
-                    L_SPACING = 1.0 # Reset spacing for new font attempt
-            
-            # Post-loop adjustment: if small song, expand spacing to "close the page"
+                    f_size -= 0.5
+                    L_SPACING = 1.0
+
             cur_fit_h, _ = calculate_layout(float(f_size), float(L_SPACING), n_cols, float(eff_l))
-            if cur_fit_h < avail_h * 0.9 and float(f_size) >= 12.0:
-                new_ls = float(avail_h) / (float(eff_l) * float(f_size) * LEADING_FACTOR * CM_PT)
-                L_SPACING = min(1.2, new_ls * 0.98) # Safe cap
-            section = doc.add_section(WD_SECTION.NEW_PAGE)
-            create_columns(section, 1)
-            
+            if cur_fit_h < music_avail_h * 0.9 and float(f_size) >= 12.0:
+                new_ls = float(music_avail_h) / (float(eff_l) * float(f_size) * LEADING_FACTOR * CM_PT)
+                L_SPACING = min(1.2, new_ls * 0.98)
+
             shape_key = song.get('key', 'C')
             sounding_key = song.get('sounding_key', shape_key)
             capo = song.get('capo', 0)
             
-            h_txt = f"{str(song['song_name']).title()} - {song['artist_name']}"
+            h_txt = f"{str(song.get('song_name', 'Sem Nome')).title()} - {song.get('artist_name', 'Artista Desconhecido')}"
             h = doc.add_heading(h_txt, level=1)
             h.paragraph_format.space_before = Pt(0)
             h.paragraph_format.space_after = Pt(2)
             
             tom_text = f"Tom: {sounding_key}"
-            if capo > 0:
-                tom_text += f" (forma de {shape_key})"
+            if capo > 0: tom_text += f" (forma de {shape_key})"
             p_t = doc.add_paragraph(tom_text)
             p_t.style.font.name = 'Consolas'
             p_t.style.font.bold = True
@@ -377,8 +342,10 @@ def generate_docx(songs: list, output_filename: str = "Livreto.docx", cover_imag
                 p_t.paragraph_format.space_after = Pt(2)
 
             if n_cols == 2:
-                section = doc.add_section(WD_SECTION.CONTINUOUS)
-                create_columns(section, 2)
+                # Nota: Colunagem em seção contínua é pesada. 
+                # Se ainda houver lentidão, precisaremos repensar isso.
+                section_cols = doc.add_section(WD_SECTION.CONTINUOUS)
+                create_columns(section_cols, 2)
             
             for l_str in lines:
                 p = doc.add_paragraph()
@@ -400,31 +367,25 @@ def generate_docx(songs: list, output_filename: str = "Livreto.docx", cover_imag
                         if not is_valid_chord(c_txt): continue
                         st, en = m.span()
                         if st > last_idx:
-                            s_part = l_str[last_idx:st]
-                            p.add_run(s_part).font.size = Pt(f_size)
+                            p.add_run(l_str[last_idx:st]).font.size = Pt(f_size)
                         run = p.add_run(c_txt)
                         run.bold = True
                         run.font.size = Pt(f_size)
                         last_idx = en
                     if last_idx < len(l_str):
-                        s_rest = l_str[last_idx:]
-                        p.add_run(s_rest).font.size = Pt(f_size)
+                        p.add_run(l_str[last_idx:]).font.size = Pt(f_size)
                 else:
-                    run = p.add_run(l_str)
-                    run.font.size = Pt(f_size)
+                    p.add_run(l_str).font.size = Pt(f_size)
                 for r in p.runs: r.font.name = 'Consolas'
 
-            # 5. ABSOLUTE BOTTOM ANCHOR
+            if n_cols == 2:
+                # Volta para 1 coluna
+                section_back = doc.add_section(WD_SECTION.CONTINUOUS)
+                create_columns(section_back, 1)
+
             if show_diag and num_chords > 0:
-                if n_cols == 2:
-                    section = doc.add_section(WD_SECTION.CONTINUOUS)
-                    create_columns(section, 1)
-                
-                # Final calculation for real anchor
                 actual_music_h: float = (eff_l * f_size * L_SPACING * LEADING_FACTOR * CM_PT)
-                spacer_h: float = A4_H - actual_music_h - dict_h - header_h
-                
-                # Anchor dictionary to bottom if space permits
+                spacer_h: float = music_avail_h - actual_music_h
                 if spacer_h > 0.1:
                     doc.add_paragraph().paragraph_format.space_before = Cm(spacer_h)
                 
@@ -434,7 +395,6 @@ def generate_docx(songs: list, output_filename: str = "Livreto.docx", cover_imag
                 r_dic.font.name = 'Consolas'
                 p_dic.paragraph_format.space_after = Pt(0)
                 
-                # Use pre-generated global images instead of building per song
                 c_list = sorted(list(unique_chords))
                 c_imgs = []
                 for ch in c_list:
@@ -457,21 +417,15 @@ def generate_docx(songs: list, output_filename: str = "Livreto.docx", cover_imag
                             i_w = 0.68 if float(music_avail_h) > 15.0 else 0.58
                             para.add_run().add_picture(img_p, width=Inches(i_w))
                         col_i += 1
-            
                 
-        # Add Header & Footer Branding to all sections
-        for section in doc.sections:
-            add_header_logo(section)
-        add_footer_with_branding(doc)
-        
-        # Force TOC update on open
+        # Forçar atualização de campos do Word ao abrir
         try:
             settings = doc.settings.element
             update_fields = OxmlElement('w:updateFields')
             update_fields.set(qn('w:val'), 'true')
             settings.append(update_fields)
-        except Exception as e:
-            print(f"DEBUG: Error setting updateFields - {e}")
+        except:
+            pass
 
         doc.save(out_p)
     finally:
