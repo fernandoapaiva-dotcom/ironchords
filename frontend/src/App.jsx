@@ -4171,38 +4171,65 @@ function App() {
                                         )}
 
                                         {/* ——— SONG LIST (with trash + print) ——— */}
-                                        <div className={`flex-1 overflow-y-auto space-y-2 scrollbar-thin scrollbar-thumb-[#B87333]/20 ${isSidebarCollapsed ? 'pr-0' : 'pr-1'}`}>
+                                        <div className={`flex-1 overflow-y-auto space-y-2 scrollbar-thin scrollbar-thumb-[#B87333]/20 ${isSidebarCollapsed ? 'pr-0' : 'pr-8 pl-1'}`}>
+                                            {!isSidebarCollapsed && (
+                                                <div className="absolute right-0 top-0 bottom-0 w-8 pointer-events-none bg-gradient-to-l from-black/20 to-transparent z-10" title="Zona de deslize" />
+                                            )}
                                             {songs.map((s, idx) => (
-                                                <div key={idx} className="relative group/song">
+                                                <div key={idx} className="relative group/song flex items-center space-x-1">
+                                                    {!isSidebarCollapsed && (
+                                                        <div 
+                                                            className="p-2 cursor-grab active:cursor-grabbing text-slate-700 hover:text-[#B87333] transition-colors shrink-0"
+                                                            onTouchStart={(e) => { 
+                                                                dragItem.current = idx; 
+                                                                const parent = e.currentTarget.closest('[data-drag-index]');
+                                                                if (parent) parent.style.opacity = '0.5';
+                                                                // This specific handle needs touch-none or similar to prevent scroll while dragging
+                                                                e.currentTarget.style.touchAction = 'none';
+                                                            }}
+                                                            onMouseDown={() => (dragItem.current = idx)}
+                                                            title="Arrastar para reordenar"
+                                                        >
+                                                            <GripVertical className="w-4 h-4" />
+                                                        </div>
+                                                    )}
                                                     <button
                                                         draggable={!isSidebarCollapsed}
-                                                        onDragStart={() => (dragItem.current = idx)}
+                                                        onDragStart={(e) => {
+                                                            // On desktop, we still allow dragging the whole item if desired, 
+                                                            // but we focus on the handle for mobile.
+                                                            if (dragItem.current === null) dragItem.current = idx;
+                                                        }}
                                                         onDragEnter={() => { dragOverItem.current = idx; setDragOverIdx(idx); }}
                                                         onDragEnd={handleSort}
                                                         onDragOver={(e) => e.preventDefault()}
-                                                        onTouchStart={(e) => { if (isSidebarCollapsed) return; dragItem.current = idx; e.target.style.opacity = '0.5'; }}
                                                         onTouchMove={(e) => {
                                                             if (isSidebarCollapsed || dragItem.current === null) return;
-                                                            e.preventDefault();
+                                                            // We don't preventDefault here globally to allow page scroll if not dragging
                                                             const touchIndex = e.touches[0];
                                                             const hoverElement = document.elementFromPoint(touchIndex.clientX, touchIndex.clientY);
                                                             if (hoverElement) {
                                                                 const targetButton = hoverElement.closest('[data-drag-index]');
                                                                 if (targetButton) {
                                                                     const targetIdx = parseInt(targetButton.getAttribute('data-drag-index'), 10);
-                                                                    if (!isNaN(targetIdx) && targetIdx !== dragOverItem.current) { dragOverItem.current = targetIdx; setDragOverIdx(targetIdx); }
+                                                                    if (!isNaN(targetIdx) && targetIdx !== dragOverItem.current) { 
+                                                                        dragOverItem.current = targetIdx; 
+                                                                        setDragOverIdx(targetIdx); 
+                                                                    }
                                                                 }
                                                             }
                                                         }}
                                                         onTouchEnd={(e) => {
                                                             if (isSidebarCollapsed) return;
-                                                            e.target.style.opacity = '1';
+                                                            const parents = document.querySelectorAll('[data-drag-index]');
+                                                            parents.forEach(p => p.style.opacity = '1');
+                                                            
                                                             if (dragItem.current !== null && dragOverItem.current !== null) handleSort();
                                                             else { dragItem.current = null; dragOverItem.current = null; setDragOverIdx(null); }
                                                         }}
                                                         onClick={() => { setSelectedManualIndex(idx); setCurrentLineIndex(0); currentLineIndexRef.current = 0; }}
-                                                        className={`w-full ${isSidebarCollapsed ? 'p-2 justify-center' : 'p-3'} rounded-2xl border transition-all text-left flex items-center ${isSidebarCollapsed ? 'space-x-0' : 'space-x-3'} relative overflow-hidden ${selectedManualIndex === idx ? 'bg-[#B87333] border-[#B87333] shadow-lg shadow-[#B87333]/20' : 'bg-white/5 border-white/5 hover:border-[#B87333]/30'} ${dragOverIdx === idx ? (dragItem.current !== null && dragOverItem.current !== null && dragItem.current < dragOverItem.current ? 'border-b-4 border-b-orange-500' : 'border-t-4 border-t-orange-500') : ''} ${!isSidebarCollapsed ? 'cursor-grab active:cursor-grabbing touch-none' : ''}`}
-                                                        title={isSidebarCollapsed ? `${idx + 1}. ${s.song_name}` : "Clique para tocar • Arraste para reordenar"}
+                                                        className={`flex-1 ${isSidebarCollapsed ? 'p-2 justify-center' : 'p-3'} rounded-2xl border transition-all text-left flex items-center ${isSidebarCollapsed ? 'space-x-0' : 'space-x-3'} relative overflow-hidden ${selectedManualIndex === idx ? 'bg-[#B87333] border-[#B87333] shadow-lg shadow-[#B87333]/20' : 'bg-white/5 border-white/5 hover:border-[#B87333]/30'} ${dragOverIdx === idx ? (dragItem.current !== null && dragOverItem.current !== null && dragItem.current < dragOverItem.current ? 'border-b-4 border-b-orange-500' : 'border-t-4 border-t-orange-500') : ''} ${!isSidebarCollapsed ? 'cursor-default' : ''}`}
+                                                        title={isSidebarCollapsed ? `${idx + 1}. ${s.song_name}` : "Clique para tocar"}
                                                         data-drag-index={idx}
                                                     >
                                                         <div className={`w-7 h-7 rounded-xl flex items-center justify-center font-black text-xs shrink-0 transition-all ${selectedManualIndex === idx ? 'bg-white text-[#B87333]' : 'bg-black/60 text-slate-700 group-hover/song:text-white'}`}>{idx + 1}</div>

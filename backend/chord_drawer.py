@@ -1,12 +1,8 @@
 import os
 import io
+from PIL import Image, ImageDraw, ImageFont
 
 def generate_chord_image(chord_name, positions, output_path):
-    """
-    Generates a simple 6-string guitar chord diagram and saves it.
-    positions is a string like "X32010" for C Major.
-    """
-    from PIL import Image, ImageDraw, ImageFont
     width = 150
     height = 200
     img = Image.new('RGB', (width, height), color='white')

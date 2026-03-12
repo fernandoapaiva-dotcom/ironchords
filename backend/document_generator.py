@@ -237,6 +237,27 @@ def generate_docx(songs: list, output_filename: str = "Livreto.docx", cover_imag
     temp_dir = tempfile.mkdtemp()
     out_p = os.path.join(os.path.dirname(__file__), output_filename)
     
+    # --- GLOBAL CHORD CACHE OPTIMIZATION ---
+    # Pre-generate all unique chords across all songs to avoid O(N*M) lookups
+    global_chord_images = {}
+    if include_dictionary:
+        all_chords = set()
+        for song in songs_sorted:
+            if not song.get('show_chords', True): continue
+            
+            content = str(song.get('content') or '')
+            lines = content.split('\n')
+            for l in lines:
+                for m in CHORD_REGEX.findall(l):
+                    if is_valid_chord(m): 
+                        all_chords.add(m)
+        
+        if all_chords:
+            from chord_drawer import build_chord_dictionary
+            generated_list = build_chord_dictionary(sorted(list(all_chords)), temp_dir)
+            global_chord_images = {name: path for name, path in generated_list}
+    # ---------------------------------------
+
     try:
         for idx, song in enumerate(songs_sorted):
             # Page Anchor Constants (V31 Iron Box: 26.0cm safety limit)
@@ -413,8 +434,12 @@ def generate_docx(songs: list, output_filename: str = "Livreto.docx", cover_imag
                 r_dic.font.name = 'Consolas'
                 p_dic.paragraph_format.space_after = Pt(0)
                 
+                # Use pre-generated global images instead of building per song
                 c_list = sorted(list(unique_chords))
-                c_imgs = build_chord_dictionary(c_list, os.path.join(temp_dir, f"s_{idx}"))
+                c_imgs = []
+                for ch in c_list:
+                    if ch in global_chord_images:
+                        c_imgs.append((ch, global_chord_images[ch]))
                 
                 c_cnt = min(6, len(c_imgs))
                 if c_cnt > 0:
@@ -429,7 +454,6 @@ def generate_docx(songs: list, output_filename: str = "Livreto.docx", cover_imag
                         para = cells[col_i].paragraphs[0]
                         para.alignment = WD_ALIGN_PARAGRAPH.CENTER
                         if os.path.exists(img_p):
-                            # V31: Scale down chords if space is tight
                             i_w = 0.68 if float(music_avail_h) > 15.0 else 0.58
                             para.add_run().add_picture(img_p, width=Inches(i_w))
                         col_i += 1
