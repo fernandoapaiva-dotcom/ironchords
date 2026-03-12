@@ -51,12 +51,7 @@ def clean_song_name(name: str) -> str:
     # Remove extra spaces
     return name.strip()
 
-import scraper # type: ignore
-from scraper import find_chord_cascade, get_cifraclub_versions # type: ignore
-import chord_utils # type: ignore
-from chord_utils import process_chords # type: ignore
-from document_generator import generate_docx # type: ignore
-from audio_processor import IronChordsPlayer # type: ignore
+# Heavy imports are lazy-loaded inside functions or endpoints to save memory on Render
 
 def fix_pywin32():
     if platform.system() != "Windows":
@@ -248,6 +243,33 @@ def generate_slug(length=6):
     chars = string.ascii_letters + string.digits
     return ''.join(random.choice(chars) for _ in range(length))
 
+@app.post("/api/document/generate")
+async def generate_document_endpoint(request: Dict[str, Any]):
+    from document_generator import generate_docx
+    songs = request.get("songs", [])
+    if not songs:
+        raise HTTPException(status_code=400, detail="No songs provided")
+    
+    # Process songs (transpose etc)
+    processed_songs = []
+    for s in songs:
+        processed_songs.append(s)
+
+    temp_id = str(int(time.time()))
+    output_filename = f"Livreto_{temp_id}.docx"
+    
+    try:
+        path = generate_docx(
+            processed_songs, 
+            output_filename=output_filename,
+            include_toc=request.get("include_toc", True),
+            include_dictionary=request.get("include_dictionary", True),
+            sort_order=request.get("sort_order", "alphabetical")
+        )
+        return FileResponse(path, filename=output_filename, media_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao gerar documento: {str(e)}")
+
 @app.post("/api/share")
 def create_share_link(request: ShareRequest):
     slug = generate_slug()
@@ -310,8 +332,9 @@ def social_preview_bridge(slug: str):
 def health_check():
     return {"status": "online", "message": "IronChords API is running."}
 
-@app.websocket("/ws/videoke")
-async def videoke_stream(websocket: WebSocket):
+@app.websocket("/ws/player")
+async def websocket_endpoint(websocket: WebSocket):
+    from audio_processor import IronChordsPlayer
     await websocket.accept()
     player = IronChordsPlayer()
     
@@ -439,6 +462,7 @@ def add_manual_music(request: ManualEntryRequest):
         scraped = None
         if selected_slug:
             print(f"DEBUG SMART SEARCH: Usando slug direto do frontend: {selected_slug}")
+            import scraper
             scraped = scraper.scrape_cifraclub(request.song_name, selected_slug, request.version, request.include_tabs)
             if scraped:
                 found_via_suggestion = True
@@ -560,16 +584,10 @@ def add_manual_music(request: ManualEntryRequest):
         "versions": available_versions
     }
 
-@app.get("/api/music/versions")
-async def get_versions_by_name(song_name: str, artist_name: str):
-    a_slug = scraper.get_slug(artist_name)
-    s_slug = scraper.get_slug(song_name)
-    
-    versions = scraper.get_cifraclub_versions(a_slug, s_slug)
-    # Filter if only Principal
-    if len(versions) <= 1:
-        return {"versions": []}
-    return {"versions": versions}
+@app.get("/api/chords/versions")
+def get_versions(song_slug: str, artist_slug: str):
+    from scraper import get_cifraclub_versions
+    return get_cifraclub_versions(artist_slug, song_slug)
 
 @app.post("/api/transpose")
 def transpose_endpoint(request: TransposeRequest):
@@ -641,6 +659,7 @@ def add_batch_music(request: BatchRequest):
 
             # If specifically requested different version/tabs, override cache
             if needs_scrape:
+                from scraper import find_chord_cascade
                 scraped = find_chord_cascade(song_name, artist_name, version=row.version, include_tabs=row.include_tabs)
                 if scraped:
                     chord_data = scraped
@@ -667,6 +686,7 @@ def add_batch_music(request: BatchRequest):
             print(f"DEBUG BATCH: Song={song_name}, FromKey={chord_data.get('key') if chord_data else 'None'}, ToKey={req_key}")
             
             if not chord_data:
+                from scraper import find_chord_cascade
                 scraped = find_chord_cascade(song_name, artist_name)
                 if scraped:
                     chord_data = scraped
@@ -702,6 +722,7 @@ def add_batch_music(request: BatchRequest):
                         rest = str(req_key)[len(base_note):]  # type: ignore
                         visual_key = f"{new_base}{rest}"
 
+                from chord_utils import process_chords
                 final_content = process_chords(chord_data['content'], chord_data['key'], visual_key)
                 
                 # Calculate sounding key
@@ -809,6 +830,7 @@ class ScrapeLinkRequest(BaseModel):
 
 @app.post("/api/music/scrape-link")
 def scrape_link_endpoint(request: ScrapeLinkRequest):
+    import scraper
     data = scraper.scrape_cifraclub_url(request.url)
     if not data:
         raise HTTPException(status_code=400, detail="Não foi possível extrair a cifra deste link. Verifique se é uma URL válida do CifraClub.")
@@ -848,24 +870,18 @@ def get_single_chord(chord_id: int):
     if not chord: raise HTTPException(404, "Cifra não encontrada no banco")
     return dict(chord)
 
-@app.put("/api/chords/{chord_id}")
-async def update_chord(chord_id: int, chord: ChordEdit):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    try:
-        cursor.execute('''
-            UPDATE chords
-            SET song_name=?, artist_name=?, song_key=?, content=?, capo=?, include_tabs=?
-            WHERE id=?
-        ''', (chord.song_name, chord.artist_name, chord.song_key, chord.content, chord.capo, 1 if chord.include_tabs else 0, chord_id))
-        conn.commit()
-        if cursor.rowcount == 0:
-            raise HTTPException(status_code=404, detail="Cifra não encontrada no banco local.")
-        return {"status": "success"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        conn.close()
+@app.post("/api/chords/process")
+async def process_chords_endpoint(request: Dict[str, Any]):
+    from chord_utils import process_chords
+    content = request.get("content", "")
+    from_key = request.get("from_key", "C")
+    to_key = request.get("to_key", "C")
+    
+    if not content:
+        return {"content": ""}
+        
+    processed = process_chords(content, from_key, to_key)
+    return {"content": processed}
 
 @app.delete("/api/chords/{chord_id}")
 def delete_chord(chord_id: int):
@@ -874,6 +890,14 @@ def delete_chord(chord_id: int):
     conn.commit()
     conn.close()
     return {"status": "ok"}
+
+@app.get("/api/chords/search")
+def search_chords(song: str, artist: str = ""):
+    from scraper import find_chord_cascade
+    result = find_chord_cascade(song, artist)
+    if result:
+        return {"status": "success", "result": result}
+    raise HTTPException(status_code=404, detail="Cifra não encontrada")
 
 @app.get("/api/chords/check")
 def check_song_exists(name: str):
@@ -1024,6 +1048,7 @@ async def generate_book(
             cover_path = temp_cover.name
             
         docx_filename = "Livreto.docx"
+        from document_generator import generate_docx
         file_path = generate_docx(
             prepared_songs, 
             docx_filename, 

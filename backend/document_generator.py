@@ -5,20 +5,14 @@ import shutil
 import re
 from typing import Optional
 
-from docx import Document
-from docx.shared import Pt, Inches, Cm, RGBColor
-from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.enum.section import WD_SECTION
-from docx.oxml import OxmlElement
-from docx.oxml.ns import qn
-
-from chord_drawer import build_chord_dictionary
 
 CHORD_REGEX = re.compile(r"(?<![a-zA-Z0-9])([A-G][b#]?(?:m|maj|min|dim|aug|sus)?(?:\d)?(?:/[A-G][b#]?)?)(?![a-zA-Z0-9])")
 LOGO_PATH = os.path.join(os.path.dirname(__file__), "brand_logo.png")
 
 def add_header_logo(section):
     """Adds small logo to top right corner of the section header."""
+    from docx.shared import Inches
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
     header = section.header
     
     # Idempotency check: if linked to previous, it already has the logo
@@ -42,6 +36,8 @@ def add_header_logo(section):
         run.add_picture(LOGO_PATH, width=Inches(1.0)) # Slightly larger for the combined mark
 
 def add_toc(doc):
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
     p = doc.add_paragraph()
     run = p.add_run()
     
@@ -65,6 +61,10 @@ def add_toc(doc):
 
 def add_footer_with_branding(doc):
     """Adds a branded footer with 'Forja ao Palco' and page numbers."""
+    from docx.shared import Pt
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
     sections = doc.sections
     for section in sections:
         footer = section.footer
@@ -120,6 +120,10 @@ def add_footer_with_branding(doc):
 
 def add_watermark(section):
     """Adds a diagonal text watermark 'Forja ao Palco' to the section header."""
+    from docx.shared import Pt, RGBColor
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
     header = section.header
     if not header.paragraphs:
         header.add_paragraph()
@@ -158,6 +162,7 @@ def add_watermark(section):
     # For now, let's stick to the footer which is more critical.
 
 def create_columns(section, num_columns):
+    from docx.oxml.ns import qn
     sectPr = section._sectPr
     cols = sectPr.xpath('./w:cols')[0]
     cols.set(qn('w:num'), str(num_columns))
@@ -175,6 +180,11 @@ def is_valid_chord(word: str) -> bool:
     return has_root and all(c in musical_atoms for c in c_word)
 
 def generate_docx(songs: list, output_filename: str = "Livreto.docx", cover_image_path: Optional[str] = None, include_toc: bool = True, include_dictionary: bool = True, sort_order: str = "alphabetical") -> str:
+    from docx import Document
+    from docx.shared import Pt, Inches, Cm, RGBColor
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from docx.enum.section import WD_SECTION
+    from chord_drawer import build_chord_dictionary
     doc = Document()
     for section in doc.sections:
         section.top_margin = Cm(0.7)
