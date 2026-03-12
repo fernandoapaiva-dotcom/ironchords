@@ -11,10 +11,24 @@ def get_db_connection():
         import urllib.parse
         import psycopg2
         from psycopg2.extras import RealDictCursor
+        import time as _time
         
-        # Connect directly using the URL (DSN) to preserve options like sslmode
-        conn = psycopg2.connect(DATABASE_URL)
-        return conn
+        # Normalize postgres:// to postgresql:// for psycopg2
+        url = DATABASE_URL
+        if url.startswith("postgres://"):
+            url = url.replace("postgres://", "postgresql://", 1)
+        
+        # Retry logic for robust startup
+        last_err = None
+        for attempt in range(3):
+            try:
+                conn = psycopg2.connect(url)
+                return conn
+            except Exception as e:
+                last_err = e
+                print(f"[DB] Connection attempt {attempt+1} failed: {e}")
+                _time.sleep(2)
+        raise last_err
     else:
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row

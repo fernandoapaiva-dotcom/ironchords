@@ -357,7 +357,18 @@ def _keep_alive_worker():
 
 @app.on_event("startup")
 def startup_event():
-    init_db()
+    try:
+        init_db()
+        print("[DB] Database initialized successfully.")
+    except Exception as e:
+        import traceback
+        print(f"[CRITICAL] Database initialization failed: {e}")
+        traceback.print_exc()
+        # On Render, we want the process to exit clearly if it can't connect to DB
+        # However, FastAPI/Gunicorn might handle the exception. 
+        # Raising it here is better for "Worker failed to boot" clarity.
+        raise e
+
     import threading
     t = threading.Thread(target=_keep_alive_worker, daemon=True, name="KeepAlive")
     t.start()
@@ -381,6 +392,7 @@ class TransposeRequest(BaseModel):
 
 @app.post("/api/music/manual")
 def add_manual_music(request: ManualEntryRequest):
+    from scraper import find_chord_cascade
     # Normalize key from request
     req_key = request.key.strip() if request.key else ""
     
@@ -550,6 +562,7 @@ def add_manual_music(request: ManualEntryRequest):
             rest = cast(str, req_key)[len(base_note):]  # type: ignore
             visual_key = f"{new_base}{rest}"
 
+    from chord_utils import process_chords
     final_content = process_chords(cast(Dict[str, Any], chord_data)['content'], cast(Dict[str, Any], chord_data)['key'], visual_key)  # type: ignore
     
     # Requirement: Sounding key = requested key
@@ -592,6 +605,7 @@ def transpose_endpoint(request: TransposeRequest):
             new_key = f"{new_key}{rest}"
 
         # Transpose content
+        from chord_utils import process_chords
         transposed_content = process_chords(request.content, request.current_key, new_key)
         
         return {
@@ -978,6 +992,7 @@ def get_metadata(song_name: str, artist_name: str):
         return {"key": res["song_key"]}
         
     # If not local, try a quick scrape
+    from scraper import find_chord_cascade
     result = find_chord_cascade(song_name, artist_name)
     if result:
         # Save to local database for next time
