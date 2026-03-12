@@ -12,23 +12,8 @@ def get_db_connection():
         import psycopg2
         from psycopg2.extras import RealDictCursor
         
-        # Parse for psycopg2
-        result = urllib.parse.urlparse(DATABASE_URL)
-        username = result.username
-        password = result.password
-        database = result.path[1:]
-        hostname = result.hostname
-        port = result.port
-        
-        conn = psycopg2.connect(
-            database=database,
-            user=username,
-            password=password,
-            host=hostname,
-            port=port
-        )
-        # We don't set row_factory here, we use DictCursor in executes if needed, 
-        # but to keep compatibility with existing code that expects dict-like access:
+        # Connect directly using the URL (DSN) to preserve options like sslmode
+        conn = psycopg2.connect(DATABASE_URL)
         return conn
     else:
         conn = sqlite3.connect(DB_PATH)
