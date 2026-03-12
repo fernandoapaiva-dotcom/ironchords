@@ -131,6 +131,11 @@ app.add_middleware(
 )
 
 
+@app.get("/api/health")
+def health_check():
+    return {"status": "ok", "message": "Backend is running"}
+
+
 class RegistrationRequest(BaseModel):
     email: str
 

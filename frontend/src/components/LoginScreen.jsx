@@ -134,10 +134,10 @@ const LoginScreen = ({ onAuthorized }) => {
                 await handleRegisterWithEmail(emailToCheck);
             }
         } catch (err) {
-            console.error("Status check error:", err);
+            console.error("Status check error details:", err);
             setStatus('error');
             const msg = err.name === 'AbortError' ? 'Servidor demorou muito a responder' : (err.message || 'Falha na rede');
-            setMessage(`Erro ao conectar com o servidor: ${msg}`);
+            setMessage(`Erro ao conectar com o servidor em ${API_BASE}: ${msg}`);
         } finally {
             // Only clear loading if we are NOT authorized (onAuthorized already handles navigation/unmount)
             // But actually it's safer to clear it anyway if status isn't authorized or pending
