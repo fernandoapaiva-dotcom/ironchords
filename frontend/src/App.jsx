@@ -1134,7 +1134,7 @@ function App() {
         }
     };
 
-    const [activePlaylistName, setActivePlaylistName] = useState('Lista Personalizada');
+    const [activePlaylistName, setActivePlaylistName] = useState(null);
     const [activeTab, setActiveTab] = useState('manual');
     const [playerSidebarTab, setPlayerSidebarTab] = useState('fila'); // 'fila' | 'listas'
     const [listasSubTab, setListasSubTab] = useState('salvas');
@@ -1540,33 +1540,12 @@ function App() {
 
     // Auto-Save Effect for Active Playlist
     useEffect(() => {
-        // Only auto-save if an explicit list is active (not the initial default state or a single song "Nova Cifra/Lista")
-        if (!activePlaylistName || activePlaylistName === "Nova Cifra/Lista") return;
+        // Only auto-save if an explicit list is active and has songs
+        if (!activePlaylistName || activePlaylistName === "Nova Cifra/Lista" || !songs || songs.length === 0) return;
         
-        // Use a debounce to prevent spamming LocalStorage and the API on quick changes (like transposing)
         const debounceSave = setTimeout(() => {
-            const allPlaylists = JSON.parse(localStorage.getItem('iron_chords_playlists') || '[]');
-            const existingIndex = allPlaylists.findIndex(p => p.name === activePlaylistName);
-            
-            // Only autosave if the playlist already exists in the saved playlists
-            if (existingIndex >= 0) {
-                const currentDataStr = JSON.stringify(allPlaylists[existingIndex].songs);
-                const newDataStr = JSON.stringify(songs);
-                
-                // Only write and sync if songs actually changed
-                if (currentDataStr !== newDataStr) {
-                    const updated = [...allPlaylists];
-                    updated[existingIndex].songs = songs;
-                    
-                    localStorage.setItem('iron_chords_playlists', JSON.stringify(updated));
-                    setSavedPlaylists(updated);
-                    
-                    if (authenticatedUser) {
-                        saveCloudPlaylist(authenticatedUser, activePlaylistName, songs);
-                    }
-                }
-            }
-        }, 800); // 800ms debounce
+            persistSongsToPlaylist(songs, activePlaylistName);
+        }, 1200); // Slightly longer debounce for extra safety during transitions
 
         return () => clearTimeout(debounceSave);
     }, [songs, activePlaylistName, authenticatedUser]);
@@ -2740,22 +2719,20 @@ function App() {
         }
     };
 
-    // AUTO-SAVE EFFECT: Persists whenever songs or active playlist name changes
-    useEffect(() => {
-        if (activePlaylistName && songs.length > 0) {
-            persistSongsToPlaylist(songs, activePlaylistName);
-        }
-    }, [songs, activePlaylistName]);
-
     // SYNC PLAYER STATES TO GLOBAL SONGS (For Auto-Save)
     useEffect(() => {
         const isPlayerActive = activeTab === 'manual' || activeTab === 'player';
-        if (isPlayerActive && songs[selectedManualIndex]) {
+        if (isPlayerActive && songs[selectedManualIndex] && manualPreviewSong) {
             const current = songs[selectedManualIndex];
+            
+            // SECURITY CHECK: Ensure we are updating the SAME song
+            // This prevents "Song A" from overwriting "Song B" during selection changes
+            const isSameSong = manualPreviewSong.song_name === current.song_name && manualPreviewSong.artist_name === current.artist_name;
+            if (!isSameSong) return;
 
             // For manual player, we sync content and sounding_key from manualPreviewSong
-            const contentToSync = activeTab === 'manual' && manualPreviewSong ? manualPreviewSong.content : current.content;
-            const keyToSync = activeTab === 'manual' && manualPreviewSong ? manualPreviewSong.sounding_key : current.sounding_key;
+            const contentToSync = activeTab === 'manual' ? manualPreviewSong.content : current.content;
+            const keyToSync = activeTab === 'manual' ? manualPreviewSong.sounding_key : current.sounding_key;
             // Capo and includeTabs are synced for both
             const capoToSync = manualCapo;
             const tabsToSync = includeTabs;
