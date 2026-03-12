@@ -19,6 +19,25 @@ def get_db_connection():
         if url.startswith("postgres://"):
             url = url.replace("postgres://", "postgresql://", 1)
             
+        # Handle passwords with @ by ensuring the last @ is the host separator
+        # A common mistake is not URL-encoding the password.
+        if url.count('@') > 1:
+            try:
+                # Split at '://'
+                prefix, rest = url.split("://", 1)
+                # The last '@' is the real separator for the host
+                parts = rest.rsplit("@", 1)
+                if len(parts) == 2:
+                    user_pass, host_db = parts
+                    # If user_pass has a colon, it's user:password
+                    if ":" in user_pass:
+                        user, password = user_pass.split(":", 1)
+                        import urllib.parse
+                        # Encode password while preserving the colon as separator
+                        url = f"{prefix}://{user}:{urllib.parse.quote(password)}@{host_db}"
+            except:
+                pass # Fallback to original if logic fails
+            
         # Enforce SSL for hosted providers if not specified
         if "sslmode" not in url:
             separator = "&" if "?" in url else "?"
