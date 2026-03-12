@@ -5435,7 +5435,7 @@ function App() {
                                                                 }
                                                             }}
                                                             readOnly={!editFormData.include_tabs}
-                                                            className={`w-full bg-black/60 border rounded-2xl px-6 py-6 text-white outline-none font-mono text-xs leading-relaxed min-h-[600px] transition-all scrollbar-thin shadow-inner ${!editFormData.include_tabs ? 'border-white/5 cursor-not-allowed opacity-80' : 'border-white/10 hover:border-white/20 focus:border-[#B87333]/50'}`}
+                                                            className={`w-full bg-black/60 border rounded-2xl px-6 py-6 text-white outline-none font-mono text-xs leading-relaxed sm:min-h-[600px] min-h-[40vh] transition-all scrollbar-thin shadow-inner ${!editFormData.include_tabs ? 'border-white/5 cursor-not-allowed opacity-80' : 'border-white/10 hover:border-white/20 focus:border-[#B87333]/50'}`}
                                                             spellCheck="false"
                                                         />
                                                         {!editFormData.include_tabs && (
@@ -6339,7 +6339,7 @@ function App() {
                                                 </div>
                                                 <div className="flex-1 flex flex-col">
                                                     <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Cifra Bruta</label>
-                                                    <textarea value={batchFixData.content} onChange={e => setBatchFixData({ ...batchFixData, content: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white outline-none font-mono text-xs leading-relaxed min-h-[600px] resize-none scrollbar-thin" placeholder="Cole a cifra estruturada aqui..."></textarea>
+                                                    <textarea value={batchFixData.content} onChange={e => setBatchFixData({ ...batchFixData, content: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white outline-none font-mono text-xs leading-relaxed sm:min-h-[600px] min-h-[40vh] resize-none scrollbar-thin" placeholder="Cole a cifra estruturada aqui..."></textarea>
                                                 </div>
                                             </div>
 
@@ -6432,7 +6432,7 @@ function App() {
                             </div>
                             <div className="flex flex-col flex-1">
                                 <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Cifra Bruta</label>
-                                <textarea value={editQueueSong.content} onChange={e => setEditQueueSong({ ...editQueueSong, content: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white outline-none font-mono text-xs leading-relaxed min-h-[600px] resize-none focus:border-[#B87333]/50 transition-all scrollbar-thin" placeholder="Cole a cifra estruturada aqui..."></textarea>
+                                <textarea value={editQueueSong.content} onChange={e => setEditQueueSong({ ...editQueueSong, content: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white outline-none font-mono text-xs leading-relaxed sm:min-h-[600px] min-h-[40vh] resize-none focus:border-[#B87333]/50 transition-all scrollbar-thin" placeholder="Cole a cifra estruturada aqui..."></textarea>
                             </div>
                         </div>
                         {/* Footer */}
