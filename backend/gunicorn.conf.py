@@ -1,8 +1,8 @@
 # Gunicorn configuration file
 import multiprocessing
 
-# Increase timeout to 120 seconds to allow for intensive document generation
-timeout = 120
+# Increase timeout to 300 seconds to allow for massive document generation
+timeout = 300
 
 # Reduce worker count to 2 to save RAM on restricted environments
 workers = 2

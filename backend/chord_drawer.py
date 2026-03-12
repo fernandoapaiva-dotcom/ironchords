@@ -114,23 +114,36 @@ COMMON_CHORDS = {
     "Dsus4": "XX0233", "Esus4": "022200", "Asus4": "X02230"
 }
 
+# Global persistent cache directory (within the ephemeral Render disk)
+CACHE_DIR = os.path.join(os.path.dirname(__file__), "chords_cache")
+
 def build_chord_dictionary(chords_list, temp_dir):
     """
-    Given a list of chords found in a song, returns a list of file paths to generated images.
+    Given a list of chords, returns a list of file paths to generated images.
+    Uses a global cache to avoid redundant drawing.
     """
     image_paths = []
+    
+    # Ensure both central cache and request-specific temp dir exist
+    if not os.path.exists(CACHE_DIR):
+        os.makedirs(CACHE_DIR)
     if not os.path.exists(temp_dir):
         os.makedirs(temp_dir)
         
     for ch in chords_list:
-        clean_ch = ch.split('/')[0] if '/' in ch else ch  # simplify bass notes
-        pos = COMMON_CHORDS.get(clean_ch)
-        if not pos:
-            # Fallback simple empty diagram if unknown pattern
-            pos = "XXXXXX"
+        clean_ch = ch.split('/')[0] if '/' in ch else ch
+        pos = COMMON_CHORDS.get(clean_ch, "XXXXXX")
             
-        img_path = os.path.join(temp_dir, f"{ch.replace('#', 'sharp').replace('/', '_')}.png")
-        generate_chord_image(ch, pos, img_path)
-        image_paths.append((ch, img_path))
+        file_safe_name = ch.replace('#', 'sharp').replace('/', '_')
+        central_path = os.path.join(CACHE_DIR, f"{file_safe_name}.png")
+        temp_path = os.path.join(temp_dir, f"{file_safe_name}.png")
+        
+        # 1. If not in central cache, generate it
+        if not os.path.exists(central_path):
+            generate_chord_image(ch, pos, central_path)
+            
+        # 2. Copy/Link to temp_dir (Word needs local paths that it can safely "consume" or we can just point to the central one)
+        # Actually, document_generator uses these paths. Pointing directly to central is fine!
+        image_paths.append((ch, central_path))
         
     return image_paths

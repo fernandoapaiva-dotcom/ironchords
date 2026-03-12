@@ -5350,7 +5350,7 @@ function App() {
                             {
                                 editingChord && (
                                     <div className="fixed inset-0 z-[250] flex items-center justify-center bg-[#070709]/90 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-300 p-4">
-                                        <div className="bg-[#16161D] border border-[#B87333]/30 p-8 rounded-[32px] shadow-[0_0_50px_rgba(0,0,0,0.8)] w-full max-w-4xl flex flex-col max-h-[90vh]">
+                                        <div className="bg-[#16161D] border border-[#B87333]/30 p-8 rounded-[32px] shadow-[0_0_50px_rgba(0,0,0,0.8)] w-full max-w-6xl flex flex-col max-h-[90vh]">
                                             <div className="flex items-center justify-between mb-8 shrink-0">
                                                 <div className="flex items-center space-x-4">
                                                     <div className="w-1.5 h-6 bg-[#B87333] rounded-full shadow-[0_0_15px_rgba(184,115,51,0.4)]"></div>
@@ -5435,7 +5435,7 @@ function App() {
                                                                 }
                                                             }}
                                                             readOnly={!editFormData.include_tabs}
-                                                            className={`w-full bg-black/60 border rounded-2xl px-6 py-6 text-white outline-none font-mono text-xs leading-relaxed min-h-[400px] transition-all scrollbar-thin shadow-inner ${!editFormData.include_tabs ? 'border-white/5 cursor-not-allowed opacity-80' : 'border-white/10 hover:border-white/20 focus:border-[#B87333]/50'}`}
+                                                            className={`w-full bg-black/60 border rounded-2xl px-6 py-6 text-white outline-none font-mono text-xs leading-relaxed min-h-[600px] transition-all scrollbar-thin shadow-inner ${!editFormData.include_tabs ? 'border-white/5 cursor-not-allowed opacity-80' : 'border-white/10 hover:border-white/20 focus:border-[#B87333]/50'}`}
                                                             spellCheck="false"
                                                         />
                                                         {!editFormData.include_tabs && (
@@ -6228,7 +6228,7 @@ function App() {
                                 {/* Batch Manual Fix Modal */}
                                 {batchFixData && (
                                     <div className="fixed inset-0 z-[400] flex items-center justify-center bg-[#070709]/90 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-300">
-                                        <div className="bg-[#16161D] border border-white/10 p-8 rounded-[32px] shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+                                        <div className="bg-[#16161D] border border-white/10 p-8 rounded-[32px] shadow-2xl w-full max-w-6xl max-h-[90vh] flex flex-col">
                                             <div className="flex items-center justify-between mb-6 shrink-0">
                                                 <div className="flex items-center space-x-4">
                                                     <div className="w-1.5 h-6 bg-red-500 rounded-full shadow-[0_0_15px_rgba(239,68,68,0.4)]"></div>
@@ -6339,7 +6339,7 @@ function App() {
                                                 </div>
                                                 <div className="flex-1 flex flex-col">
                                                     <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Cifra Bruta</label>
-                                                    <textarea value={batchFixData.content} onChange={e => setBatchFixData({ ...batchFixData, content: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white outline-none font-mono text-xs leading-relaxed min-h-[250px] resize-none scrollbar-thin" placeholder="Cole a cifra estruturada aqui..."></textarea>
+                                                    <textarea value={batchFixData.content} onChange={e => setBatchFixData({ ...batchFixData, content: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white outline-none font-mono text-xs leading-relaxed min-h-[600px] resize-none scrollbar-thin" placeholder="Cole a cifra estruturada aqui..."></textarea>
                                                 </div>
                                             </div>
 
@@ -6377,7 +6377,7 @@ function App() {
             {/* ——— EDIT QUEUE SONG MODAL ——— */}
             {editQueueSong && (
                 <div className="fixed inset-0 z-[500] flex items-center justify-center bg-[#070709]/95 backdrop-blur-2xl animate-in fade-in zoom-in-95 duration-300 p-4">
-                    <div className="bg-[#16161D] border border-white/10 rounded-[40px] shadow-2xl w-full max-w-2xl max-h-[95vh] flex flex-col overflow-hidden">
+                    <div className="bg-[#16161D] border border-white/10 rounded-[40px] shadow-2xl w-full max-w-6xl max-h-[95vh] flex flex-col overflow-hidden">
                         {/* Header */}
                         <div className="flex items-center justify-between p-8 pb-6 border-b border-white/5 shrink-0">
                             <div className="flex items-center space-x-4">
@@ -6432,7 +6432,7 @@ function App() {
                             </div>
                             <div className="flex flex-col flex-1">
                                 <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Cifra Bruta</label>
-                                <textarea value={editQueueSong.content} onChange={e => setEditQueueSong({ ...editQueueSong, content: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white outline-none font-mono text-xs leading-relaxed min-h-[250px] resize-none focus:border-[#B87333]/50 transition-all scrollbar-thin" placeholder="Cole a cifra estruturada aqui..."></textarea>
+                                <textarea value={editQueueSong.content} onChange={e => setEditQueueSong({ ...editQueueSong, content: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white outline-none font-mono text-xs leading-relaxed min-h-[600px] resize-none focus:border-[#B87333]/50 transition-all scrollbar-thin" placeholder="Cole a cifra estruturada aqui..."></textarea>
                             </div>
                         </div>
                         {/* Footer */}
