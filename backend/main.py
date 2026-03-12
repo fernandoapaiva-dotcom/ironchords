@@ -109,6 +109,16 @@ if HAS_PYWIN32:
 else:
     PYWIN32_ERR = "Failed to bootstrap pywin32"
 
+def normalize_gmail(email: str) -> str:
+    if not email: return ""
+    email = email.lower().strip()
+    if '@gmail.com' in email or '@googlemail.com' in email:
+        local, domain = email.split('@')
+        # Remove dots and everything after +
+        local = local.split('+')[0].replace('.', '')
+        return f"{local}@gmail.com"
+    return email
+
 app = FastAPI()
 
 app.add_middleware(
