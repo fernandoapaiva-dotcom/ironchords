@@ -1032,10 +1032,22 @@ const ImportModal = ({ data, onImport, onClose }) => {
     );
 };
 
+// Safe LocalStorage Helper
+const getSafeJSON = (key, defaultValue) => {
+    try {
+        const val = localStorage.getItem(key);
+        return val ? JSON.parse(val) : defaultValue;
+    } catch (e) {
+        console.warn(`Error parsing localStorage key "${key}":`, e);
+        return defaultValue;
+    }
+};
 
 function App() {
     const [authenticatedUser, setAuthenticatedUser] = useState(null);
     const [isAuthenticating, setIsAuthenticating] = useState(true);
+    // Simple versioning to force refresh if needed (optional)
+    const APP_VERSION = '1.0.1'; 
     const [deferredPrompt, setDeferredPrompt] = useState(null);
 
     useEffect(() => {
@@ -1062,13 +1074,19 @@ function App() {
             if (savedEmail) {
                 try {
                     const res = await fetch(`${API_BASE_URL}/api/auth/status/${savedEmail}`);
+                    if (!res.ok) throw new Error("Server error");
                     const data = await res.json();
                     if (data.status === 'authorized') {
                         setAuthenticatedUser(savedEmail);
                         syncCloudPlaylists(savedEmail);
+                    } else {
+                        // If not authorized (rejected or pending), clear local state to allow re-login
+                        localStorage.removeItem('ironchords_user_email');
                     }
                 } catch (err) {
                     console.error("Auth check failed:", err);
+                    // On connection error, we keep the UI state but don't clear email 
+                    // to allow offline use if it was already authorized
                 }
             }
             setIsAuthenticating(false);
@@ -1088,7 +1106,7 @@ function App() {
                     name: p.name,
                     songs: JSON.parse(p.data)
                 }));
-                const local = JSON.parse(localStorage.getItem('iron_chords_playlists') || '[]');
+                const local = getSafeJSON('iron_chords_playlists', []);
                 
                 // Merge strategy: cloud takes precedence for same name, but keep local-only ones
                 const merged = [...cloudPlaylists];
@@ -1533,10 +1551,7 @@ function App() {
     const [currentStep, setCurrentStep] = useState(1);
 
     // Playlists Persistence
-    const [savedPlaylists, setSavedPlaylists] = useState(() => {
-        const saved = localStorage.getItem('iron_chords_playlists');
-        return saved ? JSON.parse(saved) : [];
-    });
+    const [savedPlaylists, setSavedPlaylists] = useState(() => getSafeJSON('iron_chords_playlists', []));
 
     // Auto-Save Effect for Active Playlist
     useEffect(() => {
@@ -5626,7 +5641,7 @@ function App() {
             {/* Save List Modal */}
             {
                 saveListModalOpen && (() => {
-                    const allPlaylists = JSON.parse(localStorage.getItem('iron_chords_playlists') || '[]');
+                    const allPlaylists = getSafeJSON('iron_chords_playlists', []);
                     const hasExisting = allPlaylists.length > 0;
                     return (
                         <div className="fixed inset-0 z-[400] flex items-center justify-center bg-[#070709]/95 backdrop-blur-2xl animate-in fade-in zoom-in-95 duration-300">
@@ -5713,7 +5728,7 @@ function App() {
                                         autoFocus
                                         onKeyDown={e => {
                                             if (e.key === 'Enter' && editListName.trim()) {
-                                                const all = Array.isArray(savedPlaylists) ? savedPlaylists : JSON.parse(localStorage.getItem('iron_chords_playlists') || '[]');
+                                                const all = Array.isArray(savedPlaylists) ? savedPlaylists : getSafeJSON('iron_chords_playlists', []);
                                                 const updated = all.map(pl => pl.id === editingList.id ? { ...pl, name: editListName } : pl);
                                                 localStorage.setItem('iron_chords_playlists', JSON.stringify(updated));
                                                 setSavedPlaylists(updated);
