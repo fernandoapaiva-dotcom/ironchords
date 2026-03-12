@@ -135,6 +135,15 @@ app.add_middleware(
 def health_check():
     return {"status": "ok", "message": "Backend is running"}
 
+@app.get("/api/debug/db")
+def db_debug():
+    from database import LAST_DB_ERROR, DATABASE_URL
+    return {
+        "database_configured": DATABASE_URL is not None,
+        "last_error": LAST_DB_ERROR,
+        "status": "connected" if LAST_DB_ERROR is None and DATABASE_URL else "error/pending"
+    }
+
 
 class RegistrationRequest(BaseModel):
     email: str
