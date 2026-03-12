@@ -1036,6 +1036,7 @@ async def generate_book(
     cover_image: Optional[UploadFile] = File(None),
     include_toc: str = Form("true"),
     include_dictionary: str = Form("true"),
+    include_tabs: str = Form("true"),
     sort_order: str = Form("alphabetical")
 ):
     try:
@@ -1075,6 +1076,7 @@ async def generate_book(
             cover_path,
             include_toc=(include_toc == "true"),
             include_dictionary=(include_dictionary == "true"),
+            include_tabs=(include_tabs == "true"),
             sort_order=sort_order
         )
         

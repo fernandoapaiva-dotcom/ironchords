@@ -3727,6 +3727,7 @@ function App() {
             formData.append('export_format', exportFormat);
             formData.append('include_toc', includeToc ? 'true' : 'false');
             formData.append('include_dictionary', includeDictionary ? 'true' : 'false');
+            formData.append('include_tabs', includeTabs ? 'true' : 'false');
             formData.append('sort_order', sortOrder);
             if (coverImage) formData.append('cover_image', coverImage);
 
@@ -5020,6 +5021,17 @@ function App() {
                                                                 </div>
                                                                 <div className="flex items-center space-x-3">
                                                                     <span className="text-xs font-black bg-[#B87333] text-white py-1.5 px-4 rounded-full shadow-lg shadow-[#B87333]/20 uppercase italic">{songs.length}</span>
+                                                                    <button onClick={() => {
+                                                                        if (window.confirm("Deseja realmente zerar toda a fila da forja?")) {
+                                                                            setSongs([]);
+                                                                            setManualPreviewSong(null);
+                                                                            setSelectedManualIndex(null);
+                                                                            setActivePlaylistName(null);
+                                                                        }
+                                                                    }} className="px-4 py-1.5 bg-white/5 hover:bg-red-500/20 text-slate-300 hover:text-red-500 border border-white/10 hover:border-red-500/30 rounded-full font-black uppercase text-[10px] italic transition-all shadow-lg flex items-center space-x-2" title="Zerar Fila">
+                                                                        <RotateCcw className="w-3 h-3" />
+                                                                        <span>Zerar</span>
+                                                                    </button>
                                                                     <button onClick={() => setSaveListModalOpen(true)} className="px-4 py-1.5 bg-white/5 hover:bg-[#B87333]/40 text-slate-300 hover:text-white border border-white/10 hover:border-[#B87333]/30 rounded-full font-black uppercase text-[10px] italic transition-all shadow-lg flex items-center space-x-2">
                                                                         <Save className="w-3 h-3" />
                                                                         <span>Salvar Lista</span>
@@ -5428,7 +5440,7 @@ function App() {
                                                     <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Cifra</label>
                                                     <div className="relative group/editor">
                                                         <textarea
-                                                            value={editFormData.include_tabs ? editFormData.content : getFilteredContent(editFormData.content)}
+                                                            value={editFormData.include_tabs ? editFormData.content : removeTablatureBlocks(editFormData.content)}
                                                             onChange={e => {
                                                                 if (editFormData.include_tabs) {
                                                                     setEditFormData({ ...editFormData, content: e.target.value });
@@ -5561,6 +5573,17 @@ function App() {
                                                                     <div className={`w-4 h-4 rounded-full bg-white transition-transform ${includeDictionary ? 'translate-x-6' : 'translate-x-0'}`}></div>
                                                                 </div>
                                                                 <input type="checkbox" className="hidden" checked={includeDictionary} onChange={(e) => setIncludeDictionary(e.target.checked)} />
+                                                            </label>
+
+                                                            <label className="flex items-center justify-between p-4 bg-white/5 border border-white/5 rounded-2xl cursor-pointer hover:border-[#B87333]/40 transition-all group">
+                                                                <div>
+                                                                    <p className="text-sm font-black text-white uppercase tracking-widest">Incluir Tablaturas</p>
+                                                                    <p className="text-[10px] font-bold text-slate-500 uppercase mt-1">Manter solos e riffs no livreto</p>
+                                                                </div>
+                                                                <div className={`w-12 h-6 rounded-full p-1 transition-colors ${includeTabs ? 'bg-[#B87333]' : 'bg-slate-700'}`}>
+                                                                    <div className={`w-4 h-4 rounded-full bg-white transition-transform ${includeTabs ? 'translate-x-6' : 'translate-x-0'}`}></div>
+                                                                </div>
+                                                                <input type="checkbox" className="hidden" checked={includeTabs} onChange={(e) => setIncludeTabs(e.target.checked)} />
                                                             </label>
 
 
@@ -6339,7 +6362,27 @@ function App() {
                                                 </div>
                                                 <div className="flex-1 flex flex-col">
                                                     <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Cifra Bruta</label>
-                                                    <textarea value={batchFixData.content} onChange={e => setBatchFixData({ ...batchFixData, content: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white outline-none font-mono text-xs leading-relaxed sm:min-h-[600px] min-h-[40vh] resize-none scrollbar-thin" placeholder="Cole a cifra estruturada aqui..."></textarea>
+                                                    <div className="relative group/editor">
+                                                        <textarea
+                                                            value={batchFixData.include_tabs ? batchFixData.content : removeTablatureBlocks(batchFixData.content)}
+                                                            onChange={e => {
+                                                                if (batchFixData.include_tabs) {
+                                                                    setBatchFixData({ ...batchFixData, content: e.target.value });
+                                                                }
+                                                            }}
+                                                            readOnly={!batchFixData.include_tabs}
+                                                            className={`w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white outline-none font-mono text-xs leading-relaxed sm:min-h-[600px] min-h-[40vh] resize-none scrollbar-thin transition-all ${!batchFixData.include_tabs ? 'cursor-not-allowed opacity-80' : 'focus:border-[#B87333]/50'}`}
+                                                            placeholder="Cole a cifra estruturada aqui..."
+                                                        ></textarea>
+                                                        {!batchFixData.include_tabs && (
+                                                            <div className="absolute inset-0 flex items-center justify-center bg-black/20 backdrop-blur-[1px] opacity-0 group-hover/editor:opacity-100 transition-opacity pointer-events-none">
+                                                                <div className="bg-black/80 border border-[#B87333]/50 px-4 py-2 rounded-xl flex items-center space-x-2">
+                                                                    <Eye className="w-4 h-4 text-[#B87333]" />
+                                                                    <span className="text-[10px] font-bold text-white uppercase italic">Ative as Tabs para Editar</span>
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             </div>
 
@@ -6432,7 +6475,27 @@ function App() {
                             </div>
                             <div className="flex flex-col flex-1">
                                 <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Cifra Bruta</label>
-                                <textarea value={editQueueSong.content} onChange={e => setEditQueueSong({ ...editQueueSong, content: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white outline-none font-mono text-xs leading-relaxed sm:min-h-[600px] min-h-[40vh] resize-none focus:border-[#B87333]/50 transition-all scrollbar-thin" placeholder="Cole a cifra estruturada aqui..."></textarea>
+                                <div className="relative group/editor">
+                                    <textarea
+                                        value={editQueueSong.include_tabs ? editQueueSong.content : removeTablatureBlocks(editQueueSong.content)}
+                                        onChange={e => {
+                                            if (editQueueSong.include_tabs) {
+                                                setEditQueueSong({ ...editQueueSong, content: e.target.value });
+                                            }
+                                        }}
+                                        readOnly={!editQueueSong.include_tabs}
+                                        className={`w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white outline-none font-mono text-xs leading-relaxed sm:min-h-[600px] min-h-[40vh] resize-none focus:border-[#B87333]/50 transition-all scrollbar-thin ${!editQueueSong.include_tabs ? 'cursor-not-allowed opacity-80' : ''}`}
+                                        placeholder="Cole a cifra estruturada aqui..."
+                                    ></textarea>
+                                    {!editQueueSong.include_tabs && (
+                                        <div className="absolute inset-0 flex items-center justify-center bg-black/20 backdrop-blur-[1px] opacity-0 group-hover/editor:opacity-100 transition-opacity pointer-events-none">
+                                            <div className="bg-black/80 border border-[#B87333]/50 px-4 py-2 rounded-xl flex items-center space-x-2">
+                                                <Eye className="w-4 h-4 text-[#B87333]" />
+                                                <span className="text-[10px] font-bold text-white uppercase italic">Ative as Tabs para Editar</span>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         </div>
                         {/* Footer */}

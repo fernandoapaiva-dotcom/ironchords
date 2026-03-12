@@ -179,7 +179,35 @@ def is_valid_chord(word: str) -> bool:
     has_root = any(c in "ABCDEFG" for c in word)
     return has_root and all(c in musical_atoms for c in c_word)
 
-def generate_docx(songs: list, output_filename: str = "Livreto.docx", cover_image_path: Optional[str] = None, include_toc: bool = True, include_dictionary: bool = True, sort_order: str = "alphabetical") -> str:
+def is_tablature_line(line: str) -> bool:
+    """Detects if a line is a tablature line."""
+    trimmed = line.strip()
+    if not trimmed: return False
+    if '|' in trimmed and ('-' in trimmed or '=' in trimmed): return True
+    if trimmed.startswith('|') or trimmed.endswith('|'): return True
+    # Pattern for string markers like e|--- or B|---
+    if re.match(r"^[a-gA-G][b#]?\|", trimmed): return True
+    return False
+
+def remove_tablature_blocks(content: str) -> str:
+    """Removes blocks of tablature from the content."""
+    lines = content.split('\n')
+    filtered = []
+    i = 0
+    while i < len(lines):
+        if is_tablature_line(lines[i]):
+            # Skip this line and any consecutive tab lines
+            while i < len(lines) and (is_tablature_line(lines[i]) or not lines[i].strip()):
+                i += 1
+            # Also skip any trailing empty lines after a tab block
+            while i < len(lines) and not lines[i].strip():
+                i += 1
+            continue
+        filtered.append(lines[i])
+        i += 1
+    return '\n'.join(filtered)
+
+def generate_docx(songs: list, output_filename: str = "Livreto.docx", cover_image_path: Optional[str] = None, include_toc: bool = True, include_dictionary: bool = True, sort_order: str = "alphabetical", include_tabs: bool = True) -> str:
     from docx import Document
     from docx.shared import Pt, Inches, Cm, RGBColor
     from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -263,7 +291,11 @@ def generate_docx(songs: list, output_filename: str = "Livreto.docx", cover_imag
             CM_PT: float = 0.03528
             LEADING_FACTOR: float = 1.30
             
-            lines = [l.rstrip() for l in str(song.get('content', '')).split('\n')]
+            content = str(song.get('content', ''))
+            if not include_tabs:
+                content = remove_tablature_blocks(content)
+                
+            lines = [l.rstrip() for l in content.split('\n')]
             line_cnt = len(lines)
             max_line_w = max(len(l) for l in lines) if lines else 1
             
