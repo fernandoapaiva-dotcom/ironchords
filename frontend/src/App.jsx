@@ -1375,7 +1375,7 @@ function App() {
     // Batch Mapping State
     const [batchRawData, setBatchRawData] = useState([]);
     const [batchHeaders, setBatchHeaders] = useState([]);
-    const [batchMapping, setBatchMapping] = useState({ song_name: '', artist_name: '', key: '' });
+    const [batchMapping, setBatchMapping] = useState({ song_name: '', artist_name: '', key: '', capo: '' });
     const [showMappingUI, setShowMappingUI] = useState(false);
     const [batchResults, setBatchResults] = useState([]);
     const [showBatchReview, setShowBatchReview] = useState(false);
@@ -3396,6 +3396,18 @@ function App() {
         finally { setManualLoading(false); }
     };
 
+    const autoMapHeaders = (headers) => {
+        const mapping = { song_name: '', artist_name: '', key: '', capo: '' };
+        headers.forEach(h => {
+            const low = h.toLowerCase();
+            if (low.includes('musica') || low.includes('nome') || low.includes('canção') || low.includes('song')) mapping.song_name = h;
+            if (low.includes('artista') || low.includes('cantor') || low.includes('banda') || low.includes('artist')) mapping.artist_name = h;
+            if (low.includes('tom') || low.includes('key') || low.includes('tonalidade')) mapping.key = h;
+            if (low.includes('capo') || low.includes('braçadeira') || low.includes('capotraste')) mapping.capo = h;
+        });
+        return mapping;
+    };
+
     const handleBatchFileSelect = async (e) => {
         const file = e.target.files[0];
         if (!file) return;
@@ -3419,8 +3431,10 @@ function App() {
 
                 const data = await res.json();
                 if (data.headers && data.rows) {
-                    setBatchHeaders(data.headers);
+                    const cleanHeaders = data.headers.map(h => String(h).trim());
+                    setBatchHeaders(cleanHeaders);
                     setBatchRawData(data.rows);
+                    setBatchMapping(autoMapHeaders(cleanHeaders));
                     setShowMappingUI(true);
                 } else {
                     throw new Error("Não foi possível identificar tabelas neste PDF.");
@@ -3436,8 +3450,10 @@ function App() {
                     const ws = wb.Sheets[wb.SheetNames[0]];
                     const data = XLSX.utils.sheet_to_json(ws, { header: 1 });
                     if (data.length > 0) {
-                        setBatchHeaders(data[0].map(h => String(h).trim()));
+                        const cleanHeaders = data[0].map(h => String(h).trim());
+                        setBatchHeaders(cleanHeaders);
                         setBatchRawData(XLSX.utils.sheet_to_json(ws));
+                        setBatchMapping(autoMapHeaders(cleanHeaders));
                         setShowMappingUI(true);
                     }
                 } catch (err) { setBatchError("Erro ao processar arquivo."); }
@@ -3457,6 +3473,13 @@ function App() {
         const songsToProcess = batchRawData.map(row => {
             const songName = String(row[batchMapping.song_name] || '').trim();
             const artistName = String(row[batchMapping.artist_name] || '').trim();
+            const rawCapo = row[batchMapping.capo];
+            let capo = 0;
+            if (rawCapo !== undefined && rawCapo !== null && rawCapo !== '') {
+                const parsed = parseInt(String(rawCapo).replace(/\D/g, ''));
+                if (!isNaN(parsed)) capo = parsed;
+            }
+
             // Basic validation: if artist is just a dot, dash or empty, mark as invalid but keep it
             const invalidArtist = !artistName || artistName === '.' || artistName === '-' || artistName === '_';
 
@@ -3466,7 +3489,7 @@ function App() {
                 key: String(row[batchMapping.key] || '').trim(),
                 version: 'Principal',
                 include_tabs: true,
-                capo: 0,
+                capo: capo,
                 needs_artist: invalidArtist
             };
         }).filter(s => s.song_name); // Keep it as long as there is a song name
@@ -3488,14 +3511,19 @@ function App() {
             );
 
             if (localMatch) {
+                // Check if content is valid (not empty)
+                const isContentEmpty = !localMatch.content || String(localMatch.content).trim().length < 100;
+
                 // Use local data instead of fetching from API
                 finalResults.push({
                     ...localMatch,
                     requested_key: song.key,
                     sounding_key: localMatch.song_key, // Default to its original key
-                    status: 'success',
+                    status: isContentEmpty ? 'error' : 'success',
+                    message: isContentEmpty ? 'Cifra Vazia no Acervo' : null,
                     include_tabs: localMatch.content ? (localMatch.content.includes('|-') || localMatch.content.includes('-|')) : false,
-                    in_acervo: true
+                    in_acervo: true,
+                    capo: song.capo || localMatch.capo || 0
                 });
                 setBatchProgress({ current: i + 1, total: songsToProcess.length });
                 continue;
@@ -3511,10 +3539,14 @@ function App() {
 
                 if (res.ok) {
                     const data = await res.json();
+                    
+                    // Filter empty chords (Requirement 3)
+                    const isContentEmpty = !data.content || String(data.content).trim().length < 100;
 
                     finalResults.push({
                         ...data,
-                        status: 'success',
+                        status: isContentEmpty ? 'error' : 'success',
+                        message: isContentEmpty ? 'Cifra Vazia Encontrada' : null,
                         show_chords: true,
                         include_tabs: data.content ? (data.content.includes('|-') || data.content.includes('-|')) : false,
                         in_acervo: false
@@ -3527,7 +3559,8 @@ function App() {
                         requested_key: song.key,
                         status: 'error',
                         suggestions: errorData.detail?.suggestions || [],
-                        needs_artist: song.needs_artist
+                        needs_artist: song.needs_artist,
+                        capo: song.capo
                     });
                 }
             } catch (err) {
@@ -3535,7 +3568,8 @@ function App() {
                     song_name: song.song_name,
                     artist_name: song.artist_name,
                     requested_key: song.key,
-                    status: 'error'
+                    status: 'error',
+                    capo: song.capo
                 });
             }
             setBatchProgress(prev => ({ ...prev, current: i + 1 }));
@@ -5989,7 +6023,7 @@ function App() {
                                         <button onClick={() => setShowMappingUI(false)} className="absolute top-6 right-6 p-2 bg-white/5 hover:bg-red-900/40 text-slate-500 hover:text-red-500 rounded-xl transition-all border border-white/5"><X className="w-5 h-5" /></button>
                                         <h4 className="text-xs font-black text-[#B87333] uppercase tracking-widest text-center">Mapeamento de Colunas</h4>
                                         <p className="text-[10px] text-slate-500 text-center uppercase tracking-widest">Colunas disponíveis: {batchHeaders.join(', ')}</p>
-                                        {[{ label: 'Nome da Música', key: 'song_name' }, { label: 'Artista', key: 'artist_name' }, { label: 'Tom (Key)', key: 'key' }].map(field => (
+                                        {[{ label: 'Nome da Música', key: 'song_name' }, { label: 'Artista', key: 'artist_name' }, { label: 'Tom (Key)', key: 'key' }, { label: 'Capo (Opcional)', key: 'capo' }].map(field => (
                                             <div key={field.key}>
                                                 <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest">{field.label}</label>
                                                 <select value={batchMapping[field.key]} onChange={e => setBatchMapping(prev => ({ ...prev, [field.key]: e.target.value }))} className="w-full bg-black/60 border border-white/10 rounded-xl px-4 py-3 text-white font-bold outline-none">
@@ -6056,9 +6090,16 @@ function App() {
                                                                             </span>
                                                                         )}
                                                                     </div>
-                                                                ) : (
-                                                                    <h5 className="font-black text-slate-400 uppercase italic tracking-tighter text-lg truncate">{item.song_name}</h5>
-                                                                )}
+                                                                    ) : (
+                                                                        <div className="flex flex-col items-start gap-1">
+                                                                            <h5 className="font-black text-slate-400 uppercase italic tracking-tighter text-lg truncate">{item.song_name}</h5>
+                                                                            {item.message && (
+                                                                                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-red-900/40 border border-red-500/50 text-[9px] font-black text-red-200 uppercase tracking-widest">
+                                                                                    <AlertCircle className="w-3 h-3" /> {item.message}
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
+                                                                    )}
                                                                 <div className="flex items-center space-x-3 mt-1">
                                                                     {item.needs_artist || !item.artist_name ? (
                                                                         <div className="flex items-center space-x-2">

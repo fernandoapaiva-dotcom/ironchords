@@ -14,6 +14,11 @@
 @tailwind utilities;
 
 @layer base {
+  html, body {
+    overscroll-behavior-y: none;
+    height: 100%;
+    overflow-x: hidden;
+  }
   body {
     @apply bg-[#0F0F12] text-[#A5A9B4] font-sans antialiased selection:bg-[#B87333]/30;
     background-image:

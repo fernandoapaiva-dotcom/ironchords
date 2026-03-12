@@ -39,7 +39,8 @@ def clean_song_name(name: str) -> str:
         r'-?\s*clipe\b',
         r'-?\s*video\b',
         r'-?\s*lyric\b',
-        r'-?\s*remix\b'
+        r'-?\s*remix\b',
+        r'agape uma comunidade de amor\b'
     ]
     for term in fluff_terms:
         name = re.sub(term, '', name, flags=re.IGNORECASE)
