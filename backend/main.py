@@ -195,6 +195,14 @@ def deauthorize_user_endpoint(email: str):
     deauthorize_user(email)
     return {"status": "success", "message": f"Acesso de {email} revogado."}
 
+@app.get("/api/auth/add_manual/{email}")
+def add_manual_user_endpoint(email: str):
+    norm_email = normalize_gmail(email)
+    # Register (if not exists) and Authorize
+    register_user(norm_email)
+    authorize_user(norm_email)
+    return {"status": "success", "message": f"Usuário {norm_email} adicionado e autorizado."}
+
 @app.delete("/api/auth/delete/{email}")
 def delete_user_endpoint(email: str):
     delete_user(email)

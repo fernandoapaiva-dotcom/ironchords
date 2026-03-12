@@ -897,6 +897,8 @@ const UserManagementModal = ({ isOpen, onClose, API_BASE }) => {
     const [users, setUsers] = useState([]);
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState('all'); // all, authorized, pending
+    const [newUserEmail, setNewUserEmail] = useState('');
+    const [isAdding, setIsAdding] = useState(false);
 
     const fetchUsers = async () => {
         setLoading(true);
@@ -921,6 +923,28 @@ const UserManagementModal = ({ isOpen, onClose, API_BASE }) => {
         } catch (err) {
             console.error("Auth failed:", err);
         }
+    };
+
+    const handleAddManual = async () => {
+        if (!newUserEmail || !newUserEmail.includes('@')) {
+            alert("Por favor, insira um e-mail válido.");
+            return;
+        }
+        setIsAdding(true);
+        try {
+            const res = await fetch(`${API_BASE}/auth/add_manual/${encodeURIComponent(newUserEmail.trim())}`);
+            const data = await res.json();
+            if (data.status === 'success') {
+                setNewUserEmail('');
+                fetchUsers();
+            } else {
+                alert(data.message || "Erro ao adicionar usuário.");
+            }
+        } catch (err) {
+            console.error("Manual add failed:", err);
+            alert("Erro de conexão ao adicionar usuário.");
+        }
+        setIsAdding(false);
     };
 
     const handleDeauthorize = async (email) => {
@@ -990,6 +1014,27 @@ const UserManagementModal = ({ isOpen, onClose, API_BASE }) => {
                             <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Pendentes</p>
                             <p className="text-2xl font-black text-yellow-500">{counts.pending}</p>
                         </div>
+                    </div>
+
+                    {/* Manual Add Input */}
+                    <div className="flex items-center space-x-3 mb-8 bg-white/5 p-2 pr-2 pl-6 rounded-[28px] border border-white/5 focus-within:border-blue-500/50 transition-all">
+                        <Mail className="w-5 h-5 text-slate-500" />
+                        <input 
+                            type="email" 
+                            placeholder="Adicionar novo e-mail..."
+                            value={newUserEmail}
+                            onChange={(e) => setNewUserEmail(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && handleAddManual()}
+                            className="flex-1 bg-transparent border-none outline-none text-white text-sm font-bold placeholder:text-slate-600 py-3"
+                        />
+                        <button 
+                            onClick={handleAddManual}
+                            disabled={isAdding}
+                            className="bg-blue-500 hover:bg-blue-600 disabled:opacity-50 text-white px-6 py-3 rounded-2xl font-black uppercase text-[10px] tracking-widest transition-all flex items-center space-x-2 shadow-lg shadow-blue-500/20"
+                        >
+                            {isAdding ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}
+                            <span>Adicionar</span>
+                        </button>
                     </div>
 
                     {/* Filter Tabs */}
