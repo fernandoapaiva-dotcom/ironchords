@@ -111,8 +111,15 @@ const LoginScreen = ({ onAuthorized }) => {
 
     const checkStatus = async (emailToCheck) => {
         setStatus('loading');
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+        
         try {
-            const res = await fetch(`${API_BASE}/auth/status/${emailToCheck}`);
+            const res = await fetch(`${API_BASE}/auth/status/${emailToCheck}`, {
+                signal: controller.signal
+            });
+            clearTimeout(timeoutId);
+            
             if (!res.ok) throw new Error(`Status ${res.status}`);
             const data = await res.json();
             
@@ -129,18 +136,28 @@ const LoginScreen = ({ onAuthorized }) => {
         } catch (err) {
             console.error("Status check error:", err);
             setStatus('error');
-            setMessage(`Erro ao conectar com o servidor: ${err.message || 'Falha na rede'}`);
+            const msg = err.name === 'AbortError' ? 'Servidor demorou muito a responder' : (err.message || 'Falha na rede');
+            setMessage(`Erro ao conectar com o servidor: ${msg}`);
+        } finally {
+            // Only clear loading if we are NOT authorized (onAuthorized already handles navigation/unmount)
+            // But actually it's safer to clear it anyway if status isn't authorized or pending
         }
     };
 
     const handleRegisterWithEmail = async (emailToUse) => {
         setStatus('loading');
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+
         try {
             const res = await fetch(`${API_BASE}/auth/register`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email: emailToUse })
+                body: JSON.stringify({ email: emailToUse }),
+                signal: controller.signal
             });
+            clearTimeout(timeoutId);
+            
             const data = await res.json();
             if (!res.ok) throw new Error(data.message || data.detail || `Erro ${res.status}`);
 
@@ -148,18 +165,18 @@ const LoginScreen = ({ onAuthorized }) => {
                 localStorage.setItem('ironchords_user_email', emailToUse);
                 onAuthorized(emailToUse);
             } else if (data.status === 'pending') {
-                localStorage.setItem('ironchords_user_email', emailToUse);
                 setStatus('pending');
-                setMessage(data.message);
-            } else {
-                setStatus('error');
-                setMessage(data.message || 'Erro ao registrar.');
+                setMessage('Acesso solicitado com sucesso! Aguarde autorização.');
             }
         } catch (err) {
+            console.error("Registration error:", err);
+            const msg = err.name === 'AbortError' ? 'Servidor demorou muito a responder' : (err.message || 'Erro de conexão');
             setStatus('error');
-            setMessage(`Erro ao processar cadastro: ${err.message || 'Falha na rede'}`);
+            setMessage(`Erro ao solicitar acesso: ${msg}`);
         }
     };
+
+
 
     const handleRegister = async (e) => {
         e.preventDefault();
