@@ -4151,9 +4151,21 @@ function App() {
                                                 {!isSidebarCollapsed && <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] whitespace-nowrap">Fila de Execução</h3>}
                                             </div>
                                             {!isSidebarCollapsed && (
-                                                <button onClick={() => { setShowPlaylistManager(!showPlaylistManager); setSaveMode('new'); }} className={`p-1.5 rounded-md transition-all ${showPlaylistManager ? 'bg-[#B87333] text-white' : 'text-slate-600 hover:text-slate-400'}`} title="Salvar Setlist">
-                                                    <Save className="w-3.5 h-3.5" />
-                                                </button>
+                                                <div className="flex items-center space-x-1">
+                                                    <button onClick={() => {
+                                                        if (window.confirm("Deseja realmente zerar toda a fila da forja?")) {
+                                                            setSongs([]);
+                                                            setManualPreviewSong(null);
+                                                            setSelectedManualIndex(null);
+                                                            setActivePlaylistName(null);
+                                                        }
+                                                    }} className="p-1.5 rounded-md text-slate-600 hover:text-red-500 hover:bg-red-500/10 transition-all" title="Zerar Fila">
+                                                        <RotateCcw className="w-3.5 h-3.5" />
+                                                    </button>
+                                                    <button onClick={() => { setShowPlaylistManager(!showPlaylistManager); setSaveMode('new'); }} className={`p-1.5 rounded-md transition-all ${showPlaylistManager ? 'bg-[#B87333] text-white' : 'text-slate-600 hover:text-slate-400'}`} title="Salvar Setlist">
+                                                        <Save className="w-3.5 h-3.5" />
+                                                    </button>
+                                                </div>
                                             )}
                                         </div>
 
