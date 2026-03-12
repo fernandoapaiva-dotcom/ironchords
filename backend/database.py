@@ -154,13 +154,26 @@ def init_db():
     # Always ensure admin is authorized
     admin_email = "fernandomaragao89@gmail.com"
     try:
-        db_exec('INSERT INTO users (email, status) VALUES (?, ?) ON CONFLICT (email) DO UPDATE SET status = ?', (admin_email, 'authorized', 'authorized'))
-    except:
-        # Fallback for SQLite which doesn't support ON CONFLICT... DO UPDATE or has different syntax
-        db_exec('INSERT OR IGNORE INTO users (email, status) VALUES (?, ?)', (admin_email, 'authorized'))
-        db_exec("UPDATE users SET status = 'authorized' WHERE email = ?", (admin_email,))
+        db_exec('INSERT INTO users (email, status) VALUES (?, ?) ON CONFLICT (email) DO UPDATE SET status = EXCLUDED.status', (admin_email, 'authorized'))
+        conn.commit()
+    except Exception as e:
+        if is_postgres: 
+            conn.rollback()
+            print(f"[DB] Postgres ON CONFLICT failed, trying separate steps: {e}")
         
-    conn.commit()
+        # Fallback for SQLite or if Postgres ON CONFLICT had issues
+        try:
+            if is_postgres:
+                db_exec('INSERT INTO users (email, status) VALUES (%s, %s) ON CONFLICT DO NOTHING', (admin_email, 'authorized'))
+            else:
+                db_exec('INSERT OR IGNORE INTO users (email, status) VALUES (?, ?)', (admin_email, 'authorized'))
+            
+            db_exec("UPDATE users SET status = 'authorized' WHERE email = " + ("%s" if is_postgres else "?"), (admin_email,))
+            conn.commit()
+        except Exception as e2:
+            if is_postgres: conn.rollback()
+            print(f"[DB] Final admin auth fallback failed: {e2}")
+
     conn.close()
 
 def _exec_select(sql, params=None):
