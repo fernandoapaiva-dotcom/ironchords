@@ -8,52 +8,78 @@ def generate_chord_image(chord_name, positions, output_path):
     img = Image.new('RGB', (width, height), color='white')
     draw = ImageDraw.Draw(img)
     
-    # Try to load a font, otherwise use default
-    try:
-        font_large = ImageFont.truetype("arialbd.ttf", 24)
-        font_small = ImageFont.truetype("arial.ttf", 14)
-    except:
-        font_large = ImageFont.load_default()
-        font_small = ImageFont.load_default()
+# Global font and template cache
+_FONT_CACHE = {}
+_GRID_TEMPLATE = None
+
+def get_font(size, bold=False):
+    key = f"{size}_{bold}"
+    if key not in _FONT_CACHE:
+        try:
+            name = "arialbd.ttf" if bold else "arial.ttf"
+            _FONT_CACHE[key] = ImageFont.truetype(name, size)
+        except:
+            _FONT_CACHE[key] = ImageFont.load_default()
+    return _FONT_CACHE[key]
+
+def get_grid_template():
+    global _GRID_TEMPLATE
+    if _GRID_TEMPLATE is None:
+        width, height = 150, 200
+        img = Image.new('RGB', (width, height), color='white')
+        draw = ImageDraw.Draw(img)
+        
+        # Grid constants
+        grid_x_start, grid_y_start = 30, 50
+        grid_x_end, grid_y_end = width - 30, height - 30
+        string_spacing = (grid_x_end - grid_x_start) / 5
+        fret_spacing = (grid_y_end - grid_y_start) / 4
+
+        # Draw Nut (thick line)
+        draw.line([(grid_x_start, grid_y_start), (grid_x_end, grid_y_start)], fill='black', width=4)
+
+        # Draw Frets
+        for i in range(1, 5):
+            y = grid_y_start + i * fret_spacing
+            draw.line([(grid_x_start, y), (grid_x_end, y)], fill='black', width=2)
+            
+        # Draw Strings
+        for i in range(6):
+            x = grid_x_start + i * string_spacing
+            draw.line([(x, grid_y_start), (x, grid_y_end)], fill='black', width=2)
+            
+        _GRID_TEMPLATE = img
+    return _GRID_TEMPLATE.copy()
+
+def generate_chord_image(chord_name, positions, output_path):
+    img = get_grid_template()
+    draw = ImageDraw.Draw(img)
+    width, _ = img.size
+    
+    font_large = get_font(24, bold=True)
+    font_small = get_font(14)
 
     # Draw Chord Name
     text_bbox = draw.textbbox((0, 0), chord_name, font=font_large)
-    text_width = text_bbox[2] - text_bbox[0]
-    draw.text(((width - text_width) / 2, 10), chord_name, font=font_large, fill='black')
+    tx_w = text_bbox[2] - text_bbox[0]
+    draw.text(((width - tx_w) / 2, 10), chord_name, font=font_large, fill='black')
 
-    # Grid constants
-    grid_x_start = 30
-    grid_y_start = 50
-    grid_x_end = width - 30
-    grid_y_end = height - 30
-    string_spacing = (grid_x_end - grid_x_start) / 5
-    fret_spacing = (grid_y_end - grid_y_start) / 4
-
-    # Draw Nut (thick line)
-    draw.line([(grid_x_start, grid_y_start), (grid_x_end, grid_y_start)], fill='black', width=4)
-
-    # Draw Frets
-    for i in range(1, 5):
-        y = grid_y_start + i * fret_spacing
-        draw.line([(grid_x_start, y), (grid_x_end, y)], fill='black', width=2)
-        
-    # Draw Strings
-    for i in range(6):
-        x = grid_x_start + i * string_spacing
-        draw.line([(x, grid_y_start), (x, grid_y_end)], fill='black', width=2)
+    # Grid constants for finger placement
+    gx, gy = 30, 50
+    ss = (150 - 60) / 5
+    fs = (200 - 80) / 4
 
     # Draw finger positions
     for i, char in enumerate(positions):
-        x = grid_x_start + i * string_spacing
-        if char == 'X' or char == 'x':
-            draw.text((x - 5, grid_y_start - 20), 'X', font=font_small, fill='black')
+        x = gx + i * ss
+        if char.upper() == 'X':
+            draw.text((x - 5, gy - 20), 'X', font=font_small, fill='black')
         elif char == '0':
-            draw.ellipse([x - 4, grid_y_start - 18, x + 4, grid_y_start - 10], outline='black', width=1)
+            draw.ellipse([x - 4, gy - 18, x + 4, gy - 10], outline='black', width=1)
         elif char.isdigit():
-            fret = int(char)
-            if fret > 0 and fret <= 4:
-                # Draw filled circle centered on string and middle of fret
-                cy = grid_y_start + (fret - 0.5) * fret_spacing
+            f = int(char)
+            if 0 < f <= 4:
+                cy = gy + (f - 0.5) * fs
                 r = 6
                 draw.ellipse([x - r, cy - r, x + r, cy + r], fill='black')
 
