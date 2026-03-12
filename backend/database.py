@@ -5,8 +5,10 @@ from typing import Optional, cast
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "chords.db")
 DATABASE_URL = os.environ.get("DATABASE_URL")
+LAST_DB_ERROR = None
 
 def get_db_connection():
+    global LAST_DB_ERROR
     if DATABASE_URL:
         import psycopg2
         from psycopg2.extras import RealDictCursor
@@ -22,18 +24,24 @@ def get_db_connection():
             separator = "&" if "?" in url else "?"
             url += f"{separator}sslmode=require"
         
+        # Add connection timeout to avoid long hangs
+        if "connect_timeout" not in url:
+            separator = "&" if "?" in url else "?"
+            url += f"{separator}connect_timeout=10"
+        
         # Retry logic for robust startup
-        last_err = None
         for attempt in range(3):
             try:
                 conn = psycopg2.connect(url)
+                LAST_DB_ERROR = None
                 return conn
             except Exception as e:
-                last_err = e
+                LAST_DB_ERROR = str(e)
                 print(f"[DB] Connection attempt {attempt+1} failed: {e}")
-                _time.sleep(2)
-        if last_err:
-            raise last_err
+                if attempt < 2:
+                    _time.sleep(2)
+        if LAST_DB_ERROR:
+            raise Exception(f"Database connection failed after 3 attempts: {LAST_DB_ERROR}")
         raise Exception("Failed to connect to database")
     else:
         conn = sqlite3.connect(DB_PATH)

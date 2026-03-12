@@ -360,21 +360,28 @@ def _keep_alive_worker():
             print(f"[KeepAlive] Ping failed: {e}")
         _time.sleep(INTERVAL)
 
+class RegistrationRequest(BaseModel):
+    email: str
+
 @app.on_event("startup")
 def startup_event():
-    try:
-        init_db()
-        print("[DB] Database initialized successfully.")
-    except Exception as e:
-        import traceback
-        print(f"[CRITICAL] Database initialization failed: {e}")
-        traceback.print_exc()
-        # On Render, we want the process to exit clearly if it can't connect to DB
-        # However, FastAPI/Gunicorn might handle the exception. 
-        # Raising it here is better for "Worker failed to boot" clarity.
-        raise e
-
     import threading
+    
+    def run_init():
+        try:
+            from database import init_db
+            init_db()
+            print("[DB] Database initialized successfully in background.")
+        except Exception as e:
+            import traceback
+            print(f"[CRITICAL] Background database initialization failed: {e}")
+            traceback.print_exc()
+
+    # Run DB init in background so it doesn't block the worker boot timeout
+    db_thread = threading.Thread(target=run_init, daemon=True, name="DBInit")
+    db_thread.start()
+    print("[DB] Database initialization started in background thread.")
+
     t = threading.Thread(target=_keep_alive_worker, daemon=True, name="KeepAlive")
     t.start()
     print("[KeepAlive] Background keep-alive thread started (interval: 14min).")
