@@ -4,92 +4,128 @@ import re
 from typing import Optional, cast
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "chords.db")
+DATABASE_URL = os.environ.get("DATABASE_URL")
 
 def get_db_connection():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
+    if DATABASE_URL:
+        import urllib.parse
+        import psycopg2
+        from psycopg2.extras import RealDictCursor
+        
+        # Parse for psycopg2
+        result = urllib.parse.urlparse(DATABASE_URL)
+        username = result.username
+        password = result.password
+        database = result.path[1:]
+        hostname = result.hostname
+        port = result.port
+        
+        conn = psycopg2.connect(
+            database=database,
+            user=username,
+            password=password,
+            host=hostname,
+            port=port
+        )
+        # We don't set row_factory here, we use DictCursor in executes if needed, 
+        # but to keep compatibility with existing code that expects dict-like access:
+        return conn
+    else:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        return conn
 
 def init_db():
     conn = get_db_connection()
     cursor = conn.cursor()
+    is_postgres = DATABASE_URL is not None
     
-    # Chords table
-    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='chords'")
-    has_chords = cursor.fetchone() is not None
+    # helper for cross-db compatibility
+    def db_exec(sql, params=None):
+        if is_postgres:
+            # Postgres uses %s instead of ?
+            sql = sql.replace('?', '%s')
+            # Postgres doesn't like AUTOINCREMENT keyword in PRIMARY KEY
+            sql = sql.replace('AUTOINCREMENT', '')
+            # Postgres uses SERIAL for autoincrement
+            if 'INTEGER PRIMARY KEY' in sql and 'AUTOINCREMENT' not in sql:
+                 # Only replace if it's a CREATE TABLE
+                 if 'CREATE TABLE' in sql:
+                     sql = sql.replace('INTEGER PRIMARY KEY', 'SERIAL PRIMARY KEY')
+        
+        if params:
+            cursor.execute(sql, params)
+        else:
+            cursor.execute(sql)
+
+    # Check if table exists (portable-ish)
+    if is_postgres:
+        cursor.execute("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'chords')")
+        has_chords = cursor.fetchone()[0]
+    else:
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='chords'")
+        has_chords = cursor.fetchone() is not None
 
     if not has_chords:
-        conn.execute('''
+        db_exec('''
             CREATE TABLE chords (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                song_name TEXT NOT NULL COLLATE NOCASE,
-                artist_name TEXT NOT NULL COLLATE NOCASE,
-                song_key TEXT NOT NULL COLLATE NOCASE,
+                id SERIAL PRIMARY KEY,
+                song_name TEXT NOT NULL,
+                artist_name TEXT NOT NULL,
+                song_key TEXT NOT NULL,
                 content TEXT NOT NULL,
                 source TEXT NOT NULL,
-                version TEXT NOT NULL DEFAULT 'Principal' COLLATE NOCASE,
+                version TEXT NOT NULL DEFAULT 'Principal',
                 capo INTEGER DEFAULT 0,
                 include_tabs INTEGER DEFAULT 1,
                 UNIQUE(song_name, artist_name, version)
             )
         ''')
     else:
-        cursor.execute("PRAGMA table_info(chords)")
-        cols_info = cursor.fetchall()
-        col_names = [c[1] for c in cols_info]
-        
-        if 'version' not in col_names:
-            conn.execute("ALTER TABLE chords ADD COLUMN version TEXT NOT NULL DEFAULT 'Principal' COLLATE NOCASE")
+        # Migration logic simplified for Postgres (assuming fresh start or already migrated)
+        # For SQLite we keep the old logic but use db_exec
+        if not is_postgres:
+            cursor.execute("PRAGMA table_info(chords)")
+            cols_info = cursor.fetchall()
+            col_names = [c[1] for c in cols_info]
             
-        if 'capo' not in col_names:
-            conn.execute("ALTER TABLE chords ADD COLUMN capo INTEGER DEFAULT 0")
-            
-        if 'include_tabs' not in col_names:
-            conn.execute("ALTER TABLE chords ADD COLUMN include_tabs INTEGER DEFAULT 1")
-            
-        conn.execute('DROP TABLE IF EXISTS chords_tmp')
-        conn.execute('''
-            CREATE TABLE chords_tmp (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                song_name TEXT NOT NULL COLLATE NOCASE,
-                artist_name TEXT NOT NULL COLLATE NOCASE,
-                song_key TEXT NOT NULL COLLATE NOCASE,
-                content TEXT NOT NULL,
-                source TEXT NOT NULL,
-                version TEXT NOT NULL DEFAULT 'Principal' COLLATE NOCASE,
-                capo INTEGER DEFAULT 0,
-                include_tabs INTEGER DEFAULT 1,
-                UNIQUE(song_name, artist_name, version)
-            )
-        ''')
-        
-        conn.execute('''
-            INSERT OR IGNORE INTO chords_tmp (id, song_name, artist_name, song_key, content, source, version, capo, include_tabs)
-            SELECT id, song_name, artist_name, song_key, content, source, 
-                   IFNULL(version, 'Principal'), IFNULL(capo, 0), IFNULL(include_tabs, 1) FROM chords
-        ''')
-        
-        conn.execute('DROP TABLE chords')
-        conn.execute('ALTER TABLE chords_tmp RENAME TO chords')
+            if 'version' not in col_names:
+                cursor.execute("ALTER TABLE chords ADD COLUMN version TEXT NOT NULL DEFAULT 'Principal'")
+            if 'capo' not in col_names:
+                cursor.execute("ALTER TABLE chords ADD COLUMN capo INTEGER DEFAULT 0")
+            if 'include_tabs' not in col_names:
+                cursor.execute("ALTER TABLE chords ADD COLUMN include_tabs INTEGER DEFAULT 1")
 
     # Users table
-    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='users'")
-    if cursor.fetchone() is None:
-        conn.execute('''
+    if is_postgres:
+        cursor.execute("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'users')")
+        has_users = cursor.fetchone()[0]
+    else:
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='users'")
+        has_users = cursor.fetchone() is not None
+
+    if not has_users:
+        db_exec('''
             CREATE TABLE users (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                email TEXT NOT NULL UNIQUE COLLATE NOCASE,
+                id SERIAL PRIMARY KEY,
+                email TEXT NOT NULL UNIQUE,
                 status TEXT NOT NULL DEFAULT 'pending',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
         
     # Playlists table
-    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='playlists'")
-    if cursor.fetchone() is None:
-        conn.execute('''
+    if is_postgres:
+        cursor.execute("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'playlists')")
+        has_playlists = cursor.fetchone()[0]
+    else:
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='playlists'")
+        has_playlists = cursor.fetchone() is not None
+
+    if not has_playlists:
+        db_exec('''
             CREATE TABLE playlists (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id SERIAL PRIMARY KEY,
                 user_email TEXT NOT NULL,
                 name TEXT NOT NULL,
                 data TEXT NOT NULL,
@@ -99,11 +135,17 @@ def init_db():
         ''')
         
     # Short Links table
-    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='short_links'")
-    if cursor.fetchone() is None:
-        conn.execute('''
+    if is_postgres:
+        cursor.execute("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'short_links')")
+        has_links = cursor.fetchone()[0]
+    else:
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='short_links'")
+        has_links = cursor.fetchone() is not None
+
+    if not has_links:
+        db_exec('''
             CREATE TABLE short_links (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id SERIAL PRIMARY KEY,
                 slug TEXT NOT NULL UNIQUE,
                 data TEXT NOT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -112,41 +154,76 @@ def init_db():
 
     # Always ensure admin is authorized
     admin_email = "fernandomaragao89@gmail.com"
-    conn.execute('INSERT OR IGNORE INTO users (email, status) VALUES (?, ?)', (admin_email, 'authorized'))
-    conn.execute("UPDATE users SET status = 'authorized' WHERE email = ?", (admin_email,))
+    try:
+        db_exec('INSERT INTO users (email, status) VALUES (?, ?) ON CONFLICT (email) DO UPDATE SET status = ?', (admin_email, 'authorized', 'authorized'))
+    except:
+        # Fallback for SQLite which doesn't support ON CONFLICT... DO UPDATE or has different syntax
+        db_exec('INSERT OR IGNORE INTO users (email, status) VALUES (?, ?)', (admin_email, 'authorized'))
+        db_exec("UPDATE users SET status = 'authorized' WHERE email = ?", (admin_email,))
         
     conn.commit()
     conn.close()
 
-def get_all_users():
+def _exec_select(sql, params=None):
     conn = get_db_connection()
-    users = conn.execute("SELECT * FROM users ORDER BY created_at DESC").fetchall()
+    is_postgres = DATABASE_URL is not None
+    if is_postgres:
+        from psycopg2.extras import RealDictCursor
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        sql = sql.replace('?', '%s')
+    else:
+        cursor = conn.cursor()
+    
+    if params:
+        cursor.execute(sql, params)
+    else:
+        cursor.execute(sql)
+    
+    results = cursor.fetchall()
     conn.close()
-    return [dict(u) for u in users]
+    return [dict(r) for r in results]
 
-def register_user(email: str):
+def _exec_write(sql, params=None):
     conn = get_db_connection()
+    is_postgres = DATABASE_URL is not None
+    cursor = conn.cursor()
+    if is_postgres:
+        sql = sql.replace('?', '%s')
+    
     try:
-        conn.execute('INSERT INTO users (email, status) VALUES (?, ?)', (email.strip(), 'pending'))
+        if params:
+            cursor.execute(sql, params)
+        else:
+            cursor.execute(sql)
         conn.commit()
         return True
-    except sqlite3.IntegrityError:
+    except Exception as e:
+        print(f"Write error: {e}")
+        conn.rollback()
         return False
     finally:
         conn.close()
 
+def get_all_users():
+    return _exec_select("SELECT * FROM users ORDER BY created_at DESC")
+
+def register_user(email: str):
+    email = email.lower().strip()
+    return _exec_write('INSERT INTO users (email, status) VALUES (?, ?) ON CONFLICT (email) DO NOTHING', (email, 'pending'))
+
 def authorize_user(email: str):
-    conn = get_db_connection()
-    conn.execute("UPDATE users SET status = 'authorized' WHERE email = ?", (email.strip(),))
-    conn.commit()
-    conn.close()
+    return _exec_write("UPDATE users SET status = 'authorized' WHERE email = ?", (email.lower().strip(),))
+
+def deauthorize_user(email: str):
+    return _exec_write("UPDATE users SET status = 'pending' WHERE email = ?", (email.lower().strip(),))
+
+def delete_user(email: str):
+    return _exec_write("DELETE FROM users WHERE email = ?", (email.lower().strip(),))
 
 def check_user_status(email: str):
-    conn = get_db_connection()
-    user = conn.execute("SELECT status FROM users WHERE email = ?", (email.strip(),)).fetchone()
-    conn.close()
-    if user:
-        return user['status']
+    res = _exec_select("SELECT status FROM users WHERE email = ?", (email.lower().strip(),))
+    if res:
+        return res[0]['status']
     return None
 
 def get_chord(song_name: str, artist_name: str, song_key: Optional[str] = None, version: Optional[str] = "Principal"):

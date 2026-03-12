@@ -1,7 +1,7 @@
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, WebSocket, WebSocketDisconnect # type: ignore
 from fastapi.middleware.cors import CORSMiddleware # type: ignore
 from fastapi.responses import FileResponse, HTMLResponse # type: ignore
-from database import init_db, get_chord, save_chord, get_db_connection, get_all_chords, register_user, authorize_user, check_user_status, get_all_users, save_short_link, get_short_link, get_user_playlists, save_user_playlist, delete_user_playlist # type: ignore
+from database import init_db, get_chord, save_chord, get_db_connection, get_all_chords, register_user, authorize_user, deauthorize_user, delete_user, check_user_status, get_all_users, save_short_link, get_short_link, get_user_playlists, save_user_playlist, delete_user_playlist # type: ignore
 from pydantic import BaseModel # type: ignore
 from typing import List, Optional, Any, Dict, Union, cast
 import pandas as pd # type: ignore
@@ -189,6 +189,16 @@ def authorize_user_endpoint(email: str):
 @app.get("/api/auth/users")
 def get_users_endpoint():
     return {"users": get_all_users()}
+
+@app.get("/api/auth/deauthorize/{email}")
+def deauthorize_user_endpoint(email: str):
+    deauthorize_user(email)
+    return {"status": "success", "message": f"Acesso de {email} revogado."}
+
+@app.delete("/api/auth/delete/{email}")
+def delete_user_endpoint(email: str):
+    delete_user(email)
+    return {"status": "success", "message": f"Usuário {email} removido."}
 
 # PLAYLIST SYNC ENDPOINTS
 class PlaylistUpdate(BaseModel):
