@@ -2992,7 +2992,9 @@ function App() {
                     song_name: s.song_name,
                     artist_name: s.artist_name,
                     song_key: s.sounding_key || s.requested_key || s.song_key,
-                    capo: s.capo || 0
+                    capo: s.capo || 0,
+                    content: s.content,
+                    include_tabs: s.include_tabs
                 }))
             };
             
