@@ -1989,8 +1989,8 @@ function App() {
         let localCtx = null, localSource = null, localAnalyser = null, raf = null;
         let lastBlowTime = 0, burstStartTime = 0, inBurst = false;
         
-        // Calibration: Threshold increased slightly, requires MIN duration to ignore sharp clicks
-        const BLOW_THRESHOLD = 90, MIN_BLOW_DURATION = 50, BLOW_MAX_DURATION = 350;
+        // Calibration: Threshold increased, requires longer sustain to ignore noise/claps
+        const BLOW_THRESHOLD = 120, MIN_BLOW_DURATION = 150, BLOW_MAX_DURATION = 400;
         
         const checkBlow = () => {
             if (localAnalyser) {
@@ -2004,11 +2004,12 @@ function App() {
                 if (rms > BLOW_THRESHOLD && !inBurst) { 
                     inBurst = true; 
                     burstStartTime = now; 
-                } else if (rms < BLOW_THRESHOLD * 0.4 && inBurst) {
+                } else if (rms < BLOW_THRESHOLD * 0.5 && inBurst) {
                     const dur = now - burstStartTime;
-                    // Filter: Must sustain for > 50ms (not a click) but < 350ms (not singing)
-                    if (dur > MIN_BLOW_DURATION && dur < BLOW_MAX_DURATION && now - lastBlowTime > 800) {
+                    // Filter: Must sustain for > 150ms (not a click) but < 400ms (not singing)
+                    if (dur > MIN_BLOW_DURATION && dur < BLOW_MAX_DURATION && now - lastBlowTime > 1000) {
                         lastBlowTime = now;
+                        console.log(`[BlowDetect] Valid blow detected! Duration: ${dur}ms`);
                         const container = scrollContainerRef.current;
                         if (container) {
                             lastManualScrollTime.current = 0;
@@ -2462,7 +2463,11 @@ function App() {
                 if (!currentLineWords.has(word)) uniqueCount++;
             }
 
-            return { score: matchedWords.size, unique: uniqueCount };
+            const result = { score: matchedWords.size, unique: uniqueCount };
+            if (matchedWords.size > 0) {
+                console.log(`[IASync] Scored Line ${idx}: "${lines[idx].trim().substring(0, 20)}..." | Score: ${result.score} | Unique: ${result.unique} | Words: ${Array.from(matchedWords).join(', ')}`);
+            }
+            return result;
         };
 
         // 2. TIER 1: STRICT LINEAR ADVANCE
