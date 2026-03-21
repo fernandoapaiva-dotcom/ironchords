@@ -1195,8 +1195,14 @@ function App() {
     const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
     const [isTransposing, setIsTransposing] = useState(false);
     const [isGenerating, setIsGenerating] = useState(false);
+    const [playerSongSearch, setPlayerSongSearch] = useState('');
+    const [playerSongSearchLoading, setPlayerSongSearchLoading] = useState(false);
+    const [playerSongSuggestions, setPlayerSongSuggestions] = useState([]);
+    const [addingSongSlug, setAddingSongSlug] = useState(null);
     const [isImmersiveMode, setIsImmersiveMode] = useState(false);
+    const [showImmersiveControls, setShowImmersiveControls] = useState(false);
     const [isStageModeActive, setIsStageModeActive] = useState(false);
+    const [showStageControls, setShowStageControls] = useState(false);
     const [isBlowDetectEnabled, setIsBlowDetectEnabled] = useState(false);
     const [isDynamicSpeedActive, setIsDynamicSpeedActive] = useState(false);
     const [isAutoScrolling, setIsAutoScrolling] = useState(false);
@@ -1209,7 +1215,25 @@ function App() {
     const [currentLineIndex, setCurrentLineIndex] = useState(0);
     const [scrollProgress, setScrollProgress] = useState(0);
     const [presenterSongIndex, setPresenterSongIndex] = useState(0);
+    
+    // Manual view / Stage view related
+    const [isManualAutoScrolling, setIsManualAutoScrolling] = useState(false);
+    const [manualScrollSpeed, setManualScrollSpeed] = useState(1);
+    const [manualCapo, setManualCapo] = useState(0);
+    const [manualPreviewSong, setManualPreviewSong] = useState(null);
+    const [stagedSongs, setStagedSongs] = useState([]);
+    const [isManualFullscreen, setIsManualFullscreen] = useState(false);
+    
+    // Pinch / UI Feedback
+    const [showPinchBar, setShowPinchBar] = useState(false);
+    const [pinchLiveFontSize, setPinchLiveFontSize] = useState(19);
+    const [showPlayerControls, setShowPlayerControls] = useState(true);
+    const [showUserManagement, setShowUserManagement] = useState(false);
+    const [showSettingsModal, setShowSettingsModal] = useState(false);
+    const [isManualColumns, setIsManualColumns] = useState(false);
+    const [showBottomToolsDrawer, setShowBottomToolsDrawer] = useState(false);
 
+    // Refs
     const sharedAudioStreamRef = useRef(null);
     const audioTrackerRef = useRef(null);
     const syncLineByTextRef = useRef(null);
@@ -1224,6 +1248,10 @@ function App() {
     const playerSearchDebounceRef = useRef(null);
     const lastManualScrollTime = useRef(0);
     const wasInPlayerRef = useRef(false);
+    const immersiveHideTimerRef = useRef(null);
+    const stageControlsTimerRef = useRef(null);
+    const playerControlsTimerRef = useRef(null);
+    const pinchBarTimerRef = useRef(null);
     const driftHistoryRef = useRef([]);
     const lastBpmAdjustTimeRef = useRef(Date.now());
     const lastVoiceMatchedIndexRef = useRef(0);
@@ -1233,10 +1261,9 @@ function App() {
     const lastMatchTimeRef = useRef(Date.now());
     const micLevelRef = useRef(0);
     const isPausedBySilenceRef = useRef(false);
-    
-    // Simple versioning to force refresh if needed (optional)
-    const APP_VERSION = '1.0.1'; 
 
+    // Version
+    const APP_VERSION = '1.0.1';
 
     useEffect(() => {
         const handleBeforeInstallPrompt = (e) => {
@@ -1346,17 +1373,11 @@ function App() {
         }
     };
 
-    // Player Song Search (sidebar)
-    const [playerSongSearch, setPlayerSongSearch] = useState('');
-    const [playerSongSearchLoading, setPlayerSongSearchLoading] = useState(false);
-    const [playerSongSuggestions, setPlayerSongSuggestions] = useState([]);
-    const [addingSongSlug, setAddingSongSlug] = useState(null);
 
-    const [showImmersiveControls, setShowImmersiveControls] = useState(false);
-    const immersiveHideTimerRef = useRef(null);
+
+
     // Stage Mode (Modo Palco) — distraction-free display
-    const [showStageControls, setShowStageControls] = useState(false);
-    const stageControlsTimerRef = useRef(null);
+
     // Wake Lock
     // Blow Detection
     const [blowFlash, setBlowFlash] = useState(false);
@@ -1385,9 +1406,7 @@ function App() {
         }
     };
     // Pinch Font Size Bar
-    const [showPinchBar, setShowPinchBar] = useState(false);
-    const [pinchLiveFontSize, setPinchLiveFontSize] = useState(19);
-    const pinchBarTimerRef = useRef(null);
+
     const handlePinchActive = useCallback((active) => {
         if (active) {
             setShowPinchBar(true);
@@ -1435,18 +1454,14 @@ function App() {
     const [suggestions, setSuggestions] = useState([]);
     const [showSuggestions, setShowSuggestions] = useState(false);
     const [availableVersions, setAvailableVersions] = useState([{ name: 'Principal', key: 'Principal' }]);
-    const [showPlayerControls, setShowPlayerControls] = useState(true);
-    const [showUserManagement, setShowUserManagement] = useState(false);
-    const [showSettingsModal, setShowSettingsModal] = useState(false);
-    const [isManualColumns, setIsManualColumns] = useState(false);
-    const playerControlsTimerRef = useRef(null);
-    const [manualCapo, setManualCapo] = useState(0);
-    const [manualPreviewSong, setManualPreviewSong] = useState(null);
-    const [stagedSongs, setStagedSongs] = useState([]);
+
+
+
+
     const [chordDiagramOverlay, setChordDiagramOverlay] = useState(null);
     const [chordTooltip, setChordTooltip] = useState(null); // { chord, anchor }
     // Modern Mobile Bottom Bar Drawer
-    const [showBottomToolsDrawer, setShowBottomToolsDrawer] = useState(false);
+
 
     // Batch Form State
     const [batchLoading, setBatchLoading] = useState(false);
