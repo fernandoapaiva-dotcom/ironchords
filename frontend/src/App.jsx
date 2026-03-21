@@ -1260,6 +1260,7 @@ function App() {
     const lastJumpRef = useRef(0);
     const lastMatchTimeRef = useRef(Date.now());
     const micLevelRef = useRef(0);
+    const advanceTimerRef = useRef(null);
     const isPausedBySilenceRef = useRef(false);
 
     // Version
