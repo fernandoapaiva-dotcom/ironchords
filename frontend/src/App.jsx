@@ -1205,6 +1205,7 @@ function App() {
     const [manualFontSize, setManualFontSize] = useState(18);
     const [printFontSize, setPrintFontSize] = useState(15);
     const [micEnabled, setMicEnabled] = useState(false);
+    const [micLevel, setMicLevel] = useState(0);
     const [currentLineIndex, setCurrentLineIndex] = useState(0);
     const [scrollProgress, setScrollProgress] = useState(0);
     const [presenterSongIndex, setPresenterSongIndex] = useState(0);
