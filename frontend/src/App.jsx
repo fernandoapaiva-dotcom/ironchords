@@ -1330,6 +1330,7 @@ function App() {
     const [includeToc, setIncludeToc] = useState(true);
     const [includeDictionary, setIncludeDictionary] = useState(true);
     const coverInputRef = useRef(null);
+    const lastManualScrollTime = useRef(0);
 
     // Manual Form State
     const [songName, setSongName] = useState('');
@@ -1771,6 +1772,8 @@ function App() {
 
         if (isPlayerViewActive && (isAutoScrolling || isDynamicSpeedActive) && scrollContainerRef.current) {
             interval = setInterval(() => {
+                if (Date.now() - lastManualScrollTime.current < 2500) return; // IA/Auto Sync pauses for 2.5s on manual scroll
+
                 if (isDynamicSpeedActive && micEnabled) {
                     // IA SYNC: Voice drives position, volume drives speed
                     // Scroll TOWARD the voice-matched currentLineIndex
@@ -1808,6 +1811,7 @@ function App() {
             }, 50);
         } else if (isManualViewActive) {
             interval = setInterval(() => {
+                if (Date.now() - lastManualScrollTime.current < 2500) return;
                 manualScrollContainerRef.current.scrollTop += manualScrollSpeed;
             }, 50);
         }
@@ -1965,49 +1969,55 @@ function App() {
         }
     }, [micGain]);
 
-    useEffect(() => {
-        if (micEnabled) {
-            if (!audioTrackerRef.current) {
-                audioTrackerRef.current = new AudioTracker(
-                    (detectedBpm) => {
-                        setBpm(prev => {
-                            const diff = detectedBpm - prev;
-                            if (Math.abs(diff) > 10) return prev + Math.sign(diff) * 2;
-                            return detectedBpm;
-                        });
-                    },
-                    (level) => {
-                        setMicLevel(level);
-                        micLevelRef.current = level;
-                    },
-                    (noteStr, centsOff, pitch) => {
-                        setDetectedNote(noteStr);
-                        setDetectedCents(centsOff);
-                        setDetectedPitch(pitch);
-                    },
-                    (text, isFinal) => {
-                        const isSystemMsg = text && (text.startsWith('[SISTEMA:') || text.startsWith('[ERRO VOZ:'));
-                        if (!isSystemMsg) setTranscriptRaw(text);
-                        lastVoiceTimeRef.current = Date.now();
-                        if (!isSystemMsg && syncLineByTextRef.current) syncLineByTextRef.current(text, isFinal);
-                    },
-                    (state) => setFsmState(state),
-                    (status) => setConnectionStatus(status)
-                );
-            }
-            audioTrackerRef.current.start().then(() => {
-                if (audioTrackerRef.current) audioTrackerRef.current.setGain(micGain);
-            }).catch((err) => {
-                console.error("Microphone access denied or error:", err);
-                setMicEnabled(false);
-            });
-        } else {
+    const startAudioTracker = () => {
+        if (!audioTrackerRef.current) {
+            audioTrackerRef.current = new AudioTracker(
+                (detectedBpm) => {
+                    setBpm(prev => {
+                        const diff = detectedBpm - prev;
+                        if (Math.abs(diff) > 10) return prev + Math.sign(diff) * 2;
+                        return detectedBpm;
+                    });
+                },
+                (level) => {
+                    setMicLevel(level);
+                    micLevelRef.current = level;
+                },
+                (noteStr, centsOff, pitch) => {
+                    setDetectedNote(noteStr);
+                    setDetectedCents(centsOff);
+                    setDetectedPitch(pitch);
+                },
+                (text, isFinal) => {
+                    const isSystemMsg = text && (text.startsWith('[SISTEMA:') || text.startsWith('[ERRO VOZ:'));
+                    if (!isSystemMsg) setTranscriptRaw(text);
+                    lastVoiceTimeRef.current = Date.now();
+                    if (!isSystemMsg && syncLineByTextRef.current) syncLineByTextRef.current(text, isFinal);
+                },
+                (state) => setFsmState(state),
+                (status) => setConnectionStatus(status)
+            );
+        }
+        audioTrackerRef.current.start().then(() => {
+            if (audioTrackerRef.current) audioTrackerRef.current.setGain(micGain);
+            setMicEnabled(true);
+        }).catch((err) => {
+            console.error("Microphone access denied or error:", err);
+            setMicEnabled(false);
             if (audioTrackerRef.current) {
                 audioTrackerRef.current.stop();
                 audioTrackerRef.current = null;
             }
+        });
+    };
+
+    const stopAudioTracker = () => {
+        if (audioTrackerRef.current) {
+            audioTrackerRef.current.stop();
+            audioTrackerRef.current = null;
         }
-    }, [micEnabled]);
+        setMicEnabled(false);
+    };
 
     // Clear Live Transcript after 3 seconds of inactivity
     useEffect(() => {
@@ -3144,6 +3154,22 @@ function App() {
         if (!suggestion) return;
         const suggestionKey = suggestion.slug || `${suggestion.song}-${suggestion.artist}`;
         setAddingSongSlug(suggestionKey);
+
+        const tempId = `temp-${Date.now()}`;
+        const tempSong = {
+            id: tempId,
+            song_name: suggestion.song,
+            artist_name: suggestion.artist,
+            content: "\n\n        ...Carregando cifra...\n\n",
+            is_loading: true
+        };
+        // Optimistic UI update instantly
+        setSongs(prev => {
+            const updated = [...prev, tempSong];
+            setSelectedManualIndex(updated.length - 1); // switch to it instantly to show loading
+            return updated;
+        });
+
         try {
             const res = await fetch(`${API_BASE_URL}/api/music/manual`, {
                 method: 'POST',
@@ -3168,6 +3194,7 @@ function App() {
                 }
                 alert(message);
                 setAddingSongSlug(null);
+                setSongs(prev => prev.filter(s => s.id !== tempId));
                 return;
             }
 
@@ -3186,6 +3213,13 @@ function App() {
             };
 
             setSongs(prev => {
+                const tempIndex = prev.findIndex(s => s.id === tempId);
+                if (tempIndex !== -1) {
+                    const updated = [...prev];
+                    updated[tempIndex] = newSong;
+                    setSelectedManualIndex(tempIndex);
+                    return updated;
+                }
                 const updated = [...prev, newSong];
                 setSelectedManualIndex(updated.length - 1);
                 return updated;
@@ -3928,20 +3962,48 @@ function App() {
                                             {/* Transpose */}
                                             <div className="flex flex-col gap-1.5 bg-black/40 p-2 rounded-xl border border-[#B87333]/20">
                                                 <span className="text-[8px] font-black text-[#B87333] uppercase tracking-widest text-center">Tom</span>
-                                                <div className="flex items-center justify-center gap-2">
-                                                    <button onClick={() => transposeSong(selectedManualIndex, -1)} disabled={isTransposing} className="p-1 text-slate-400 hover:text-white bg-white/5 rounded-lg disabled:opacity-50"><Minus className="w-3.5 h-3.5" /></button>
-                                                    <span className="text-sm font-black text-white uppercase italic w-5 text-center">{isTransposing ? '…' : getSoundingKey(currentSong)}</span>
-                                                    <button onClick={() => transposeSong(selectedManualIndex, 1)} disabled={isTransposing} className="p-1 text-slate-400 hover:text-white bg-white/5 rounded-lg disabled:opacity-50"><Plus className="w-3.5 h-3.5" /></button>
+                                                <div className="flex items-center justify-center bg-white/5 rounded-lg overflow-hidden relative">
+                                                    {isTransposing ? (
+                                                        <div className="w-full py-1.5 text-center"><RefreshCw className="w-4 h-4 text-[#B87333] animate-spin inline-block" /></div>
+                                                    ) : (
+                                                        <>
+                                                            <select
+                                                                value={getSoundingKey(currentSong) || 'C'}
+                                                                disabled={isTransposing}
+                                                                onChange={(e) => {
+                                                                    const targetKey = e.target.value;
+                                                                    const currentKeyMatch = (getSoundingKey(currentSong) || 'C').match(/([A-G][b#]?)/i);
+                                                                    const targetMatch = targetKey.match(/([A-G][b#]?)/i);
+                                                                    if (currentKeyMatch && targetMatch) {
+                                                                        const NOTES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+                                                                        const norm = k => { const flats = {'Db':'C#','Eb':'D#','Gb':'F#','Ab':'G#','Bb':'A#'}; let n=k.charAt(0).toUpperCase()+k.slice(1); return flats[n]||n; };
+                                                                        const cIdx = NOTES.indexOf(norm(currentKeyMatch[1]));
+                                                                        const tIdx = NOTES.indexOf(norm(targetMatch[1]));
+                                                                        if (cIdx !== -1 && tIdx !== -1) {
+                                                                            let diff = tIdx - cIdx;
+                                                                            if (diff > 6) diff -= 12;
+                                                                            if (diff < -6) diff += 12;
+                                                                            if (diff !== 0) transposeSong(selectedManualIndex, diff);
+                                                                        }
+                                                                    }
+                                                                }}
+                                                                className="w-full bg-transparent text-white font-black italic text-sm text-center py-1.5 outline-none appearance-none cursor-pointer disabled:opacity-50"
+                                                            >
+                                                                {["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"].map(k => <option key={k} value={k} className="bg-[#1A1A1A]">{k}</option>)}
+                                                            </select>
+                                                            <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-[#B87333]">
+                                                                <ChevronDown className="w-3 h-3" />
+                                                            </div>
+                                                        </>
+                                                    )}
                                                 </div>
                                             </div>
 
                                             {/* Size */}
                                             <div className="flex flex-col gap-1.5 bg-black/40 p-2 rounded-xl border border-white/5">
-                                                <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest text-center">Tamanho (Tela)</span>
-                                                <div className="flex items-center justify-center gap-2">
-                                                    <button onClick={() => setPlayerFontSize(p => Math.max(12, p - 1))} className="p-1 text-slate-400 hover:text-white bg-white/5 rounded-lg"><Minus className="w-3.5 h-3.5" /></button>
-                                                    <span className="text-sm font-black text-white w-5 text-center">{playerFontSize}</span>
-                                                    <button onClick={() => setPlayerFontSize(p => Math.min(45, p + 1))} className="p-1 text-slate-400 hover:text-white bg-white/5 rounded-lg"><Plus className="w-3.5 h-3.5" /></button>
+                                                <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest text-center">Tamanho: {playerFontSize}</span>
+                                                <div className="flex items-center justify-center h-full px-2 py-1.5">
+                                                    <input type="range" min="12" max="60" step="1" value={playerFontSize} onChange={e => setPlayerFontSize(parseInt(e.target.value))} className="w-full h-1 bg-white/10 rounded-full appearance-none cursor-pointer accent-slate-400" />
                                                 </div>
                                             </div>
 
@@ -4005,7 +4067,7 @@ function App() {
                                                     </div>
                                                 )}
 
-                                                <button onClick={() => { const s = !isDynamicSpeedActive; setIsDynamicSpeedActive(s); if (s) setIsAutoScrolling(false); if (s && !micEnabled) setMicEnabled(true); }} className={`w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl border transition-all ${isDynamicSpeedActive ? 'bg-blue-600 border-blue-600 text-white animate-pulse' : 'bg-white/5 border-white/10 text-slate-600 hover:text-slate-400'}`} title="IA Sync">
+                                                <button onClick={() => { const s = !isDynamicSpeedActive; setIsDynamicSpeedActive(s); if (s) { setIsAutoScrolling(false); startAudioTracker(); } else { stopAudioTracker(); } }} className={`w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl border transition-all ${isDynamicSpeedActive ? 'bg-blue-600 border-blue-600 text-white animate-pulse' : 'bg-white/5 border-white/10 text-slate-600 hover:text-slate-400'}`} title="IA Sync">
                                                     <Zap className="w-3.5 h-3.5" />
                                                     <span className="text-[10px] font-black uppercase">IA Sync</span>
                                                 </button>
@@ -4030,9 +4092,10 @@ function App() {
                                     </button>
                                     
                                     {/* Font Controls UNDER play button on Mobile */}
-                                    <div className="flex items-center space-x-1 bg-white/5 border border-white/5 rounded-full p-0.5 sm:hidden">
-                                        <button onClick={() => setPlayerFontSize(prev => Math.max(12, prev - 1))} className="px-2 py-1 text-slate-400 hover:text-white transition-all font-black text-[9px]">A-</button>
-                                        <button onClick={() => setPlayerFontSize(prev => Math.min(60, prev + 1))} className="px-2 py-1 text-slate-400 hover:text-white transition-all font-black text-[9px]">A+</button>
+                                    <div className="flex items-center justify-center bg-white/5 border border-white/5 rounded-full p-1 sm:hidden">
+                                        <button onClick={() => setPlayerFontSize(prev => prev < 18 ? 22 : prev < 28 ? 36 : 14)} className="w-8 h-6 text-slate-400 hover:text-white transition-all font-black text-[10px] flex items-center justify-center" title="Ciclar Tamanho da Fonte">
+                                            Aa
+                                        </button>
                                     </div>
                                 </div>
 
@@ -4220,7 +4283,7 @@ function App() {
                                         )}
 
                                         {/* ——— SONG LIST (with trash + print) ——— */}
-                                        <div className={`flex-1 overflow-y-auto space-y-2 scrollbar-thin scrollbar-thumb-[#B87333]/20 ${isSidebarCollapsed ? 'pr-0' : 'pr-8 pl-1'}`}>
+                                        <div className={`flex-1 overflow-y-auto pb-32 space-y-2 scrollbar-thin scrollbar-thumb-[#B87333]/20 ${isSidebarCollapsed ? 'pr-0' : 'pr-8 pl-1'}`}>
                                             {!isSidebarCollapsed && (
                                                 <div className="absolute right-0 top-0 bottom-0 w-8 pointer-events-none bg-gradient-to-l from-black/20 to-transparent z-10" title="Zona de deslize" />
                                             )}
@@ -4322,7 +4385,7 @@ function App() {
                                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500 pointer-events-none" />
                                             <input type="text" placeholder="Buscar lista..." value={listSearchTerm} onChange={e => setListSearchTerm(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl pl-9 pr-4 py-3 text-[11px] font-bold text-white placeholder:text-slate-600 focus:outline-none focus:border-[#B87333]/50 transition-all" />
                                         </div>
-                                        <div className="flex-1 overflow-y-auto pr-2 space-y-3 custom-scrollbar">
+                                        <div className="flex-1 overflow-y-auto pb-32 pr-2 space-y-3 custom-scrollbar">
                                             {(() => {
                                                 const allPlaylists = Array.isArray(savedPlaylists) ? savedPlaylists : JSON.parse(localStorage.getItem('iron_chords_playlists') || '[]');
                                                 const filteredPlaylists = allPlaylists.filter(pl => pl.name.toLowerCase().includes(listSearchTerm.toLowerCase()));
@@ -4384,7 +4447,13 @@ function App() {
                                         <X className="w-5 h-5" />
                                     </button>
                                 )}
-                                <div ref={scrollContainerRef} className="flex-1 overflow-auto overflow-x-auto p-4 md:p-16 scroll-smooth scrollbar-none pb-64 w-full">
+                                <div 
+                                    ref={scrollContainerRef} 
+                                    onTouchStart={() => { lastManualScrollTime.current = Date.now(); }}
+                                    onTouchMove={() => { lastManualScrollTime.current = Date.now(); }}
+                                    onWheel={() => { lastManualScrollTime.current = Date.now(); }}
+                                    className="flex-1 overflow-auto overflow-x-auto p-4 md:p-16 scroll-smooth scrollbar-none pb-64 w-full"
+                                >
 
                                     <div className="max-w-4xl mx-auto space-y-1 printable-area">
                                         {/* Print Only Header */}
