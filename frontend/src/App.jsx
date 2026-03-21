@@ -29,11 +29,10 @@ const API_BASE_URL = getBaseUrl().replace(/\/api\/?$/, '');
 // -------------------------------------------------------------------
 // PINCH-TO-ZOOM HOOK – adjusts font size when user pinches on mobile
 // -------------------------------------------------------------------
-function usePinchZoom(containerRef, fontSize, setFontSize, minSize = 12, maxSize = 60, onPinchActive = null) {
+function usePinchZoom(containerRef, fontSize, setFontSize, minSize = 12, maxSize = 60, onPinchActive = null, onPinchUpdate = null) {
     const lastDistRef = React.useRef(null);
     const targetFontSizeRef = React.useRef(fontSize);
 
-    // Sync ref with external state when state changes from elsewhere (like buttons)
     React.useEffect(() => {
         targetFontSizeRef.current = fontSize;
     }, [fontSize]);
@@ -53,6 +52,8 @@ function usePinchZoom(containerRef, fontSize, setFontSize, minSize = 12, maxSize
             if (e.touches.length === 2) {
                 lastDistRef.current = getTouchDist(e.touches);
                 if (onPinchActive) onPinchActive(true);
+                // Lock scrolling during pinch to prevent weird jumping
+                el.style.touchAction = 'none';
             }
         };
 
@@ -62,44 +63,47 @@ function usePinchZoom(containerRef, fontSize, setFontSize, minSize = 12, maxSize
             const newDist = getTouchDist(e.touches);
             const delta = newDist - lastDistRef.current;
 
-            // Only prevent default and block touch-action if we are actually pinching
-            if (e.cancelable) {
-                e.preventDefault();
-            }
+            if (e.cancelable) e.preventDefault();
 
-            // Direct DOM manipulation for instant feedback with ZERO React re-renders!
             if (Math.abs(delta) > 1) { 
-                const zoomFactor = delta > 0 ? 0.5 : -0.5; 
+                const zoomFactor = delta > 0 ? 0.6 : -0.6; // Slightly more sensitive
                 targetFontSizeRef.current = Math.min(maxSize, Math.max(minSize, targetFontSizeRef.current + zoomFactor));
                 
-                // Apply directly to the DOM for 60fps performance
+                // Instant DOM feedback
                 el.style.fontSize = `${targetFontSizeRef.current}px`;
+                
+                // Live callback for the visual bar/UI
+                if (onPinchUpdate) onPinchUpdate(targetFontSizeRef.current);
                 
                 lastDistRef.current = newDist;
             }
         };
 
-        const onTouchEnd = () => {
-            if (lastDistRef.current !== null && onPinchActive) onPinchActive(false);
+        const onTouchEnd = (e) => {
+            if (lastDistRef.current !== null) {
+                if (onPinchActive) onPinchActive(false);
+                // Restore normal scrolling
+                el.style.touchAction = 'pan-y';
+                // Sync with React state
+                setFontSize(targetFontSizeRef.current);
+            }
             lastDistRef.current = null;
-            // Sync the final size with React state ONLY when the gesture finishes
-            setFontSize(targetFontSizeRef.current);
         };
 
-        // Passive false is required to call preventDefault()
         el.addEventListener('touchstart', onTouchStart, { passive: true });
         el.addEventListener('touchmove', onTouchMove, { passive: false });
         el.addEventListener('touchend', onTouchEnd, { passive: true });
+        el.addEventListener('touchcancel', onTouchEnd, { passive: true });
 
-        // Add CSS to block native browser zoom behavior on this element during interaction
         el.style.touchAction = 'pan-y'; 
 
         return () => {
             el.removeEventListener('touchstart', onTouchStart);
             el.removeEventListener('touchmove', onTouchMove);
             el.removeEventListener('touchend', onTouchEnd);
+            el.removeEventListener('touchcancel', onTouchEnd);
         };
-    }, [containerRef, setFontSize, minSize, maxSize]);
+    }, [containerRef, setFontSize, minSize, maxSize, onPinchActive, onPinchUpdate]);
 }
 
 
@@ -1350,17 +1354,19 @@ function App() {
     };
     // Pinch Font Size Bar
     const [showPinchBar, setShowPinchBar] = useState(false);
+    const [pinchLiveFontSize, setPinchLiveFontSize] = useState(19);
     const pinchBarTimerRef = useRef(null);
     const handlePinchActive = useCallback((active) => {
         if (active) {
             setShowPinchBar(true);
+            // Initialize live font size with current state
+            setPinchLiveFontSize(playerFontSize); 
             if (pinchBarTimerRef.current) clearTimeout(pinchBarTimerRef.current);
         } else {
-            // Keep bar visible for 3s after user lifts fingers
             if (pinchBarTimerRef.current) clearTimeout(pinchBarTimerRef.current);
             pinchBarTimerRef.current = setTimeout(() => setShowPinchBar(false), 3000);
         }
-    }, []);
+    }, [playerFontSize]);
     // Enhanced Save Modal (Feature 3)
     const [saveMode, setSaveMode] = useState('new'); // 'new' | 'append'
     const dragItem = useRef(null);
@@ -1810,8 +1816,8 @@ function App() {
     }, []);
 
     // Apply Pinch-to-Zoom Hook to both containers safely
-    usePinchZoom(scrollContainerRef, playerFontSize, setPlayerFontSize, 12, 60, handlePinchActive);
-    usePinchZoom(manualScrollContainerRef, manualFontSize, setManualFontSize, 12, 60, handlePinchActive);
+    usePinchZoom(scrollContainerRef, playerFontSize, setPlayerFontSize, 12, 60, handlePinchActive, setPinchLiveFontSize);
+    usePinchZoom(manualScrollContainerRef, manualFontSize, setManualFontSize, 12, 60, handlePinchActive, setPinchLiveFontSize);
 
     // AutoScroll Effect with Mic interaction (Manual / Player / Presentation)
     useEffect(() => {
@@ -4722,6 +4728,7 @@ function App() {
                                     onTouchMove={() => { lastManualScrollTime.current = Date.now(); }}
                                     onWheel={() => { lastManualScrollTime.current = Date.now(); }}
                                     className="flex-1 overflow-auto overflow-x-auto p-4 md:p-16 scroll-smooth scrollbar-none pb-64 w-full"
+                                    style={{ fontSize: `${playerFontSize}px` }}
                                 >
 
                                     <div className="max-w-4xl mx-auto space-y-1 printable-area">
@@ -4771,7 +4778,6 @@ function App() {
                                                         ${isActive ? 'bg-[#B87333]/30 scale-[1.08] z-10 shadow-[0_10px_30px_rgba(0,0,0,0.5)] ring-1 ring-white/10' : 'hover:bg-white/5'}
                                                         ${isPast ? 'opacity-40 grayscale-[0.5]' : 'opacity-100'}
                                                     `}
-                                                        style={{ fontSize: `${playerFontSize}px` }}
                                                     >
                                                         {isActive && <div className="absolute left-0 w-2 h-full bg-[#B87333] rounded-full shadow-[0_0_20px_rgba(184,115,51,0.8)] animate-pulse"></div>}
                                                         <pre className={`font-mono leading-relaxed whitespace-pre transition-colors duration-500
@@ -4792,13 +4798,13 @@ function App() {
                             {/* === PINCH FONT SIZE VISUAL BAR === */}
                             <div className={`absolute bottom-[100px] left-1/2 -translate-x-1/2 bg-black/85 backdrop-blur-3xl border border-white/10 rounded-full px-5 py-2.5 shadow-[0_20px_40px_rgba(0,0,0,0.8)] flex items-center justify-center gap-4 z-[350] transition-all duration-300 pointer-events-none ${showPinchBar ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-8 scale-90'}`}>
                                 <span className="absolute -top-7 text-[10px] font-black tracking-widest text-[#B87333]">
-                                    {Math.round(playerFontSize)}
+                                    {Math.round(pinchLiveFontSize)}
                                 </span>
                                 <span className="text-white/40 text-[11px] font-black uppercase">A</span>
                                 <div className="w-40 sm:w-56 h-1.5 bg-white/10 rounded-full overflow-hidden relative">
                                     <div 
                                         className="h-full bg-[#B87333] transition-all duration-75 relative"
-                                        style={{ width: `${Math.max(0, Math.min(100, ((playerFontSize - 12) / (60 - 12)) * 100))}%` }}
+                                        style={{ width: `${Math.max(0, Math.min(100, ((pinchLiveFontSize - 12) / (60 - 12)) * 100))}%` }}
                                     >
                                         <div className="absolute right-0 top-0 bottom-0 w-1.5 bg-white rounded-full shadow-[0_0_10px_white]" />
                                     </div>
@@ -5283,7 +5289,10 @@ function App() {
                                                                     flex-1 overflow-auto overflow-x-auto ${isManualFullscreen ? 'p-4 md:p-20 pt-16 md:pt-24' : 'p-4 md:p-10'}
                                                                     scrollbar-none pb-32 transition-all w-full
                                                                 `}
-                                                                style={{ maxHeight: isManualFullscreen ? '100vh' : '500px' }}
+                                                                style={{ 
+                                                                    maxHeight: isManualFullscreen ? '100vh' : '500px',
+                                                                    fontSize: `${manualFontSize}px`
+                                                                }}
                                                             >
                                                                 <div className="printable-area">
                                                                     {/* Print Only Header */}
@@ -5323,7 +5332,7 @@ function App() {
                                                                                 const isChordLine = !!(line && line.trim().length > 0 && (line.match(CHORD_TOKEN_RE) || []).length > 0 && line.replace(CHORD_TOKEN_RE, '').replace(/[\s|()\-xX0-9:]/g, '').length < Math.max(2, line.trim().length * 0.5));
 
                                                                                 return (
-                                                                                    <pre key={lIdx} className={`font-mono leading-relaxed whitespace-pre break-inside-avoid ${isChordLine ? 'text-[#B87333] print:text-[#B87333] font-black italic tracking-tight mb-0' : 'text-slate-300 print:text-gray-900 font-medium mb-1'}`} style={{ fontSize: `${manualFontSize}px` }}>
+                                                                                    <pre key={lIdx} className={`font-mono leading-relaxed whitespace-pre break-inside-avoid ${isChordLine ? 'text-[#B87333] print:text-[#B87333] font-black italic tracking-tight mb-0' : 'text-slate-300 print:text-gray-900 font-medium mb-1'}`}>
                                                                                         {isChordLine
                                                                                             ? renderChordLine(line, (chord, anchor, isPersistent) => setChordTooltip({ chord, anchor, isPersistent }), manualPreviewSong.capo || 0)
                                                                                             : (line || ' ')}
