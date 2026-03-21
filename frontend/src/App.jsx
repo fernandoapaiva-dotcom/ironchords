@@ -1183,9 +1183,59 @@ const getSafeJSON = (key, defaultValue) => {
 function App() {
     const [authenticatedUser, setAuthenticatedUser] = useState(null);
     const [isAuthenticating, setIsAuthenticating] = useState(true);
+    const [deferredPrompt, setDeferredPrompt] = useState(null);
+    const [savedPlaylists, setSavedPlaylists] = useState(() => getSafeJSON('iron_chords_playlists', []));
+    const [activePlaylistName, setActivePlaylistName] = useState(null);
+    const [activeTab, setActiveTab] = useState('manual');
+    const [playerSidebarTab, setPlayerSidebarTab] = useState('fila'); 
+    const [listasSubTab, setListasSubTab] = useState('salvas');
+    const [songs, setSongs] = useState([]);
+    const [selectedManualIndex, setSelectedManualIndex] = useState(null);
+    const [isFullScreenPlayer, setIsFullScreenPlayer] = useState(false);
+    const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+    const [isTransposing, setIsTransposing] = useState(false);
+    const [isGenerating, setIsGenerating] = useState(false);
+    const [isImmersiveMode, setIsImmersiveMode] = useState(false);
+    const [isStageModeActive, setIsStageModeActive] = useState(false);
+    const [isBlowDetectEnabled, setIsBlowDetectEnabled] = useState(false);
+    const [isDynamicSpeedActive, setIsDynamicSpeedActive] = useState(false);
+    const [isAutoScrolling, setIsAutoScrolling] = useState(false);
+    const [scrollSpeed, setScrollSpeed] = useState(1);
+    const [playerFontSize, setPlayerFontSize] = useState(19);
+    const [manualFontSize, setManualFontSize] = useState(18);
+    const [printFontSize, setPrintFontSize] = useState(15);
+    const [micEnabled, setMicEnabled] = useState(false);
+    const [currentLineIndex, setCurrentLineIndex] = useState(0);
+    const [scrollProgress, setScrollProgress] = useState(0);
+    const [presenterSongIndex, setPresenterSongIndex] = useState(0);
+
+    const sharedAudioStreamRef = useRef(null);
+    const audioTrackerRef = useRef(null);
+    const syncLineByTextRef = useRef(null);
+    const scrollContainerRef = useRef(null);
+    const manualScrollContainerRef = useRef(null);
+    const currentLineIndexRef = useRef(0);
+    const recognitionRef = useRef(null);
+    const blowDetectRef = useRef(null);
+    const wakeLockRef = useRef(null);
+    const audioContextRef = useRef(null);
+    const analyserRef = useRef(null);
+    const playerSearchDebounceRef = useRef(null);
+    const lastManualScrollTime = useRef(0);
+    const wasInPlayerRef = useRef(false);
+    const driftHistoryRef = useRef([]);
+    const lastBpmAdjustTimeRef = useRef(Date.now());
+    const lastVoiceMatchedIndexRef = useRef(0);
+    const silenceTimerRef = useRef(null);
+    const lastVoiceTimeRef = useRef(Date.now());
+    const lastJumpRef = useRef(0);
+    const lastMatchTimeRef = useRef(Date.now());
+    const micLevelRef = useRef(0);
+    const isPausedBySilenceRef = useRef(false);
+    
     // Simple versioning to force refresh if needed (optional)
     const APP_VERSION = '1.0.1'; 
-    const [deferredPrompt, setDeferredPrompt] = useState(null);
+
 
     useEffect(() => {
         const handleBeforeInstallPrompt = (e) => {
@@ -1295,39 +1345,20 @@ function App() {
         }
     };
 
-    const [activePlaylistName, setActivePlaylistName] = useState(null);
-    const [activeTab, setActiveTab] = useState('manual');
-    const [playerSidebarTab, setPlayerSidebarTab] = useState('fila'); // 'fila' | 'listas'
-    const [listasSubTab, setListasSubTab] = useState('salvas');
-    const [songs, setSongs] = useState([]);
-    const [selectedManualIndex, setSelectedManualIndex] = useState(null);
-    const [isFullScreenPlayer, setIsFullScreenPlayer] = useState(false);
-    const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-    const [isTransposing, setIsTransposing] = useState(false);
-    const [isGenerating, setIsGenerating] = useState(false);
     // Player Song Search (sidebar)
     const [playerSongSearch, setPlayerSongSearch] = useState('');
     const [playerSongSearchLoading, setPlayerSongSearchLoading] = useState(false);
     const [playerSongSuggestions, setPlayerSongSuggestions] = useState([]);
     const [addingSongSlug, setAddingSongSlug] = useState(null);
 
-    // Format song to CIFRA text format
-    const playerSearchDebounceRef = useRef(null);
-    // Immersive Fullscreen (Feature 6)
-    const [isImmersiveMode, setIsImmersiveMode] = useState(false);
     const [showImmersiveControls, setShowImmersiveControls] = useState(false);
     const immersiveHideTimerRef = useRef(null);
     // Stage Mode (Modo Palco) — distraction-free display
-    const [isStageModeActive, setIsStageModeActive] = useState(false);
     const [showStageControls, setShowStageControls] = useState(false);
     const stageControlsTimerRef = useRef(null);
     // Wake Lock
-    const wakeLockRef = useRef(null);
     // Blow Detection
-    const [isBlowDetectEnabled, setIsBlowDetectEnabled] = useState(false);
     const [blowFlash, setBlowFlash] = useState(false);
-    const blowDetectRef = useRef(null);
-    const sharedAudioStreamRef = useRef(null);
 
     const getSharedMicStream = async () => {
         if (sharedAudioStreamRef.current && sharedAudioStreamRef.current.active) return sharedAudioStreamRef.current;
@@ -1386,7 +1417,6 @@ function App() {
     const [includeToc, setIncludeToc] = useState(true);
     const [includeDictionary, setIncludeDictionary] = useState(true);
     const coverInputRef = useRef(null);
-    const lastManualScrollTime = useRef(0);
 
     // Manual Form State
     const [songName, setSongName] = useState('');
@@ -1405,7 +1435,6 @@ function App() {
     const [showSuggestions, setShowSuggestions] = useState(false);
     const [availableVersions, setAvailableVersions] = useState([{ name: 'Principal', key: 'Principal' }]);
     const [showPlayerControls, setShowPlayerControls] = useState(true);
-    const [scrollProgress, setScrollProgress] = useState(0);
     const [showUserManagement, setShowUserManagement] = useState(false);
     const [showSettingsModal, setShowSettingsModal] = useState(false);
     const [isManualColumns, setIsManualColumns] = useState(false);
@@ -1413,14 +1442,8 @@ function App() {
     const [manualCapo, setManualCapo] = useState(0);
     const [manualPreviewSong, setManualPreviewSong] = useState(null);
     const [stagedSongs, setStagedSongs] = useState([]);
-    const [manualScrollSpeed, setManualScrollSpeed] = useState(1);
-    const [isManualAutoScrolling, setIsManualAutoScrolling] = useState(false);
-    const [manualFontSize, setManualFontSize] = useState(18);
-    const [printFontSize, setPrintFontSize] = useState(15);
-    const [isManualFullscreen, setIsManualFullscreen] = useState(false);
     const [chordDiagramOverlay, setChordDiagramOverlay] = useState(null);
     const [chordTooltip, setChordTooltip] = useState(null); // { chord, anchor }
-    const manualScrollContainerRef = useRef(null);
     // Modern Mobile Bottom Bar Drawer
     const [showBottomToolsDrawer, setShowBottomToolsDrawer] = useState(false);
 
@@ -1488,14 +1511,6 @@ function App() {
     }, [batchFixData?.song_name]);
 
     // Presentation Mode State
-    const [presenterSongIndex, setPresenterSongIndex] = useState(0);
-    const [isAutoScrolling, setIsAutoScrolling] = useState(false);
-    const [isDynamicSpeedActive, setIsDynamicSpeedActive] = useState(false);
-    const [scrollSpeed, setScrollSpeed] = useState(1);
-    const scrollContainerRef = useRef(null);
-    const wasInPlayerRef = useRef(false);
-
-
     // Save List State
     const [saveListModalOpen, setSaveListModalOpen] = useState(false);
     const [saveListName, setSaveListName] = useState('');
@@ -1722,15 +1737,6 @@ function App() {
         }
     };
 
-    const [micEnabled, setMicEnabled] = useState(false);
-    const [micLevel, setMicLevel] = useState(0);
-    const audioContextRef = useRef(null);
-    const analyserRef = useRef(null);
-
-    const [detectedNote, setDetectedNote] = useState(null);
-    const [transcriptRaw, setTranscriptRaw] = useState('');
-    const [currentLineIndex, setCurrentLineIndex] = useState(0);
-    const [playerFontSize, setPlayerFontSize] = useState(19);
     const [bpm, setBpm] = useState(80);
     const [isRhythmicMode, setIsRhythmicMode] = useState(true);
     const [isAnchored, setIsAnchored] = useState(false);
@@ -1745,7 +1751,6 @@ function App() {
     const [currentStep, setCurrentStep] = useState(1);
 
     // Playlists Persistence
-    const [savedPlaylists, setSavedPlaylists] = useState(() => getSafeJSON('iron_chords_playlists', []));
 
     // Auto-Save Effect for Active Playlist
     useEffect(() => {
@@ -1761,18 +1766,8 @@ function App() {
     const [playlistNameInput, setPlaylistNameInput] = useState('');
     const [showPlaylistManager, setShowPlaylistManager] = useState(false);
 
-    const currentLineIndexRef = useRef(0);
-    const recognitionRef = useRef(null);
-    const advanceTimerRef = useRef(null);
-    const driftHistoryRef = useRef([]);
-    const lastBpmAdjustTimeRef = useRef(Date.now());
-    const lastVoiceMatchedIndexRef = useRef(0);
-    const silenceTimerRef = useRef(null);
-    const lastVoiceTimeRef = useRef(Date.now());
-    const lastJumpRef = useRef(0);
-    const lastMatchTimeRef = useRef(Date.now());
-    const micLevelRef = useRef(0);
-    const isPausedBySilenceRef = useRef(false);
+    const [transcriptRaw, setTranscriptRaw] = useState('');
+    const [detectedNote, setDetectedNote] = useState(null);
     useEffect(() => { isPausedBySilenceRef.current = isPausedBySilence; }, [isPausedBySilence]);
 
     // URL-Based Import Check (Short Links & Legacy B64)
@@ -2147,8 +2142,7 @@ function App() {
 
 
     // Mic Level & Frequency Listener
-    const audioTrackerRef = useRef(null);
-    const syncLineByTextRef = useRef(null);
+    // Mic Level & Frequency Listener
 
     useEffect(() => {
         if (audioTrackerRef.current) {
