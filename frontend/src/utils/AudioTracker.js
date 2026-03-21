@@ -30,11 +30,11 @@ export class AudioTracker {
         }
     }
 
-    async start() {
+    async start(externalStream) {
         if (this.isMicActive) return;
 
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({
+            const stream = externalStream || await navigator.mediaDevices.getUserMedia({
                 audio: {
                     echoCancellation: false,
                     noiseSuppression: false,
@@ -122,32 +122,22 @@ export class AudioTracker {
     }
 
     stopSpeechRecognition() {
-        if (this.recognition) {
-            try {
-                this.recognition.stop();
-            } catch (e) { }
-            this.recognition = null;
-        }
+        if (this.speechBufferInterval) clearInterval(this.speechBufferInterval);
+        try { if (this.recognitionA) this.recognitionA.abort(); } catch(e){}
+        try { if (this.recognitionB) this.recognitionB.abort(); } catch(e){}
+        this.activeRec = null;
     }
 
-    startSpeechRecognition() {
-        if (this.recognition) return;
+    createRecognizer(id) {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        if (!SpeechRecognition) return;
+        const rec = new SpeechRecognition();
+        rec.continuous = true;
+        rec.interimResults = true;
+        rec.lang = 'pt-BR';
 
-        this.recognition = new SpeechRecognition();
-        this.recognition.continuous = true;
-        this.recognition.interimResults = true;
-        this.recognition.lang = 'pt-BR';
-
-        // Grammar injection removed to prioritize real-time language model speed
-
-        this.recognition.onstart = () => {
-            console.log("[AudioTracker] Speech Recognition officially STARTED");
-            // Don't fire the onSpeechResult callback for system messages – it clutters the UI
-        };
-
-        this.recognition.onresult = (event) => {
+        rec.onresult = (event) => {
+            // Only process results from the ACTIVE recognizer
+            if (this.activeRec !== id) return;
             let interimText = '';
             let finalText = '';
             for (let i = event.resultIndex; i < event.results.length; i++) {
@@ -160,31 +150,75 @@ export class AudioTracker {
             }
         };
 
-        this.recognition.onerror = (e) => {
-            console.warn("[AudioTracker] SpeechRec Error:", e.error);
-            // 'aborted' = intentional stop, 'no-speech' = silence timeout (onend will restart)
+        rec.onerror = (e) => {
             if (e.error === 'aborted' || e.error === 'no-speech') return;
-            if (this.onSpeechResult) this.onSpeechResult(`[ERRO VOZ: ${e.error}]`, false);
-            if (e.error === 'network') {
-                this.stopSpeechRecognition();
-                setTimeout(() => this.startSpeechRecognition(), 2000);
+            // network error happens often when they compete for mic, ignore it gracefully
+        };
+
+        rec.onend = () => {
+            // If it's the active one that died prematurely, restart it aggressively
+            if (this.activeRec === id && this.isMicActive) {
+                setTimeout(() => {
+                    try { if (this.activeRec === id) rec.start(); } catch (e) {}
+                }, 50);
             }
         };
 
-        this.recognition.onend = () => {
-            // The browser's Speech Recognition engine automatically stops after a while.
-            // If the user still has IA Sync ON (isMicActive), we MUST restart it instantly.
-            if (this.isMicActive) {
-                this.recognition = null; // Clear old instance
-                setTimeout(() => this.startSpeechRecognition(), 200);
-            }
-        };
+        return rec;
+    }
+
+    switchRecognizer() {
+        if (!this.isMicActive) return;
+        const oldId = this.activeRec;
+        const newId = oldId === 'A' ? 'B' : 'A';
+        this.activeRec = newId;
 
         try {
-            this.recognition.start();
+            if (newId === 'A') this.recognitionA.start();
+            else this.recognitionB.start();
+            
+            // Stop the old one after a tiny overlap to avoid missing words
+            setTimeout(() => {
+                try {
+                    if (oldId === 'A') this.recognitionA.stop();
+                    else this.recognitionB.stop();
+                } catch(e){}
+            }, 300);
+
+            console.log(`[AudioTracker] IA Sync Double Buffer swapped ${oldId} -> ${newId}`);
         } catch (e) {
-            console.error("[AudioTracker] Failed to start SpeechRecognition:", e);
+            console.warn("[AudioTracker] Fast switch overlap blocked:", e.message);
         }
+    }
+
+    startSpeechRecognition() {
+        if (!this.isMicActive) return;
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognition) return;
+
+        if (!this.recognitionA) {
+            this.recognitionA = this.createRecognizer('A');
+            this.recognitionB = this.createRecognizer('B');
+            this.activeRec = 'A';
+        }
+
+        try {
+            if (this.activeRec === 'A') this.recognitionA.start();
+            else this.recognitionB.start();
+            console.log("[AudioTracker] SpeechRec DOUBLE BUFFER started with:", this.activeRec);
+        } catch (e) {
+            console.error("[AudioTracker] Failed to start Double Buffer SpeechRecognition:", e);
+        }
+
+        // Start the double buffer alternator
+        if (this.speechBufferInterval) clearInterval(this.speechBufferInterval);
+        this.speechBufferInterval = setInterval(() => {
+            if (!this.isMicActive) {
+                clearInterval(this.speechBufferInterval);
+                return;
+            }
+            this.switchRecognizer();
+        }, 5000); // Swap engine every 5 seconds to prevent Android native freeze
     }
 
     async setupWebSocket() {

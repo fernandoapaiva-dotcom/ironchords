@@ -1323,6 +1323,31 @@ function App() {
     const [isBlowDetectEnabled, setIsBlowDetectEnabled] = useState(false);
     const [blowFlash, setBlowFlash] = useState(false);
     const blowDetectRef = useRef(null);
+    const sharedAudioStreamRef = useRef(null);
+
+    const getSharedMicStream = async () => {
+        if (sharedAudioStreamRef.current && sharedAudioStreamRef.current.active) return sharedAudioStreamRef.current;
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({
+                audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
+            });
+            sharedAudioStreamRef.current = stream;
+            return stream;
+        } catch (e) {
+            console.warn("[MediaStream] Mic denied:", e);
+            throw e;
+        }
+    };
+
+    const releaseSharedMicStream = (force = false) => {
+        // Only release if BOTH features are disabled
+        if (force || (!isDynamicSpeedActive && !isBlowDetectEnabled)) {
+            if (sharedAudioStreamRef.current) {
+                sharedAudioStreamRef.current.getTracks().forEach(t => t.stop());
+                sharedAudioStreamRef.current = null;
+            }
+        }
+    };
     // Pinch Font Size Bar
     const [showPinchBar, setShowPinchBar] = useState(false);
     const pinchBarTimerRef = useRef(null);
@@ -1937,12 +1962,18 @@ function App() {
         };
     }, [isStageModeActive]);
 
-    // === BLOW DETECTION: Short mic puff advances a page ===
+    // === BLOW DETECTION: Sustained mic puff advances a page ===
     useEffect(() => {
-        if (!isBlowDetectEnabled) return;
-        let localCtx = null, localSource = null, localAnalyser = null, localStream = null, raf = null;
+        if (!isBlowDetectEnabled) {
+            releaseSharedMicStream();
+            return;
+        }
+        let localCtx = null, localSource = null, localAnalyser = null, raf = null;
         let lastBlowTime = 0, burstStartTime = 0, inBurst = false;
-        const BLOW_THRESHOLD = 80, BLOW_MAX_DURATION = 350;
+        
+        // Calibration: Threshold increased slightly, requires MIN duration to ignore sharp clicks
+        const BLOW_THRESHOLD = 90, MIN_BLOW_DURATION = 50, BLOW_MAX_DURATION = 350;
+        
         const checkBlow = () => {
             if (localAnalyser) {
                 const buf = new Float32Array(localAnalyser.fftSize);
@@ -1951,10 +1982,14 @@ function App() {
                 for (let i = 0; i < buf.length; i++) rms += buf[i] * buf[i];
                 rms = Math.sqrt(rms / buf.length) * 500;
                 const now = Date.now();
-                if (rms > BLOW_THRESHOLD && !inBurst) { inBurst = true; burstStartTime = now; }
-                else if (rms < BLOW_THRESHOLD * 0.4 && inBurst) {
+                
+                if (rms > BLOW_THRESHOLD && !inBurst) { 
+                    inBurst = true; 
+                    burstStartTime = now; 
+                } else if (rms < BLOW_THRESHOLD * 0.4 && inBurst) {
                     const dur = now - burstStartTime;
-                    if (dur < BLOW_MAX_DURATION && now - lastBlowTime > 800) {
+                    // Filter: Must sustain for > 50ms (not a click) but < 350ms (not singing)
+                    if (dur > MIN_BLOW_DURATION && dur < BLOW_MAX_DURATION && now - lastBlowTime > 800) {
                         lastBlowTime = now;
                         const container = scrollContainerRef.current;
                         if (container) {
@@ -1969,20 +2004,29 @@ function App() {
             }
             raf = requestAnimationFrame(checkBlow);
         };
-        navigator.mediaDevices.getUserMedia({ audio: true, video: false }).then(stream => {
-            localStream = stream;
-            localCtx = new (window.AudioContext || window.webkitAudioContext)();
-            localAnalyser = localCtx.createAnalyser();
-            localAnalyser.fftSize = 256;
-            localSource = localCtx.createMediaStreamSource(stream);
-            localSource.connect(localAnalyser);
-            raf = requestAnimationFrame(checkBlow);
-        }).catch(err => { console.warn('[BlowDetect] Mic denied:', err); setIsBlowDetectEnabled(false); });
+
+        const setup = async () => {
+            try {
+                const stream = await getSharedMicStream();
+                localCtx = new (window.AudioContext || window.webkitAudioContext)();
+                localAnalyser = localCtx.createAnalyser();
+                localAnalyser.fftSize = 256;
+                localSource = localCtx.createMediaStreamSource(stream);
+                localSource.connect(localAnalyser);
+                raf = requestAnimationFrame(checkBlow);
+            } catch (err) {
+                console.warn('[BlowDetect] Mic denied:', err);
+                setIsBlowDetectEnabled(false);
+            }
+        };
+
+        setup();
+
         return () => {
             cancelAnimationFrame(raf);
             if (localSource) localSource.disconnect();
             if (localCtx) localCtx.close();
-            if (localStream) localStream.getTracks().forEach(t => t.stop());
+            // Don't kill the stream if IA Sync is still using it! (Handled by releaseSharedMicStream)
         };
     }, [isBlowDetectEnabled]);
 
@@ -2106,46 +2150,50 @@ function App() {
         }
     }, [micGain]);
 
-    const startAudioTracker = () => {
-        if (!audioTrackerRef.current) {
-            audioTrackerRef.current = new AudioTracker(
-                (detectedBpm) => {
-                    setBpm(prev => {
-                        const diff = detectedBpm - prev;
-                        if (Math.abs(diff) > 10) return prev + Math.sign(diff) * 2;
-                        return detectedBpm;
-                    });
-                },
-                (level) => {
-                    setMicLevel(level);
-                    micLevelRef.current = level;
-                },
-                (noteStr, centsOff, pitch) => {
-                    setDetectedNote(noteStr);
-                    setDetectedCents(centsOff);
-                    setDetectedPitch(pitch);
-                },
-                (text, isFinal) => {
-                    const isSystemMsg = text && (text.startsWith('[SISTEMA:') || text.startsWith('[ERRO VOZ:'));
-                    if (!isSystemMsg) setTranscriptRaw(text);
-                    lastVoiceTimeRef.current = Date.now();
-                    if (!isSystemMsg && syncLineByTextRef.current) syncLineByTextRef.current(text, isFinal);
-                },
-                (state) => setFsmState(state),
-                (status) => setConnectionStatus(status)
-            );
-        }
-        audioTrackerRef.current.start().then(() => {
-            if (audioTrackerRef.current) audioTrackerRef.current.setGain(micGain);
-            setMicEnabled(true);
-        }).catch((err) => {
-            console.error("Microphone access denied or error:", err);
-            setMicEnabled(false);
-            if (audioTrackerRef.current) {
-                audioTrackerRef.current.stop();
-                audioTrackerRef.current = null;
+    const startAudioTracker = async () => {
+        try {
+            const stream = await getSharedMicStream();
+            if (!audioTrackerRef.current) {
+                audioTrackerRef.current = new AudioTracker(
+                    (detectedBpm) => {
+                        setBpm(prev => {
+                            const diff = detectedBpm - prev;
+                            if (Math.abs(diff) > 10) return prev + Math.sign(diff) * 2;
+                            return detectedBpm;
+                        });
+                    },
+                    (level) => {
+                        setMicLevel(level);
+                        micLevelRef.current = level;
+                    },
+                    (noteStr, centsOff, pitch) => {
+                        setDetectedNote(noteStr);
+                        setDetectedCents(centsOff);
+                        setDetectedPitch(pitch);
+                    },
+                    (text, isFinal) => {
+                        const isSystemMsg = text && (text.startsWith('[SISTEMA:') || text.startsWith('[ERRO VOZ:'));
+                        if (!isSystemMsg) setTranscriptRaw(text);
+                        lastVoiceTimeRef.current = Date.now();
+                        if (!isSystemMsg && syncLineByTextRef.current) syncLineByTextRef.current(text, isFinal);
+                    },
+                    (state) => setFsmState(state),
+                    (status) => setConnectionStatus(status)
+                );
             }
-        });
+            audioTrackerRef.current.start(stream).then(() => {
+                if (audioTrackerRef.current) audioTrackerRef.current.setGain(micGain);
+                setMicEnabled(true);
+            }).catch((err) => {
+                console.error("AudioTracker initialization failed:", err);
+                setIsDynamicSpeedActive(false);
+                setMicEnabled(false);
+            });
+        } catch (e) {
+            console.error("Microphone access denied or error:", e);
+            setIsDynamicSpeedActive(false);
+            setMicEnabled(false);
+        }
     };
 
     const stopAudioTracker = () => {
@@ -2154,6 +2202,7 @@ function App() {
             audioTrackerRef.current = null;
         }
         setMicEnabled(false);
+        releaseSharedMicStream();
     };
 
     // Clear Live Transcript after 3 seconds of inactivity
