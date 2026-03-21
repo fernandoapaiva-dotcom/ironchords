@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { PhoneticMatcher } from './utils/PhoneticMatcher';
-import { Music, UploadCloud, Plus, Minus, FileText, CheckCircle, AlertCircle, Eye, EyeOff, FileAudio, Info, X, Guitar, Settings2, Image as ImageIcon, Database, Edit3, Trash2, ArrowRight, Play, Maximize, Maximize2, Pause, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Download, ArrowLeft, SkipBack, SkipForward, Save, Share2, FolderHeart, Flame, Hammer, Sparkles, RefreshCw, Zap, ShieldCheck, Monitor, Tv, Check, Users, LayoutList, Layout, Mic, Search, RotateCcw, Printer, Archive, GripVertical, Minimize2, Link, MessageCircle, Mail, ExternalLink, Smartphone, Apple, Copy } from 'lucide-react';
+import { Music, UploadCloud, Plus, Minus, FileText, CheckCircle, AlertCircle, Eye, EyeOff, FileAudio, Info, X, Guitar, Settings2, Image as ImageIcon, Database, Edit3, Trash2, ArrowRight, Play, Maximize, Maximize2, Pause, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Download, ArrowLeft, SkipBack, SkipForward, Save, Share2, FolderHeart, Flame, Hammer, Sparkles, RefreshCw, Zap, ShieldCheck, Monitor, Tv, Check, Users, LayoutList, Layout, Mic, Search, RotateCcw, Printer, Archive, GripVertical, Minimize2, Link, MessageCircle, Mail, ExternalLink, Smartphone, Apple, Copy, Wind, Footprints } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { SVGuitarChord } from 'svguitar';
 import { AudioTracker } from './utils/AudioTracker';
@@ -1311,6 +1311,16 @@ function App() {
     const [isImmersiveMode, setIsImmersiveMode] = useState(false);
     const [showImmersiveControls, setShowImmersiveControls] = useState(false);
     const immersiveHideTimerRef = useRef(null);
+    // Stage Mode (Modo Palco) — distraction-free display
+    const [isStageModeActive, setIsStageModeActive] = useState(false);
+    const [showStageControls, setShowStageControls] = useState(false);
+    const stageControlsTimerRef = useRef(null);
+    // Wake Lock
+    const wakeLockRef = useRef(null);
+    // Blow Detection
+    const [isBlowDetectEnabled, setIsBlowDetectEnabled] = useState(false);
+    const [blowFlash, setBlowFlash] = useState(false);
+    const blowDetectRef = useRef(null); // holds the interval/analyser state
     // Enhanced Save Modal (Feature 3)
     const [saveMode, setSaveMode] = useState('new'); // 'new' | 'append'
     const dragItem = useRef(null);
@@ -1848,6 +1858,118 @@ function App() {
             if (playerControlsTimerRef.current) clearTimeout(playerControlsTimerRef.current);
         };
     }, [isManualFullscreen]);
+
+    // === WAKE LOCK: Keep screen alive in player mode ===
+    useEffect(() => {
+        const isInPlayerView = isFullScreenPlayer || mainNav === 'player';
+        const requestWakeLock = async () => {
+            try {
+                if ('wakeLock' in navigator && isInPlayerView) {
+                    wakeLockRef.current = await navigator.wakeLock.request('screen');
+                }
+            } catch (err) {
+                console.warn('[WakeLock] Not supported or denied:', err.message);
+            }
+        };
+        const releaseWakeLock = async () => {
+            if (wakeLockRef.current) { await wakeLockRef.current.release(); wakeLockRef.current = null; }
+        };
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible' && isInPlayerView) requestWakeLock();
+        };
+        if (isInPlayerView) {
+            requestWakeLock();
+            document.addEventListener('visibilitychange', handleVisibilityChange);
+        } else { releaseWakeLock(); }
+        return () => { releaseWakeLock(); document.removeEventListener('visibilitychange', handleVisibilityChange); };
+    }, [isFullScreenPlayer, mainNav]);
+
+    // === KEYBOARD / BLUETOOTH PEDAL PAGE SCROLL ===
+    useEffect(() => {
+        const isInPlayerView = isFullScreenPlayer || mainNav === 'player';
+        if (!isInPlayerView) return;
+        const scrollPage = (dir) => {
+            const container = scrollContainerRef.current;
+            if (!container) return;
+            lastManualScrollTime.current = 0;
+            container.scrollBy({ top: dir * container.clientHeight * 0.85, behavior: 'smooth' });
+        };
+        const handleKeyDown = (e) => {
+            if (['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName)) return;
+            if ([' ','ArrowDown','ArrowRight','PageDown'].includes(e.key)) { e.preventDefault(); scrollPage(1); }
+            else if (['ArrowUp','ArrowLeft','PageUp'].includes(e.key)) { e.preventDefault(); scrollPage(-1); }
+            else if (e.key === 'Home') { e.preventDefault(); scrollContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' }); }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [isFullScreenPlayer, mainNav]);
+
+    // === STAGE MODE: Auto-hide overlay buttons after 2.5s ===
+    useEffect(() => {
+        if (!isStageModeActive) { setShowStageControls(false); return; }
+        const showBriefly = () => {
+            setShowStageControls(true);
+            if (stageControlsTimerRef.current) clearTimeout(stageControlsTimerRef.current);
+            stageControlsTimerRef.current = setTimeout(() => setShowStageControls(false), 2500);
+        };
+        window.addEventListener('touchstart', showBriefly, { passive: true });
+        window.addEventListener('mousedown', showBriefly);
+        showBriefly();
+        return () => {
+            window.removeEventListener('touchstart', showBriefly);
+            window.removeEventListener('mousedown', showBriefly);
+            if (stageControlsTimerRef.current) clearTimeout(stageControlsTimerRef.current);
+        };
+    }, [isStageModeActive]);
+
+    // === BLOW DETECTION: Short mic puff advances a page ===
+    useEffect(() => {
+        if (!isBlowDetectEnabled) return;
+        let localCtx = null, localSource = null, localAnalyser = null, localStream = null, raf = null;
+        let lastBlowTime = 0, burstStartTime = 0, inBurst = false;
+        const BLOW_THRESHOLD = 80, BLOW_MAX_DURATION = 350;
+        const checkBlow = () => {
+            if (localAnalyser) {
+                const buf = new Float32Array(localAnalyser.fftSize);
+                localAnalyser.getFloatTimeDomainData(buf);
+                let rms = 0;
+                for (let i = 0; i < buf.length; i++) rms += buf[i] * buf[i];
+                rms = Math.sqrt(rms / buf.length) * 500;
+                const now = Date.now();
+                if (rms > BLOW_THRESHOLD && !inBurst) { inBurst = true; burstStartTime = now; }
+                else if (rms < BLOW_THRESHOLD * 0.4 && inBurst) {
+                    const dur = now - burstStartTime;
+                    if (dur < BLOW_MAX_DURATION && now - lastBlowTime > 800) {
+                        lastBlowTime = now;
+                        const container = scrollContainerRef.current;
+                        if (container) {
+                            lastManualScrollTime.current = 0;
+                            container.scrollBy({ top: container.clientHeight * 0.85, behavior: 'smooth' });
+                            setBlowFlash(true);
+                            setTimeout(() => setBlowFlash(false), 300);
+                        }
+                    }
+                    inBurst = false;
+                }
+            }
+            raf = requestAnimationFrame(checkBlow);
+        };
+        navigator.mediaDevices.getUserMedia({ audio: true, video: false }).then(stream => {
+            localStream = stream;
+            localCtx = new (window.AudioContext || window.webkitAudioContext)();
+            localAnalyser = localCtx.createAnalyser();
+            localAnalyser.fftSize = 256;
+            localSource = localCtx.createMediaStreamSource(stream);
+            localSource.connect(localAnalyser);
+            raf = requestAnimationFrame(checkBlow);
+        }).catch(err => { console.warn('[BlowDetect] Mic denied:', err); setIsBlowDetectEnabled(false); });
+        return () => {
+            cancelAnimationFrame(raf);
+            if (localSource) localSource.disconnect();
+            if (localCtx) localCtx.close();
+            if (localStream) localStream.getTracks().forEach(t => t.stop());
+        };
+    }, [isBlowDetectEnabled]);
 
     // Track scroll progress for the progress bar
     useEffect(() => {
@@ -3879,6 +4001,15 @@ function App() {
                 >
                     {isImmersiveMode ? <Minimize2 className="w-4 h-4 sm:w-5 sm:h-5" /> : <Maximize2 className="w-4 h-4 sm:w-5 sm:h-5" />}
                 </button>
+
+                {/* Stage Mode (Modo Palco) Toggle */}
+                <button 
+                    onClick={() => setIsStageModeActive(s => !s)} 
+                    className={`p-2 sm:p-3 rounded-xl border transition-all shadow-xl flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 backdrop-blur-xl ${isStageModeActive ? 'bg-red-600/30 border-red-500 text-red-400 animate-pulse' : 'bg-[#16161D]/60 border-white/5 text-slate-500 hover:text-white hover:border-red-500/40'}`}
+                    title={isStageModeActive ? "Sair do Modo Palco" : "Modo Palco (Tela de Show)"}
+                >
+                    <Music className="w-4 h-4 sm:w-5 sm:h-5" />
+                </button>
             </div>
 
             {/* Chord Tooltip Overlay */}
@@ -3915,6 +4046,59 @@ function App() {
 
                 {(isFullScreenPlayer || mainNav === 'player') ? (
                     <div className="fixed inset-0 bg-[#070709] z-[100] flex flex-col animate-in fade-in zoom-in-95 duration-500">
+                        {/* === STAGE MODE OVERLAY === */}
+                        {isStageModeActive && (
+                            <div className="fixed inset-0 z-[500] bg-black flex flex-col overflow-hidden">
+                                {/* Blow flash feedback */}
+                                {blowFlash && <div className="fixed inset-0 z-[600] bg-white/10 pointer-events-none animate-ping" />}
+                                
+                                {/* Song content — max size, no distractions */}
+                                <div 
+                                    ref={scrollContainerRef}
+                                    onTouchStart={() => { lastManualScrollTime.current = Date.now(); }}
+                                    onTouchMove={() => { lastManualScrollTime.current = Date.now(); }}
+                                    className="flex-1 overflow-auto px-6 py-10 scrollbar-none"
+                                    style={{ fontSize: `${Math.max(playerFontSize, 22)}px` }}
+                                >
+                                    <div className="max-w-4xl mx-auto space-y-1">
+                                        {((currentSong?.include_tabs ?? includeTabs) === false
+                                            ? removeTablatureBlocks(currentSong?.content || "")
+                                            : currentSong?.content || "").split('\n').map((line, idx) => {
+                                            const trimmed = line.trim();
+                                            const isChord = !!(trimmed.length > 0 && (line.match(CHORD_TOKEN_RE) || []).length > 0 && line.replace(CHORD_TOKEN_RE, '').replace(/[\s|()\-xX0-9:]/g, '').length < Math.max(2, trimmed.length * 0.25));
+                                            return (
+                                                <div
+                                                    key={idx}
+                                                    data-line-index={idx}
+                                                    className={`leading-snug transition-all duration-300 ${currentLineIndex === idx ? 'text-[#B87333]' : isChord ? 'text-[#e97c3a] opacity-70' : 'text-white'}`}
+                                                    style={{ fontFamily: isChord ? 'monospace' : 'inherit', fontWeight: isChord ? 700 : 400 }}
+                                                >
+                                                    {trimmed || <br />}
+                                                </div>
+                                            );
+                                        })}
+                                        <div className="h-40" />
+                                    </div>
+                                </div>
+
+                                {/* Stage controls — auto-hide, tap to reveal */}
+                                <div className={`fixed bottom-0 inset-x-0 flex items-center justify-center gap-6 pb-8 pt-4 bg-gradient-to-t from-black/90 to-transparent transition-all duration-500 ${showStageControls ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'}`}>
+                                    <button onClick={() => { if (selectedManualIndex > 0) { setSelectedManualIndex(selectedManualIndex - 1); scrollContainerRef.current?.scrollTo({ top: 0 }); }}} className="w-14 h-14 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center">
+                                        <SkipBack className="w-6 h-6" />
+                                    </button>
+                                    <button onClick={() => { const s = !isAutoScrolling; setIsAutoScrolling(s); if (s) setIsDynamicSpeedActive(false); }} className={`w-16 h-16 rounded-full flex items-center justify-center transition-all ${isAutoScrolling ? 'bg-[#B87333] shadow-[0_0_30px_rgba(184,115,51,0.7)]' : 'bg-white text-[#070709]'}`}>
+                                        {isAutoScrolling ? <Pause className="w-7 h-7 text-white" /> : <Play className="w-7 h-7 ml-1" />}
+                                    </button>
+                                    <button onClick={() => { if (selectedManualIndex < songs.length - 1) { setSelectedManualIndex(selectedManualIndex + 1); scrollContainerRef.current?.scrollTo({ top: 0 }); }}} className="w-14 h-14 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center">
+                                        <SkipForward className="w-6 h-6" />
+                                    </button>
+                                    <button onClick={() => setIsStageModeActive(false)} className="absolute right-6 bottom-8 w-10 h-10 rounded-full bg-red-600/30 border border-red-500 text-red-400 flex items-center justify-center">
+                                        <X className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
                         {/* PLAYER HEADER — CLEAN TOP BAR */}
                         <div className={`bg-black/60 border-b border-white/5 backdrop-blur-2xl shrink-0 no-print w-full z-[200] transition-all duration-300 ${isImmersiveMode && !showImmersiveControls ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
                             <div className="flex items-center justify-between px-3 py-2 w-full">
@@ -4070,6 +4254,27 @@ function App() {
                                                 <button onClick={() => { const s = !isDynamicSpeedActive; setIsDynamicSpeedActive(s); if (s) { setIsAutoScrolling(false); startAudioTracker(); } else { stopAudioTracker(); } }} className={`w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl border transition-all ${isDynamicSpeedActive ? 'bg-blue-600 border-blue-600 text-white animate-pulse' : 'bg-white/5 border-white/10 text-slate-600 hover:text-slate-400'}`} title="IA Sync">
                                                     <Zap className="w-3.5 h-3.5" />
                                                     <span className="text-[10px] font-black uppercase">IA Sync</span>
+                                                </button>
+                                            </div>
+
+                                            {/* === Phase 2: Sopro + Pedal === */}
+                                            <div className="col-span-2 grid grid-cols-2 gap-4">
+                                                {/* Blow Detection */}
+                                                <button
+                                                    onClick={() => setIsBlowDetectEnabled(s => !s)}
+                                                    className={`w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl border transition-all ${isBlowDetectEnabled ? 'bg-green-600/20 border-green-500 text-green-400 animate-pulse' : 'bg-white/5 border-white/10 text-slate-600 hover:text-slate-400'}`}
+                                                    title="Soprar no mic para avançar página"
+                                                >
+                                                    <Wind className="w-3.5 h-3.5" />
+                                                    <span className="text-[10px] font-black uppercase">Sopro</span>
+                                                </button>
+                                                {/* Pedal hint */}
+                                                <button
+                                                    className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl border bg-white/5 border-white/10 text-slate-600 cursor-default"
+                                                    title="Conecte um pedal ou teclado Bluetooth — use Space/↓/PageDown para avançar, ↑/PageUp para voltar"
+                                                >
+                                                    <Footprints className="w-3.5 h-3.5" />
+                                                    <span className="text-[10px] font-black uppercase">Pedal BT</span>
                                                 </button>
                                             </div>
 
