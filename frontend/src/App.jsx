@@ -51,8 +51,9 @@ function usePinchZoom(containerRef, fontSize, setFontSize, minSize = 12, maxSize
 
         const onTouchStart = (e) => {
             if (e.touches.length === 2) {
+                e.preventDefault();
                 lastDistRef.current = getTouchDist(e.touches);
-                // Save and disable native overflow scroll so iOS/Android won't hijack the touch
+                // Disable native scroll so iOS/Android don't steal the gesture
                 savedOverflowRef.current = el.style.overflow;
                 el.style.overflow = 'hidden';
                 el.style.touchAction = 'none';
@@ -62,25 +63,26 @@ function usePinchZoom(containerRef, fontSize, setFontSize, minSize = 12, maxSize
 
         const onTouchMove = (e) => {
             if (e.touches.length !== 2 || lastDistRef.current === null) return;
-
-            if (e.cancelable) e.preventDefault();
+            e.preventDefault();
 
             const newDist = getTouchDist(e.touches);
-            const delta = newDist - lastDistRef.current;
+            if (newDist === 0) return;
 
-            if (Math.abs(delta) > 0.3) {
-                targetFontSizeRef.current = Math.min(maxSize, Math.max(minSize, targetFontSizeRef.current + (delta * 0.15)));
-                requestAnimationFrame(() => {
-                    el.style.fontSize = `${targetFontSizeRef.current}px`;
-                    if (onPinchUpdate) onPinchUpdate(targetFontSizeRef.current);
-                });
-                lastDistRef.current = newDist;
-            }
+            // Ratio-based scaling: 1:1 with finger movement
+            const ratio = newDist / lastDistRef.current;
+            const newSize = Math.min(maxSize, Math.max(minSize, targetFontSizeRef.current * ratio));
+            targetFontSizeRef.current = newSize;
+
+            // Apply directly for instant visual feedback
+            el.style.fontSize = `${newSize}px`;
+            if (onPinchUpdate) onPinchUpdate(newSize);
+
+            lastDistRef.current = newDist;
         };
 
-        const onTouchEnd = (e) => {
+        const onTouchEnd = () => {
             if (lastDistRef.current !== null) {
-                // Restore native overflow and touch handling
+                // Restore native scroll
                 el.style.overflow = savedOverflowRef.current || '';
                 el.style.touchAction = 'pan-y';
                 if (onPinchActive) onPinchActive(false);
@@ -89,7 +91,7 @@ function usePinchZoom(containerRef, fontSize, setFontSize, minSize = 12, maxSize
             lastDistRef.current = null;
         };
 
-        // touchstart must be non-passive so we can disable overflow before the OS locks in
+        // Non-passive so preventDefault() works on both start and move
         el.addEventListener('touchstart', onTouchStart, { passive: false });
         el.addEventListener('touchmove', onTouchMove, { passive: false });
         el.addEventListener('touchend', onTouchEnd, { passive: true });
@@ -4030,38 +4032,50 @@ function App() {
             {isGenerating && <MoltenLoading message={forgeMessage} current={batchProgress.current} total={batchProgress.total} />}
             <UserManagementModal isOpen={showUserManagement} onClose={() => setShowUserManagement(false)} API_BASE={`${API_BASE_URL}/api`} />
 
-            {/* Top-Right Global Controls Group */}
+            {/* Top-Right Global Controls Group — hidden when player is open (buttons move into sidebar) */}
             <div className="fixed top-2 right-2 sm:top-4 sm:right-4 z-[400] flex items-center gap-1.5 sm:gap-2 no-print">
-                {/* Batch Button */}
-                <button 
-                    onClick={() => setBatchModalOpen(true)}
-                    className="flex p-2 sm:p-3 bg-[#16161D]/60 backdrop-blur-xl border border-white/5 rounded-xl text-slate-500 hover:text-[#B87333] hover:border-[#B87333]/40 transition-all shadow-xl items-center justify-center gap-1 sm:gap-2 px-2 sm:px-4"
-                    title="Adicionar em Lote"
-                >
-                    <UploadCloud className="w-4 h-4 sm:w-5 sm:h-5" />
-                    <span className="text-[10px] font-black uppercase tracking-widest hidden lg:block">Em Lote</span>
-                </button>
 
-                {/* Booklet Button */}
-                <button 
-                    onClick={() => {
-                        setCurrentExportList({ name: "Fila Atual", songs: songs || [] });
-                        setExportStep(1);
-                        setDownloadUrl(null);
-                        setExportFormat('docx');
-                        setCoverImage(null);
-                        setShowExportModal(true);
-                    }}
-                    className="p-2 sm:p-3 bg-[#16161D]/60 backdrop-blur-xl border border-white/5 rounded-xl text-slate-500 hover:text-[#B87333] hover:border-[#B87333]/40 transition-all shadow-xl flex items-center justify-center gap-1 sm:gap-2 px-2 sm:px-4"
-                    title="Gerar Livreto"
-                >
-                    <FileText className="w-4 h-4 sm:w-5 sm:h-5" />
-                    <span className="text-[10px] font-black uppercase tracking-widest hidden lg:block">Livreto</span>
-                </button>
+                {/* Batch + Booklet + Share: visible only outside player */}
+                {!(isFullScreenPlayer || mainNav === 'player') && (
+                    <>
+                        <button 
+                            onClick={() => setBatchModalOpen(true)}
+                            className="flex p-2 sm:p-3 bg-[#16161D]/60 backdrop-blur-xl border border-white/5 rounded-xl text-slate-500 hover:text-[#B87333] hover:border-[#B87333]/40 transition-all shadow-xl items-center justify-center gap-1 sm:gap-2 px-2 sm:px-4"
+                            title="Adicionar em Lote"
+                        >
+                            <UploadCloud className="w-4 h-4 sm:w-5 sm:h-5" />
+                            <span className="text-[10px] font-black uppercase tracking-widest hidden lg:block">Em Lote</span>
+                        </button>
 
-                <div className="w-px h-6 bg-white/10 mx-1" />
+                        <button 
+                            onClick={() => {
+                                setCurrentExportList({ name: "Fila Atual", songs: songs || [] });
+                                setExportStep(1);
+                                setDownloadUrl(null);
+                                setExportFormat('docx');
+                                setCoverImage(null);
+                                setShowExportModal(true);
+                            }}
+                            className="p-2 sm:p-3 bg-[#16161D]/60 backdrop-blur-xl border border-white/5 rounded-xl text-slate-500 hover:text-[#B87333] hover:border-[#B87333]/40 transition-all shadow-xl flex items-center justify-center gap-1 sm:gap-2 px-2 sm:px-4"
+                            title="Gerar Livreto"
+                        >
+                            <FileText className="w-4 h-4 sm:w-5 sm:h-5" />
+                            <span className="text-[10px] font-black uppercase tracking-widest hidden lg:block">Livreto</span>
+                        </button>
 
-                {/* Global Settings Gear Icon */}
+                        <button 
+                            onClick={handleShareList} 
+                            className="p-2 sm:p-3 bg-[#16161D]/60 backdrop-blur-xl border border-white/5 rounded-xl text-slate-500 hover:text-white hover:border-[#B87333]/40 transition-all shadow-xl flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12" 
+                            title="Compartilhar"
+                        >
+                            <Share2 className="w-4 h-4 sm:w-5 sm:h-5 text-slate-500" />
+                        </button>
+
+                        <div className="w-px h-6 bg-white/10 mx-1" />
+                    </>
+                )}
+
+                {/* Settings — always visible */}
                 <button 
                     onClick={() => setShowSettingsModal(true)}
                     className="p-2 sm:p-3 bg-[#16161D]/60 backdrop-blur-xl border border-white/5 rounded-xl text-slate-500 hover:text-[#B87333] hover:border-[#B87333]/40 transition-all shadow-xl group flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12"
@@ -4070,16 +4084,7 @@ function App() {
                     <Settings2 className="w-5 h-5 sm:w-6 sm:h-6 group-hover:rotate-90 transition-transform duration-500" />
                 </button>
 
-                {/* Share Button (Always Visible) */}
-                <button 
-                    onClick={handleShareList} 
-                    className="p-2 sm:p-3 bg-[#16161D]/60 backdrop-blur-xl border border-white/5 rounded-xl text-slate-500 hover:text-white hover:border-[#B87333]/40 transition-all shadow-xl flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12" 
-                    title="Compartilhar"
-                >
-                    <Share2 className="w-4 h-4 sm:w-5 sm:h-5 text-slate-500" />
-                </button>
-
-                {/* Fullscreen Player Toggle */}
+                {/* Fullscreen Player Toggle — always visible */}
                 <button 
                     onClick={() => { setIsImmersiveMode(!isImmersiveMode); setShowImmersiveControls(false); }} 
                     className={`p-2 sm:p-3 rounded-xl border transition-all shadow-xl flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 backdrop-blur-xl ${isImmersiveMode ? 'bg-[#B87333]/20 border-[#B87333] text-[#B87333]' : 'bg-[#16161D]/60 border-white/5 text-slate-500 hover:text-white'}`} 
@@ -4088,7 +4093,7 @@ function App() {
                     {isImmersiveMode ? <Minimize2 className="w-4 h-4 sm:w-5 sm:h-5" /> : <Maximize2 className="w-4 h-4 sm:w-5 sm:h-5" />}
                 </button>
 
-                {/* Stage Mode (Modo Palco) Toggle */}
+                {/* Stage Mode — always visible */}
                 <button 
                     onClick={() => setIsStageModeActive(s => !s)} 
                     className={`p-2 sm:p-3 rounded-xl border transition-all shadow-xl flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 backdrop-blur-xl ${isStageModeActive ? 'bg-red-600/30 border-red-500 text-red-400 animate-pulse' : 'bg-[#16161D]/60 border-white/5 text-slate-500 hover:text-white hover:border-red-500/40'}`}
@@ -4230,13 +4235,10 @@ function App() {
                                     </button>
                                 </div>
 
-                                {/* Right: Reset + Share */}
+                                {/* Right: Reset only (Share is now in the sidebar) */}
                                 <div className="flex items-center justify-end gap-1.5 flex-1">
                                     <button onClick={() => { setCurrentLineIndex(0); currentLineIndexRef.current = 0; if (scrollContainerRef.current) scrollContainerRef.current.scrollTop = 0; }} className="w-8 h-8 rounded-xl flex items-center justify-center bg-white/5 text-slate-500 hover:text-[#B87333] hover:bg-[#B87333]/10 transition-all shrink-0" title="Reiniciar do Topo">
                                         <RotateCcw className="w-3.5 h-3.5 -scale-x-100" />
-                                    </button>
-                                    <button onClick={handleShareList} className="w-8 h-8 rounded-xl flex items-center justify-center bg-white/5 text-slate-500 hover:text-blue-400 hover:bg-blue-400/10 transition-all shrink-0" title="Compartilhar Lista">
-                                        <Share2 className="w-3.5 h-3.5" />
                                     </button>
                                 </div>
                             </div>
@@ -4657,6 +4659,42 @@ function App() {
                                             })()}
                                         </div>
                                         <div className="h-4" />
+                                    </div>
+                                )}
+                                {/* ——— SIDEBAR FOOTER: utility buttons (Batch, Booklet, Share) ——— */}
+                                {!isSidebarCollapsed && (
+                                    <div className="shrink-0 border-t border-white/5 pt-4 flex items-center justify-center gap-2">
+                                        <button
+                                            onClick={() => setBatchModalOpen(true)}
+                                            className="flex-1 flex flex-col items-center gap-1 py-2.5 rounded-xl bg-white/5 border border-white/5 text-slate-500 hover:text-[#B87333] hover:border-[#B87333]/30 transition-all text-center"
+                                            title="Adicionar em Lote"
+                                        >
+                                            <UploadCloud className="w-4 h-4" />
+                                            <span className="text-[8px] font-black uppercase tracking-widest">Em Lote</span>
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                setCurrentExportList({ name: "Fila Atual", songs: songs || [] });
+                                                setExportStep(1);
+                                                setDownloadUrl(null);
+                                                setExportFormat('docx');
+                                                setCoverImage(null);
+                                                setShowExportModal(true);
+                                            }}
+                                            className="flex-1 flex flex-col items-center gap-1 py-2.5 rounded-xl bg-white/5 border border-white/5 text-slate-500 hover:text-[#B87333] hover:border-[#B87333]/30 transition-all text-center"
+                                            title="Gerar Livreto"
+                                        >
+                                            <FileText className="w-4 h-4" />
+                                            <span className="text-[8px] font-black uppercase tracking-widest">Livreto</span>
+                                        </button>
+                                        <button
+                                            onClick={handleShareList}
+                                            className="flex-1 flex flex-col items-center gap-1 py-2.5 rounded-xl bg-white/5 border border-white/5 text-slate-500 hover:text-blue-400 hover:border-blue-400/30 transition-all text-center"
+                                            title="Compartilhar Lista"
+                                        >
+                                            <Share2 className="w-4 h-4" />
+                                            <span className="text-[8px] font-black uppercase tracking-widest">Partilhar</span>
+                                        </button>
                                     </div>
                                 )}
                             </div>
