@@ -4301,6 +4301,27 @@ function App() {
                                     <span className="text-[10px] font-black uppercase">IA Sync</span>
                                 </button>
                                 
+                                <div className="w-px h-6 bg-white/10 shrink-0 mx-1" />
+
+                                {/* Blow Detection */}
+                                <button
+                                    onClick={() => setIsBlowDetectEnabled(s => !s)}
+                                    className={`shrink-0 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl border transition-all snap-start ${isBlowDetectEnabled ? 'bg-green-600 border-green-500 text-white animate-pulse shadow-[0_0_15px_rgba(34,197,94,0.4)]' : 'bg-white/5 border-white/10 text-slate-400 hover:text-white'}`}
+                                    title="Soprar no mic para avançar página"
+                                >
+                                    <Wind className="w-4 h-4" />
+                                    <span className="text-[10px] font-black uppercase">Sopro</span>
+                                </button>
+                                
+                                {/* Pedal hint */}
+                                <button
+                                    className="shrink-0 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl border bg-white/5 border-white/10 text-slate-500 cursor-default snap-start"
+                                    title="Conecte um pedal ou teclado Bluetooth — use Space/↓/PageDown para avançar, ↑/PageUp para voltar"
+                                >
+                                    <Footprints className="w-4 h-4" />
+                                    <span className="text-[10px] font-black uppercase">Pedal BT</span>
+                                </button>
+
                             </div>
 
                             {/* Line 3: Playback Controls (Play/Pause, Speed, Next/Prev) */}
