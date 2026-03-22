@@ -4784,7 +4784,7 @@ function App() {
                                     onTouchMove={() => { lastManualScrollTime.current = Date.now(); }}
                                     onWheel={() => { lastManualScrollTime.current = Date.now(); }}
                                     className="flex-1 overflow-auto overflow-x-auto p-4 md:p-16 scroll-smooth scrollbar-none pb-64 w-full"
-                                    style={{ fontSize: `${playerFontSize}px` }}
+                                    style={{ fontSize: `${showPinchBar ? pinchLiveFontSize : playerFontSize}px` }}
                                 >
 
                                     <div className="max-w-4xl mx-auto space-y-1 printable-area">
@@ -5347,7 +5347,7 @@ function App() {
                                                                 `}
                                                                 style={{ 
                                                                     maxHeight: isManualFullscreen ? '100vh' : '500px',
-                                                                    fontSize: `${manualFontSize}px`
+                                                                    fontSize: `${showPinchBar ? pinchLiveFontSize : manualFontSize}px`
                                                                 }}
                                                             >
                                                                 <div className="printable-area">
