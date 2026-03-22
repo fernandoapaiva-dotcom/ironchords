@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { PhoneticMatcher } from './utils/PhoneticMatcher';
-import { Music, UploadCloud, Plus, Minus, FileText, CheckCircle, AlertCircle, Eye, EyeOff, FileAudio, Info, X, Guitar, Settings2, Image as ImageIcon, Database, Edit3, Trash2, ArrowRight, Play, Maximize, Maximize2, Pause, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Download, ArrowLeft, SkipBack, SkipForward, Save, Share2, FolderHeart, Flame, Hammer, Sparkles, RefreshCw, Zap, ShieldCheck, Monitor, Tv, Check, Users, LayoutList, Layout, Mic, Search, RotateCcw, Printer, Archive, GripVertical, Minimize2, Link, MessageCircle, Mail, ExternalLink, Smartphone, Apple, Copy, Wind, Footprints, MoreVertical } from 'lucide-react';
+import { Music, UploadCloud, Plus, Minus, FileText, CheckCircle, AlertCircle, Eye, EyeOff, FileAudio, Info, X, Guitar, Settings2, Image as ImageIcon, Database, Edit3, Trash2, ArrowRight, Play, Maximize, Maximize2, Pause, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Download, ArrowLeft, SkipBack, SkipForward, Save, Share2, FolderHeart, Flame, Hammer, Sparkles, RefreshCw, Zap, ShieldCheck, Monitor, Tv, Check, Users, LayoutList, Layout, Mic, Search, RotateCcw, Printer, Archive, GripVertical, Minimize2, Link, MessageCircle, Mail, ExternalLink, Smartphone, Apple, Copy, Wind, Footprints, MoreVertical, Menu, LogOut } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { SVGuitarChord } from 'svguitar';
 import { AudioTracker } from './utils/AudioTracker';
@@ -1191,6 +1191,7 @@ function App() {
     const [activePlaylistName, setActivePlaylistName] = useState(null);
     const [activeTab, setActiveTab] = useState('manual');
     const [isPlayerUtilMenuOpen, setIsPlayerUtilMenuOpen] = useState(false);
+    const [showGlobalMenu, setShowGlobalMenu] = useState(false);
     const [playerSidebarTab, setPlayerSidebarTab] = useState('fila'); 
     const [listasSubTab, setListasSubTab] = useState('salvas');
     const [songs, setSongs] = useState([]);
@@ -4036,75 +4037,95 @@ function App() {
             {isGenerating && <MoltenLoading message={forgeMessage} current={batchProgress.current} total={batchProgress.total} />}
             <UserManagementModal isOpen={showUserManagement} onClose={() => setShowUserManagement(false)} API_BASE={`${API_BASE_URL}/api`} />
 
-            {/* Top-Right Global Controls Group — hidden when player is open (buttons move into sidebar) */}
-            <div className="fixed top-2 right-2 sm:top-4 sm:right-4 z-[400] flex items-center gap-1.5 sm:gap-2 no-print">
+            {/* =========================================
+                 GLOBAL HAMBURGER MENU 
+                 ========================================= */}
+            <div className={`fixed top-2 right-2 sm:top-4 sm:right-4 z-[400] no-print transition-all duration-300 ${isImmersiveMode && !showImmersiveControls && !showGlobalMenu ? '-translate-y-full opacity-0 relative' : 'translate-y-0 opacity-100 relative'}`}>
+                {/* Menu Toggle Button */}
+                <button
+                    onClick={() => setShowGlobalMenu(true)}
+                    className="p-2 sm:p-3 bg-[#16161D]/80 backdrop-blur-xl border border-white/10 rounded-xl text-slate-400 hover:text-white hover:border-[#B87333]/40 transition-all shadow-2xl flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 hover:scale-105 active:scale-95"
+                    title="Menu Global"
+                >
+                    <Menu className="w-5 h-5 sm:w-6 sm:h-6" />
+                </button>
 
-                {/* Batch + Booklet + Share: visible only outside player */}
-                {!(isFullScreenPlayer || mainNav === 'player') && (
+                {/* Sliding Drawer */}
+                {showGlobalMenu && (
                     <>
-                        <button 
-                            onClick={() => setBatchModalOpen(true)}
-                            className="flex p-2 sm:p-3 bg-[#16161D]/60 backdrop-blur-xl border border-white/5 rounded-xl text-slate-500 hover:text-[#B87333] hover:border-[#B87333]/40 transition-all shadow-xl items-center justify-center gap-1 sm:gap-2 px-2 sm:px-4"
-                            title="Adicionar em Lote"
-                        >
-                            <UploadCloud className="w-4 h-4 sm:w-5 sm:h-5" />
-                            <span className="text-[10px] font-black uppercase tracking-widest hidden lg:block">Em Lote</span>
-                        </button>
+                        {/* Backdrop */}
+                        <div
+                            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[390]"
+                            onClick={() => setShowGlobalMenu(false)}
+                        />
+                        {/* Dropdown/Drawer Content */}
+                        <div className="absolute top-0 right-0 w-64 bg-[#12121A] border border-white/10 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.8)] overflow-hidden z-[410] animate-in fade-in slide-in-from-top-2 duration-200">
+                            
+                            {/* Header */}
+                            <div className="flex items-center justify-between p-4 border-b border-white/5 bg-black/20">
+                                <h3 className="text-sm font-black text-white uppercase italic tracking-widest">Opções</h3>
+                                <button onClick={() => setShowGlobalMenu(false)} className="p-1.5 rounded-lg text-slate-500 hover:text-white hover:bg-white/10 transition-all">
+                                    <X className="w-4 h-4" />
+                                </button>
+                            </div>
 
-                        <button 
-                            onClick={() => {
-                                setCurrentExportList({ name: "Fila Atual", songs: songs || [] });
-                                setExportStep(1);
-                                setDownloadUrl(null);
-                                setExportFormat('docx');
-                                setCoverImage(null);
-                                setShowExportModal(true);
-                            }}
-                            className="p-2 sm:p-3 bg-[#16161D]/60 backdrop-blur-xl border border-white/5 rounded-xl text-slate-500 hover:text-[#B87333] hover:border-[#B87333]/40 transition-all shadow-xl flex items-center justify-center gap-1 sm:gap-2 px-2 sm:px-4"
-                            title="Gerar Livreto"
-                        >
-                            <FileText className="w-4 h-4 sm:w-5 sm:h-5" />
-                            <span className="text-[10px] font-black uppercase tracking-widest hidden lg:block">Livreto</span>
-                        </button>
+                            {/* Menu Items */}
+                            <div className="flex flex-col py-2 max-h-[70vh] overflow-y-auto min-h-0 custom-scrollbar">
+                                
+                                {/* Visible everywhere except Player */}
+                                {!(isFullScreenPlayer || mainNav === 'player') && (
+                                    <>
+                                        <button onClick={() => { setBatchModalOpen(true); setShowGlobalMenu(false); }} className="w-full flex items-center gap-3 px-5 py-3.5 text-left text-[11px] font-bold text-slate-300 hover:text-white hover:bg-[#B87333]/15 transition-all group">
+                                            <UploadCloud className="w-4 h-4 text-slate-500 group-hover:text-[#B87333]" />
+                                            Adicionar em Lote
+                                        </button>
 
-                        <button 
-                            onClick={handleShareList} 
-                            className="p-2 sm:p-3 bg-[#16161D]/60 backdrop-blur-xl border border-white/5 rounded-xl text-slate-500 hover:text-white hover:border-[#B87333]/40 transition-all shadow-xl flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12" 
-                            title="Compartilhar"
-                        >
-                            <Share2 className="w-4 h-4 sm:w-5 sm:h-5 text-slate-500" />
-                        </button>
+                                        <button onClick={() => { setCurrentExportList({ name: "Fila Atual", songs: songs || [] }); setExportStep(1); setDownloadUrl(null); setExportFormat('docx'); setCoverImage(null); setShowExportModal(true); setShowGlobalMenu(false); }} className="w-full flex items-center gap-3 px-5 py-3.5 text-left text-[11px] font-bold text-slate-300 hover:text-white hover:bg-[#B87333]/15 transition-all group">
+                                            <FileText className="w-4 h-4 text-slate-500 group-hover:text-[#B87333]" />
+                                            Gerar Livreto
+                                        </button>
 
-                        <div className="w-px h-6 bg-white/10 mx-1" />
+                                        <button onClick={() => { handleShareList(); setShowGlobalMenu(false); }} className="w-full flex items-center gap-3 px-5 py-3.5 text-left text-[11px] font-bold text-slate-300 hover:text-white hover:bg-[#B87333]/15 transition-all group">
+                                            <Share2 className="w-4 h-4 text-slate-500 group-hover:text-[#B87333]" />
+                                            Compartilhar
+                                        </button>
+
+                                        <div className="my-2 h-px bg-white/5 mx-4" />
+                                    </>
+                                )}
+
+                                {/* Always visible */}
+                                <button onClick={() => { setIsImmersiveMode(!isImmersiveMode); setShowImmersiveControls(false); setShowGlobalMenu(false); }} className={`w-full flex items-center gap-3 px-5 py-3.5 text-left text-[11px] font-bold transition-all group ${isImmersiveMode ? 'text-[#B87333] bg-[#B87333]/10' : 'text-slate-300 hover:text-white hover:bg-[#B87333]/15'}`}>
+                                    {isImmersiveMode ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4 text-slate-500 group-hover:text-white" />}
+                                    {isImmersiveMode ? 'Sair Tela Cheia' : 'Tela Cheia'}
+                                </button>
+
+                                <button onClick={() => { setIsStageModeActive(s => !s); setShowGlobalMenu(false); }} className={`w-full flex items-center gap-3 px-5 py-3.5 text-left text-[11px] font-bold transition-all group ${isStageModeActive ? 'text-red-400 bg-red-500/10' : 'text-slate-300 hover:text-white hover:bg-[#B87333]/15'}`}>
+                                    <Music className={`w-4 h-4 ${isStageModeActive ? 'animate-pulse' : 'text-slate-500 group-hover:text-white'}`} />
+                                    {isStageModeActive ? 'Sair do Modo Palco' : 'Modo Palco (Show)'}
+                                </button>
+
+                                <button onClick={() => { setShowSettingsModal(true); setShowGlobalMenu(false); }} className="w-full flex items-center gap-3 px-5 py-3.5 text-left text-[11px] font-bold text-slate-300 hover:text-white hover:bg-[#B87333]/15 transition-all group">
+                                    <Settings2 className="w-4 h-4 text-slate-500 group-hover:rotate-90 transition-transform duration-500" />
+                                    Configurações
+                                </button>
+
+                                <div className="my-2 h-px bg-white/5 mx-4" />
+
+                                <button onClick={() => {
+                                    if (window.confirm("Deseja realmente sair?")) {
+                                        localStorage.removeItem('ironchords_user_email');
+                                        window.location.reload();
+                                    }
+                                }} className="w-full flex items-center gap-3 px-5 py-3.5 text-left text-[11px] font-bold text-red-500 hover:text-red-400 hover:bg-red-500/15 transition-all">
+                                    <LogOut className="w-4 h-4" />
+                                    Sair da Conta
+                                </button>
+
+                            </div>
+                        </div>
                     </>
                 )}
-
-                {/* Settings — always visible */}
-                <button 
-                    onClick={() => setShowSettingsModal(true)}
-                    className="p-2 sm:p-3 bg-[#16161D]/60 backdrop-blur-xl border border-white/5 rounded-xl text-slate-500 hover:text-[#B87333] hover:border-[#B87333]/40 transition-all shadow-xl group flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12"
-                    title="Configurações e Gestão"
-                >
-                    <Settings2 className="w-5 h-5 sm:w-6 sm:h-6 group-hover:rotate-90 transition-transform duration-500" />
-                </button>
-
-                {/* Fullscreen Player Toggle — always visible */}
-                <button 
-                    onClick={() => { setIsImmersiveMode(!isImmersiveMode); setShowImmersiveControls(false); }} 
-                    className={`p-2 sm:p-3 rounded-xl border transition-all shadow-xl flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 backdrop-blur-xl ${isImmersiveMode ? 'bg-[#B87333]/20 border-[#B87333] text-[#B87333]' : 'bg-[#16161D]/60 border-white/5 text-slate-500 hover:text-white'}`} 
-                    title={isImmersiveMode ? "Sair Tela Cheia" : "Tela Cheia"}
-                >
-                    {isImmersiveMode ? <Minimize2 className="w-4 h-4 sm:w-5 sm:h-5" /> : <Maximize2 className="w-4 h-4 sm:w-5 sm:h-5" />}
-                </button>
-
-                {/* Stage Mode — always visible */}
-                <button 
-                    onClick={() => setIsStageModeActive(s => !s)} 
-                    className={`p-2 sm:p-3 rounded-xl border transition-all shadow-xl flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 backdrop-blur-xl ${isStageModeActive ? 'bg-red-600/30 border-red-500 text-red-400 animate-pulse' : 'bg-[#16161D]/60 border-white/5 text-slate-500 hover:text-white hover:border-red-500/40'}`}
-                    title={isStageModeActive ? "Sair do Modo Palco" : "Modo Palco (Tela de Show)"}
-                >
-                    <Music className="w-4 h-4 sm:w-5 sm:h-5" />
-                </button>
             </div>
 
             {/* Chord Tooltip Overlay */}
