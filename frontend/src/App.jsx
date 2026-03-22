@@ -65,15 +65,15 @@ function usePinchZoom(containerRef, fontSize, setFontSize, minSize = 12, maxSize
 
             if (e.cancelable) e.preventDefault();
 
-            if (Math.abs(delta) > 1) { 
-                const zoomFactor = delta > 0 ? 0.6 : -0.6; // Slightly more sensitive
-                targetFontSizeRef.current = Math.min(maxSize, Math.max(minSize, targetFontSizeRef.current + zoomFactor));
+            if (Math.abs(delta) > 0.5) { 
+                // Scale proportional to the delta for a 1:1 feel, no delay
+                targetFontSizeRef.current = Math.min(maxSize, Math.max(minSize, targetFontSizeRef.current + (delta * 0.15)));
                 
-                // Instant DOM feedback
-                el.style.fontSize = `${targetFontSizeRef.current}px`;
-                
-                // Live callback for the visual bar/UI
-                if (onPinchUpdate) onPinchUpdate(targetFontSizeRef.current);
+                // Use requestAnimationFrame for smooth 60fps rendering without delay
+                requestAnimationFrame(() => {
+                    el.style.fontSize = `${targetFontSizeRef.current}px`;
+                    if (onPinchUpdate) onPinchUpdate(targetFontSizeRef.current);
+                });
                 
                 lastDistRef.current = newDist;
             }
@@ -4185,224 +4185,154 @@ function App() {
                             </div>
                         )}
 
-                        {/* PLAYER HEADER — CLEAN TOP BAR */}
-                        <div className={`bg-black/60 border-b border-white/5 backdrop-blur-2xl shrink-0 no-print w-full z-[200] transition-all duration-300 ${isImmersiveMode && !showImmersiveControls ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
-                            <div className="flex items-center justify-between px-3 py-2 w-full">
-                                {/* Left: Info */}
-                                <div className="flex items-center gap-2 ml-2">
-                                    <div className="flex flex-col min-w-0 max-w-[160px] sm:max-w-xs">
-                                        <h2 className="text-xs font-black text-white uppercase italic tracking-tighter leading-none truncate">{currentSong?.song_name || '—'}</h2>
-                                        <p className="text-[9px] font-bold text-[#B87333] uppercase truncate opacity-60 mt-0.5">{activePlaylistName}</p>
-                                    </div>
-                                </div>
-
-                                {/* Right: Spacing placeholder for buttons on right */}
-                                <div className="w-24 sm:w-32 shrink-0"></div>
-                            </div>
-                        </div>
-
-                        {/* MODERN FLOATING BOTTOM PLAYER CONTROLS */}
-                        <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-[300] max-w-[95vw] w-max bg-[#12121A]/80 backdrop-blur-3xl border border-[#B87333]/30 p-2 sm:p-2.5 rounded-full shadow-[0_20px_60px_rgba(0,0,0,0.8)] flex items-center gap-3 transition-opacity duration-300 no-print ${isImmersiveMode && !showImmersiveControls ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+                        {/* PLAYER HEADER & CONSOLIDATED CONTROLS */}
+                        <div className={`flex flex-col bg-black/90 border-b border-[#B87333]/30 backdrop-blur-3xl shrink-0 no-print w-full z-[300] transition-transform duration-300 ${isImmersiveMode && !showImmersiveControls ? '-translate-y-full opacity-0 absolute' : 'translate-y-0 opacity-100 relative'}`}>
                             
-                            {/* Drawer Toggle */}
-                            <div className="relative">
-                                <button 
-                                    onClick={() => setShowBottomToolsDrawer(!showBottomToolsDrawer)} 
-                                    className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${showBottomToolsDrawer ? 'bg-[#B87333] text-white' : 'bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white'}`}
-                                >
-                                    <Settings2 className="w-4 h-4" />
-                                </button>
-
-                                {/* Tools Drawer Pop-up */}
-                                {showBottomToolsDrawer && (
-                                    <>
-                                        <div className="fixed inset-0 z-[290] sm:hidden" onClick={() => setShowBottomToolsDrawer(false)} />
-                                        <div className="absolute bottom-full mb-4 left-0 w-max max-w-[90vw] bg-[#16161D] border border-white/10 rounded-3xl p-4 shadow-2xl z-[350] animate-in fade-in slide-in-from-bottom-2 grid grid-cols-2 gap-4">
-                                            
-                                            {/* Capo */}
-                                            <div className="flex flex-col gap-1.5 bg-black/40 p-2 rounded-xl border border-white/5">
-                                                <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest text-center">Capo</span>
-                                                <div className="flex items-center justify-center gap-2">
-                                                    <button onClick={() => { if (selectedManualIndex !== null && songs[selectedManualIndex]) { const n = [...songs]; n[selectedManualIndex].capo = Math.max(0, (n[selectedManualIndex].capo || 0) - 1); setSongs(n); } }} className="p-1 text-slate-400 hover:text-white bg-white/5 rounded-lg"><Minus className="w-3.5 h-3.5" /></button>
-                                                    <span className="text-sm font-black text-[#B87333] w-5 text-center">{currentSong?.capo || 0}</span>
-                                                    <button onClick={() => { if (selectedManualIndex !== null && songs[selectedManualIndex]) { const n = [...songs]; n[selectedManualIndex].capo = Math.min(11, (n[selectedManualIndex].capo || 0) + 1); setSongs(n); } }} className="p-1 text-slate-400 hover:text-white bg-white/5 rounded-lg"><Plus className="w-3.5 h-3.5" /></button>
-                                                </div>
-                                            </div>
-
-                                            {/* Transpose */}
-                                            <div className="flex flex-col gap-1.5 bg-black/40 p-2 rounded-xl border border-[#B87333]/20">
-                                                <span className="text-[8px] font-black text-[#B87333] uppercase tracking-widest text-center">Tom</span>
-                                                <div className="flex items-center justify-center bg-white/5 rounded-lg overflow-hidden relative">
-                                                    {isTransposing ? (
-                                                        <div className="w-full py-1.5 text-center"><RefreshCw className="w-4 h-4 text-[#B87333] animate-spin inline-block" /></div>
-                                                    ) : (
-                                                        <>
-                                                            <select
-                                                                value={getSoundingKey(currentSong) || 'C'}
-                                                                disabled={isTransposing}
-                                                                onChange={(e) => {
-                                                                    const targetKey = e.target.value;
-                                                                    const currentKeyMatch = (getSoundingKey(currentSong) || 'C').match(/([A-G][b#]?)/i);
-                                                                    const targetMatch = targetKey.match(/([A-G][b#]?)/i);
-                                                                    if (currentKeyMatch && targetMatch) {
-                                                                        const NOTES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
-                                                                        const norm = k => { const flats = {'Db':'C#','Eb':'D#','Gb':'F#','Ab':'G#','Bb':'A#'}; let n=k.charAt(0).toUpperCase()+k.slice(1); return flats[n]||n; };
-                                                                        const cIdx = NOTES.indexOf(norm(currentKeyMatch[1]));
-                                                                        const tIdx = NOTES.indexOf(norm(targetMatch[1]));
-                                                                        if (cIdx !== -1 && tIdx !== -1) {
-                                                                            let diff = tIdx - cIdx;
-                                                                            if (diff > 6) diff -= 12;
-                                                                            if (diff < -6) diff += 12;
-                                                                            if (diff !== 0) transposeSong(selectedManualIndex, diff);
-                                                                        }
-                                                                    }
-                                                                }}
-                                                                className="w-full bg-transparent text-white font-black italic text-sm text-center py-1.5 outline-none appearance-none cursor-pointer disabled:opacity-50"
-                                                            >
-                                                                {["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"].map(k => <option key={k} value={k} className="bg-[#1A1A1A]">{k}</option>)}
-                                                            </select>
-                                                            <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-[#B87333]">
-                                                                <ChevronDown className="w-3 h-3" />
-                                                            </div>
-                                                        </>
-                                                    )}
-                                                </div>
-                                            </div>
-
-                                            {/* Size */}
-                                            <div className="flex flex-col gap-1.5 bg-black/40 p-2 rounded-xl border border-white/5">
-                                                <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest text-center">Tamanho: {playerFontSize}</span>
-                                                <div className="flex items-center justify-center h-full px-2 py-1.5">
-                                                    <input type="range" min="12" max="60" step="1" value={playerFontSize} onChange={e => setPlayerFontSize(parseInt(e.target.value))} className="w-full h-1 bg-white/10 rounded-full appearance-none cursor-pointer accent-slate-400" />
-                                                </div>
-                                            </div>
-
-                                            {/* Speed */}
-                                            <div className="flex flex-col gap-1.5 bg-black/40 p-2 rounded-xl border border-white/5">
-                                                <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest text-center">Velocidade: {scrollSpeed}x</span>
-                                                <div className="flex items-center justify-center h-full px-2">
-                                                    <input type="range" min="0.1" max="5" step="0.1" value={scrollSpeed} onChange={e => setScrollSpeed(parseFloat(e.target.value))} className="w-full h-1 bg-white/10 rounded-full appearance-none cursor-pointer accent-[#B87333]" />
-                                                </div>
-                                            </div>
-
-                                            {/* Print Size Helper */}
-                                            <div className="flex flex-col gap-1.5 bg-black/40 p-2 rounded-xl border border-white/5">
-                                                <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest text-center flex items-center justify-center gap-1"><Printer className="w-2.5 h-2.5"/> Impressão</span>
-                                                <div className="flex items-center justify-center gap-2">
-                                                    <button onClick={() => setPrintFontSize(prev => Math.max(10, prev - 1))} className="p-1 text-slate-400 hover:text-white bg-white/5 rounded-lg"><Minus className="w-3.5 h-3.5" /></button>
-                                                    <span className="text-xs font-black text-white w-5 text-center">{printFontSize}</span>
-                                                    <button onClick={() => setPrintFontSize(prev => Math.min(30, prev + 1))} className="p-1 text-slate-400 hover:text-white bg-white/5 rounded-lg"><Plus className="w-3.5 h-3.5" /></button>
-                                                </div>
-                                                <button onClick={() => { setShowBottomToolsDrawer(false); handlePrint(); }} className="mt-1 bg-white/10 hover:bg-white/20 text-white rounded-lg py-1 text-[10px] font-bold uppercase tracking-widest">Imprimir</button>
-                                            </div>
-
-                                            {/* Mix Controls */}
-                                            <div className="flex flex-col gap-2">
-                                                <button onClick={handleResetSongToOriginal} className="flex-1 rounded-xl bg-white/5 border border-white/10 text-[#B87333] hover:bg-[#B87333] hover:text-white transition-all flex items-center justify-center gap-2" title="Voltar ao Tom Original (Zerar Capo)">
-                                                    <RotateCcw className="w-3.5 h-3.5" /> <span className="text-[10px] font-black uppercase">Zerar</span>
-                                                </button>
-                                                <button onClick={() => setIncludeTabs(!includeTabs)} className={`flex-1 rounded-xl border transition-all flex items-center justify-center gap-2 ${includeTabs ? 'bg-[#B87333]/20 border-[#B87333] text-[#B87333]' : 'bg-white/5 border-white/10 text-slate-600 hover:text-slate-400'}`} title={includeTabs ? "Ocultar Tabs" : "Mostrar Tabs"}>
-                                                    <FileText className="w-3.5 h-3.5" /> <span className="text-[10px] font-black uppercase">Tabs</span>
-                                                </button>
-                                            </div>
-
-                                            {/* Versions / IA Sync -> Spanning full width below */}
-                                            <div className="col-span-2 grid grid-cols-2 gap-4 mt-2">
-                                                 {currentPlayerVersions.length > 1 && (
-                                                    <div className="relative">
-                                                        <button
-                                                            onClick={() => setIsPlayerVersionsOpen(!isPlayerVersionsOpen)}
-                                                            className={`w-full flex items-center justify-center space-x-2 px-3 py-2 rounded-xl border transition-all ${isPlayerVersionsOpen ? 'bg-[#B87333] border-[#B87333] text-white' : 'bg-white/5 border-white/10 text-slate-400 hover:text-white'}`}
-                                                        >
-                                                            {playerVersionLoading ? (
-                                                                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                                                            ) : (
-                                                                <Layout className="w-3.5 h-3.5" />
-                                                            )}
-                                                            <span className="text-[10px] font-black uppercase tracking-widest">Versões</span>
-                                                        </button>
-                                                        {isPlayerVersionsOpen && (
-                                                            <div className="absolute bottom-full mb-2 left-0 w-full bg-[#12121A] border border-[#B87333]/40 rounded-xl shadow-[0_0_20px_rgba(184,115,51,0.3)] overflow-hidden z-[400] max-h-48 overflow-y-auto">
-                                                                {currentPlayerVersions.map((v, i) => (
-                                                                    <button
-                                                                        key={v.key || i}
-                                                                        onClick={() => { handleSwitchVersion(v.key); setIsPlayerVersionsOpen(false); }}
-                                                                        className="w-full px-3 py-2 text-left text-[10px] font-bold text-slate-300 hover:text-white hover:bg-[#B87333]/20 border-b border-white/5 last:border-0"
-                                                                    >
-                                                                        {v.name}
-                                                                    </button>
-                                                                ))}
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                )}
-
-                                                <button onClick={() => { const s = !isDynamicSpeedActive; setIsDynamicSpeedActive(s); if (s) { setIsAutoScrolling(false); startAudioTracker(); } else { stopAudioTracker(); } }} className={`w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl border transition-all ${isDynamicSpeedActive ? 'bg-blue-600 border-blue-600 text-white animate-pulse' : 'bg-white/5 border-white/10 text-slate-600 hover:text-slate-400'}`} title="IA Sync">
-                                                    <Zap className="w-3.5 h-3.5" />
-                                                    <span className="text-[10px] font-black uppercase">IA Sync</span>
-                                                </button>
-                                            </div>
-
-                                            {/* === Phase 2: Sopro + Pedal === */}
-                                            <div className="col-span-2 grid grid-cols-2 gap-4">
-                                                {/* Blow Detection */}
-                                                <button
-                                                    onClick={() => setIsBlowDetectEnabled(s => !s)}
-                                                    className={`w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl border transition-all ${isBlowDetectEnabled ? 'bg-green-600/20 border-green-500 text-green-400 animate-pulse' : 'bg-white/5 border-white/10 text-slate-600 hover:text-slate-400'}`}
-                                                    title="Soprar no mic para avançar página"
-                                                >
-                                                    <Wind className="w-3.5 h-3.5" />
-                                                    <span className="text-[10px] font-black uppercase">Sopro</span>
-                                                </button>
-                                                {/* Pedal hint */}
-                                                <button
-                                                    className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl border bg-white/5 border-white/10 text-slate-600 cursor-default"
-                                                    title="Conecte um pedal ou teclado Bluetooth — use Space/↓/PageDown para avançar, ↑/PageUp para voltar"
-                                                >
-                                                    <Footprints className="w-3.5 h-3.5" />
-                                                    <span className="text-[10px] font-black uppercase">Pedal BT</span>
-                                                </button>
-                                            </div>
-
-                                        </div>
-                                    </>
-                                )}
-                            </div>
-
-                            <div className="w-px h-6 bg-white/10" />
-
-                            {/* Main Playback Controls */}
-                             {/* Navigation Controls */}
-                             <div className="flex items-center gap-2">
-                                <button onClick={() => { if (selectedManualIndex > 0) { setSelectedManualIndex(selectedManualIndex - 1); setCurrentLineIndex(0); currentLineIndexRef.current = 0; if (scrollContainerRef.current) scrollContainerRef.current.scrollTop = 0; } }} disabled={selectedManualIndex === 0} className="w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center bg-white/5 hover:bg-white/10 transition-all text-slate-300 hover:text-white disabled:opacity-20 shrink-0"><SkipBack className="w-4 h-4 ml-0.5" /></button>
-                                
-                                {/* Vertical stack on mobile for Play + Size */}
-                                <div className="flex flex-col items-center gap-1">
-                                    <button onClick={() => { const s = !isAutoScrolling; setIsAutoScrolling(s); if (s) setIsDynamicSpeedActive(false); }} className={`w-12 h-12 sm:w-14 sm:h-14 rounded-full flex items-center justify-center transition-all shrink-0 ${isAutoScrolling ? 'bg-[#B87333] text-white shadow-[0_0_30px_rgba(184,115,51,0.6)]' : 'bg-white text-black hover:bg-slate-200'}`}>
-                                        {isAutoScrolling ? <Pause className="w-6 h-6" /> : <Play className="w-6 h-6 sm:w-7 sm:h-7 ml-1 text-[#12121A]" />}
+                            {/* Line 1: Song Info & Basic Actions */}
+                            <div className="flex items-center justify-between px-3 py-2 sm:px-4 sm:py-3 w-full border-b border-white/5">
+                                <div className="flex items-center gap-3 w-full">
+                                    <button onClick={() => { setIsFullScreenPlayer(false); setMainNav('selection'); }} className="p-2 rounded-full bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-all shrink-0">
+                                        <ArrowLeft className="w-5 h-5" />
                                     </button>
+                                    <div className="flex flex-col min-w-0 flex-1">
+                                        <h2 className="text-sm sm:text-lg font-black text-white uppercase italic tracking-tighter leading-none truncate">{currentSong?.song_name || '—'}</h2>
+                                        <div className="flex items-center gap-2 mt-1">
+                                            <p className="text-[10px] sm:text-xs font-bold text-[#B87333] uppercase truncate opacity-80">{activePlaylistName || "Música Avulsa"}</p>
+                                            <span className="text-white/20 text-[10px]">•</span>
+                                            <p className="text-[10px] sm:text-xs font-bold text-slate-400 uppercase truncate">{currentSong?.artist_name}</p>
+                                        </div>
+                                    </div>
                                     
-                                    {/* Font Controls UNDER play button on Mobile */}
-                                    <div className="flex items-center justify-center bg-white/5 border border-white/5 rounded-full p-1 sm:hidden">
-                                        <button onClick={() => setPlayerFontSize(prev => prev < 18 ? 22 : prev < 28 ? 36 : 14)} className="w-8 h-6 text-slate-400 hover:text-white transition-all font-black text-[10px] flex items-center justify-center" title="Ciclar Tamanho da Fonte">
-                                            Aa
+                                    {/* Quick Actions Right */}
+                                    <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+                                        <button onClick={() => { setIsImmersiveMode(!isImmersiveMode); setShowImmersiveControls(false); }} className={`p-2.5 rounded-xl transition-all ${isImmersiveMode ? 'text-[#B87333] bg-[#B87333]/20' : 'text-slate-400 hover:text-white bg-white/5'}`} title="Tela Cheia">
+                                            {isImmersiveMode ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
                                         </button>
                                     </div>
                                 </div>
+                            </div>
 
-                                <button onClick={() => { if (selectedManualIndex < songs.length - 1) { setSelectedManualIndex(selectedManualIndex + 1); setCurrentLineIndex(0); currentLineIndexRef.current = 0; if (scrollContainerRef.current) scrollContainerRef.current.scrollTop = 0; } }} disabled={selectedManualIndex === songs.length - 1} className="w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center bg-white/5 hover:bg-white/10 transition-all text-slate-300 hover:text-white disabled:opacity-20 shrink-0"><SkipForward className="w-4 h-4 mr-0.5" /></button>
-                             </div>
-                            
-                            <div className="w-px h-6 bg-white/10" />
+                            {/* Line 2: Technical Tools (Scrollable horizontally) */}
+                            <div className="flex items-center gap-2 px-3 py-2.5 sm:px-4 w-full overflow-x-auto scrollbar-none snap-x snap-mandatory">
+                                
+                                {/* Capo */}
+                                <div className="flex items-center shrink-0 bg-[#16161D] rounded-xl border border-white/10 snap-start shadow-inner">
+                                    <span className="px-2.5 py-1.5 text-[10px] font-black text-slate-500 uppercase tracking-widest border-r border-white/10">Capo</span>
+                                    <button onClick={() => { if (selectedManualIndex !== null && songs[selectedManualIndex]) { const n = [...songs]; n[selectedManualIndex].capo = Math.max(0, (n[selectedManualIndex].capo || 0) - 1); setSongs(n); } }} className="p-2 text-slate-400 hover:text-white"><Minus className="w-4 h-4" /></button>
+                                    <span className="text-sm font-black text-[#B87333] w-6 text-center">{currentSong?.capo || 0}</span>
+                                    <button onClick={() => { if (selectedManualIndex !== null && songs[selectedManualIndex]) { const n = [...songs]; n[selectedManualIndex].capo = Math.min(11, (n[selectedManualIndex].capo || 0) + 1); setSongs(n); } }} className="p-2 text-slate-400 hover:text-white"><Plus className="w-4 h-4" /></button>
+                                </div>
 
-                            <button onClick={() => { setCurrentLineIndex(0); currentLineIndexRef.current = 0; if (scrollContainerRef.current) scrollContainerRef.current.scrollTop = 0; }} className="w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center bg-white/5 hover:bg-white/10 transition-all text-slate-400 hover:text-white shrink-0" title="Reiniciar do Topo"><RotateCcw className="w-4 h-4 -scale-x-100" /></button>
+                                {/* Transpose */}
+                                <div className="flex items-center shrink-0 bg-[#16161D] rounded-xl border border-[#B87333]/30 snap-start shadow-[0_0_10px_rgba(184,115,51,0.1)]">
+                                    <span className="px-2.5 py-1.5 text-[10px] font-black text-[#B87333] uppercase tracking-widest border-r border-[#B87333]/20 flex items-center gap-1">
+                                         {isTransposing ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : 'Tom'}
+                                    </span>
+                                    <div className="relative flex items-center pr-2 pl-2">
+                                        <select
+                                            value={getSoundingKey(currentSong) || 'C'}
+                                            disabled={isTransposing}
+                                            onChange={(e) => {
+                                                const targetKey = e.target.value;
+                                                const currentKeyMatch = (getSoundingKey(currentSong) || 'C').match(/([A-G][b#]?)/i);
+                                                const targetMatch = targetKey.match(/([A-G][b#]?)/i);
+                                                if (currentKeyMatch && targetMatch) {
+                                                    const NOTES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+                                                    const norm = k => { const flats = {'Db':'C#','Eb':'D#','Gb':'F#','Ab':'G#','Bb':'A#'}; let n=k.charAt(0).toUpperCase()+k.slice(1); return flats[n]||n; };
+                                                    const cIdx = NOTES.indexOf(norm(currentKeyMatch[1]));
+                                                    const tIdx = NOTES.indexOf(norm(targetMatch[1]));
+                                                    if (cIdx !== -1 && tIdx !== -1) {
+                                                        let diff = tIdx - cIdx;
+                                                        if (diff > 6) diff -= 12;
+                                                        if (diff < -6) diff += 12;
+                                                        if (diff !== 0) transposeSong(selectedManualIndex, diff);
+                                                    }
+                                                }
+                                            }}
+                                            className="bg-transparent text-white font-black italic text-sm text-center py-1.5 outline-none appearance-none cursor-pointer disabled:opacity-50 pr-5"
+                                        >
+                                            {["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"].map(k => <option key={k} value={k} className="bg-[#1A1A1A]">{k}</option>)}
+                                        </select>
+                                        <ChevronDown className="w-3.5 h-3.5 text-[#B87333] absolute right-1 pointer-events-none" />
+                                    </div>
+                                </div>
+                                
+                                {/* Undo Transpose */}
+                                <button onClick={handleResetSongToOriginal} className="shrink-0 p-2 rounded-xl bg-white/5 border border-white/10 text-[#B87333] hover:bg-[#B87333] hover:text-white transition-all snap-start" title="Tom Original">
+                                    <RotateCcw className="w-4 h-4" />
+                                </button>
 
-                            <div className="w-px h-6 bg-white/10" />
+                                {/* Tabs Toggle */}
+                                <button onClick={() => setIncludeTabs(!includeTabs)} className={`shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl border transition-all snap-start ${includeTabs ? 'bg-[#B87333]/20 border-[#B87333] text-[#B87333]' : 'bg-white/5 border-white/10 text-slate-400'}`}>
+                                    <FileText className="w-4 h-4" /> <span className="text-[10px] font-black uppercase">Tabs</span>
+                                </button>
 
-                            {/* Font Controls (Hidden on narrow mobile, visible on desktop/sm) */}
-                            <div className="hidden sm:flex items-center space-x-1 bg-white/5 border border-white/5 rounded-full p-1">
-                                <button onClick={() => setPlayerFontSize(prev => Math.max(12, prev - 1))} className="p-2 text-slate-400 hover:text-white transition-all font-black text-xs" title="Diminuir Zoom (Letra)">A-</button>
-                                <button onClick={() => setPlayerFontSize(prev => Math.min(60, prev + 1))} className="p-2 text-slate-400 hover:text-white transition-all font-black text-xs" title="Aumentar Zoom (Letra)">A+</button>
+                                <div className="w-px h-6 bg-white/10 shrink-0 mx-1" />
+                                
+                                {/* Versions Toggle */}
+                                {currentPlayerVersions.length > 1 && (
+                                    <div className="relative shrink-0 snap-start">
+                                        <button onClick={() => setIsPlayerVersionsOpen(!isPlayerVersionsOpen)} className={`flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl border transition-all ${isPlayerVersionsOpen ? 'bg-[#B87333] border-[#B87333] text-white' : 'bg-white/5 border-white/10 text-slate-400 hover:text-white'}`}>
+                                            {playerVersionLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Layout className="w-4 h-4" />}
+                                            <span className="text-[10px] font-black uppercase">Versões</span>
+                                        </button>
+                                        {isPlayerVersionsOpen && (
+                                            <>
+                                                <div className="fixed inset-0 z-[290] sm:hidden" onClick={() => setIsPlayerVersionsOpen(false)} />
+                                                <div className="absolute top-full mt-2 left-0 w-48 bg-[#12121A] border border-[#B87333]/40 rounded-xl shadow-[0_0_20px_rgba(184,115,51,0.3)] overflow-hidden z-[400] max-h-48 overflow-y-auto">
+                                                    {currentPlayerVersions.map((v, i) => (
+                                                        <button
+                                                            key={v.key || i}
+                                                            onClick={() => { handleSwitchVersion(v.key); setIsPlayerVersionsOpen(false); }}
+                                                            className="w-full px-3 py-2.5 text-left text-[11px] font-bold text-slate-300 hover:text-white hover:bg-[#B87333]/20 border-b border-white/5 last:border-0"
+                                                        >
+                                                            {v.name}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </>
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* IA Sync Toggle */}
+                                <button onClick={() => { const s = !isDynamicSpeedActive; setIsDynamicSpeedActive(s); if (s) { setIsAutoScrolling(false); startAudioTracker(); } else { stopAudioTracker(); } }} className={`shrink-0 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl border transition-all snap-start ${isDynamicSpeedActive ? 'bg-blue-600 border-blue-600 text-white animate-pulse shadow-[0_0_15px_rgba(37,99,235,0.4)]' : 'bg-white/5 border-white/10 text-slate-400 hover:text-white'}`}>
+                                    <Zap className="w-4 h-4" />
+                                    <span className="text-[10px] font-black uppercase">IA Sync</span>
+                                </button>
+                                
+                            </div>
+
+                            {/* Line 3: Playback Controls (Play/Pause, Speed, Next/Prev) */}
+                            <div className="flex items-center justify-between px-3 py-2 sm:px-4 sm:py-3 w-full bg-[#12121A] border-t border-[rgba(184,115,51,0.15)] shadow-[0_-5px_20px_rgba(0,0,0,0.5)] z-10">
+                                
+                                {/* Speed & Print (Left) */}
+                                <div className="flex items-center gap-3 flex-1">
+                                    <div className="flex flex-col gap-1 w-full max-w-[100px] sm:max-w-[140px]">
+                                        <div className="flex justify-between items-center">
+                                            <span className="text-[9px] font-black text-slate-400 uppercase">Velocidade</span>
+                                            <span className="text-[9px] font-black text-[#B87333]">{scrollSpeed}x</span>
+                                        </div>
+                                        <input type="range" min="0.1" max="5" step="0.1" value={scrollSpeed} onChange={e => setScrollSpeed(parseFloat(e.target.value))} className="w-full h-1.5 bg-white/10 rounded-full appearance-none cursor-pointer accent-[#B87333]" />
+                                    </div>
+                                </div>
+
+                                {/* Central Playback Nav (Play/Pause, Prev, Next) */}
+                                <div className="flex items-center gap-3 sm:gap-4 shrink-0 mx-2">
+                                    <button onClick={() => { if (selectedManualIndex > 0) { setSelectedManualIndex(selectedManualIndex - 1); setCurrentLineIndex(0); currentLineIndexRef.current = 0; if (scrollContainerRef.current) scrollContainerRef.current.scrollTop = 0; } }} disabled={selectedManualIndex === 0} className="w-10 h-10 rounded-full flex items-center justify-center bg-white/5 text-slate-300 disabled:opacity-20 shrink-0"><SkipBack className="w-4 h-4 ml-0.5" /></button>
+                                    
+                                    <button onClick={() => { const s = !isAutoScrolling; setIsAutoScrolling(s); if (s) setIsDynamicSpeedActive(false); }} className={`w-14 h-14 sm:w-16 sm:h-16 rounded-full flex items-center justify-center transition-all shrink-0 ${isAutoScrolling ? 'bg-[#B87333] text-white shadow-[0_0_20px_rgba(184,115,51,0.6)] border-2 border-[#B87333]' : 'bg-white text-[#12121A] hover:bg-slate-200 border-2 border-white'}`}>
+                                        {isAutoScrolling ? <Pause className="w-6 h-6 ml-0.5" /> : <Play className="w-6 h-6 sm:w-7 sm:h-7 ml-1" />}
+                                    </button>
+                                    
+                                    <button onClick={() => { if (selectedManualIndex < songs.length - 1) { setSelectedManualIndex(selectedManualIndex + 1); setCurrentLineIndex(0); currentLineIndexRef.current = 0; if (scrollContainerRef.current) scrollContainerRef.current.scrollTop = 0; } }} disabled={selectedManualIndex === songs.length - 1} className="w-10 h-10 rounded-full flex items-center justify-center bg-white/5 text-slate-300 disabled:opacity-20 shrink-0"><SkipForward className="w-4 h-4 mr-0.5" /></button>
+                                </div>
+                                
+                                {/* Share / Reset (Right) */}
+                                <div className="flex items-center justify-end gap-1.5 flex-1">
+                                    <button onClick={() => { setCurrentLineIndex(0); currentLineIndexRef.current = 0; if (scrollContainerRef.current) scrollContainerRef.current.scrollTop = 0; }} className="w-9 h-9 rounded-xl flex items-center justify-center bg-white/5 text-slate-400 shrink-0" title="Reiniciar do Topo"><RotateCcw className="w-4 h-4 -scale-x-100" /></button>
+                                    <button onClick={handleShareList} className="w-9 h-9 rounded-xl flex items-center justify-center bg-white/5 text-slate-400 shrink-0" title="Compartilhar Lista"><Share2 className="w-4 h-4" /></button>
+                                </div>
                             </div>
                         </div>
 
@@ -4428,7 +4358,7 @@ function App() {
                                 {/* Toggle Button */}
                                 <button
                                     onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-                                    className={`absolute ${isSidebarCollapsed ? '-right-14 md:-right-3' : '-right-5 md:-right-3'} top-6 w-12 h-12 md:w-6 md:h-6 bg-[#B87333] hover:bg-orange-500 text-white rounded-full flex items-center justify-center shadow-[0_0_20px_rgba(184,115,51,0.6)] transition-all z-[200] border-[2px] border-white/10`}
+                                    className={`absolute ${isSidebarCollapsed ? '-right-14 md:-right-3' : '-right-5 md:-right-3'} top-6 w-12 h-12 md:w-6 md:h-6 bg-[#B87333] hover:bg-orange-500 text-white rounded-full flex items-center justify-center shadow-[0_0_20px_rgba(184,115,51,0.6)] transition-all z-[200] border-[2px] border-white/10 opacity-50 hover:opacity-100 focus:opacity-100`}
                                     title={isSidebarCollapsed ? "Expandir Lista" : "Recolher Lista"}
                                 >
                                     {isSidebarCollapsed ? <ChevronRight className="w-6 h-6 md:w-3.5 md:h-3.5 ml-1 md:ml-0" /> : <ChevronLeft className="w-6 h-6 md:w-3.5 md:h-3.5 mr-1 md:mr-0" />}
