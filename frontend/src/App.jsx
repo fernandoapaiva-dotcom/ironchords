@@ -91,7 +91,7 @@ function usePinchZoom(containerRef, fontSize, setFontSize, minSize = 12, maxSize
             el.addEventListener('touchend', onTouchEnd, { capture: true, passive: true });
             el.addEventListener('touchcancel', onTouchEnd, { capture: true, passive: true });
 
-            el.style.touchAction = 'none';
+            el.style.touchAction = 'pan-y';
 
             return () => {
                 el.removeEventListener('touchstart', onTouchStart, { capture: true });
@@ -2023,6 +2023,23 @@ function App() {
         
         const checkBlow = () => {
             if (localAnalyser) {
+                const freqBuf = new Uint8Array(localAnalyser.frequencyBinCount);
+                localAnalyser.getByteFrequencyData(freqBuf);
+                
+                // 1. Calculate Peak-to-Average Ratio (PAR) to distinguish noise (blow) from tones (guitar/voice)
+                let sum = 0, max = 0;
+                for (let i = 0; i < freqBuf.length; i++) {
+                    sum += freqBuf[i];
+                    if (freqBuf[i] > max) max = freqBuf[i];
+                }
+                const avg = sum / freqBuf.length;
+                const par = avg > 0 ? max / avg : 0;
+                
+                // 2. Check low frequency bias (Blows are mostly low-end rumble)
+                let lowSum = 0;
+                for (let i = 0; i < 8; i++) lowSum += freqBuf[i]; // First ~600Hz
+                const lowRatio = sum > 0 ? (lowSum / 8) / avg : 0;
+
                 const buf = new Float32Array(localAnalyser.fftSize);
                 localAnalyser.getFloatTimeDomainData(buf);
                 let rms = 0;
@@ -2030,15 +2047,19 @@ function App() {
                 rms = Math.sqrt(rms / buf.length) * 500;
                 const now = Date.now();
                 
-                if (rms > BLOW_THRESHOLD && !inBurst) { 
+                // Thresholds: Increased RMS, added PAR < 3.0 (noise) and lowRatio > 1.5 (bass-heavy)
+                const isNoisy = par > 0 && par < 3.2;
+                const isBassHeavy = lowRatio > 1.8;
+                
+                if (rms > BLOW_THRESHOLD && isNoisy && isBassHeavy && !inBurst) { 
                     inBurst = true; 
-                    burstStartTime = now; 
-                } else if (rms < BLOW_THRESHOLD * 0.5 && inBurst) {
+                    burstStartTime = now;
+                } else if ((rms < BLOW_THRESHOLD * 0.4 || !isNoisy) && inBurst) {
                     const dur = now - burstStartTime;
-                    // Filter: Must sustain for > 150ms (not a click) but < 400ms (not singing)
+                    // Filter: Must sustain for > 150ms but < 400ms
                     if (dur > MIN_BLOW_DURATION && dur < BLOW_MAX_DURATION && now - lastBlowTime > 1000) {
                         lastBlowTime = now;
-                        console.log(`[BlowDetect] Valid blow detected! Duration: ${dur}ms`);
+                        console.log(`[BlowDetect] Valid blow! dur:${dur}ms par:${par.toFixed(2)} low:${lowRatio.toFixed(2)}`);
                         const container = scrollContainerRef.current;
                         if (container) {
                             lastManualScrollTime.current = 0;
