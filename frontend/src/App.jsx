@@ -2026,7 +2026,8 @@ function App() {
                 const freqBuf = new Uint8Array(localAnalyser.frequencyBinCount);
                 localAnalyser.getByteFrequencyData(freqBuf);
                 
-                // 1. Calculate Peak-to-Average Ratio (PAR) to distinguish noise (blow) from tones (guitar/voice)
+                // 1. Calculate Peak-to-Average Ratio (PAR)
+                // Blows (noise) have very low PAR (< 2.5), while tones (notes) have high peaks.
                 let sum = 0, max = 0;
                 for (let i = 0; i < freqBuf.length; i++) {
                     sum += freqBuf[i];
@@ -2035,10 +2036,16 @@ function App() {
                 const avg = sum / freqBuf.length;
                 const par = avg > 0 ? max / avg : 0;
                 
-                // 2. Check low frequency bias (Blows are mostly low-end rumble)
-                let lowSum = 0;
-                for (let i = 0; i < 8; i++) lowSum += freqBuf[i]; // First ~600Hz
-                const lowRatio = sum > 0 ? (lowSum / 8) / avg : 0;
+                // 2. Sub-Bass Dominance Check
+                // Physical puffs create a massive pressure wave in the lowest bin (0-172Hz).
+                const subBass = freqBuf[0]; 
+                const subBassRatio = avg > 0 ? subBass / avg : 0;
+
+                // 3. High-Frequency Suppression
+                // A true blow is mostly low-end rumble. Musical notes have harmonics in the highs.
+                let highSum = 0;
+                for (let i = 20; i < freqBuf.length; i++) highSum += freqBuf[i]; // Above ~3.4kHz
+                const highEnergyRatio = sum > 0 ? highSum / sum : 0;
 
                 const buf = new Float32Array(localAnalyser.fftSize);
                 localAnalyser.getFloatTimeDomainData(buf);
@@ -2047,19 +2054,22 @@ function App() {
                 rms = Math.sqrt(rms / buf.length) * 500;
                 const now = Date.now();
                 
-                // Thresholds: Increased RMS, added PAR < 3.0 (noise) and lowRatio > 1.5 (bass-heavy)
-                const isNoisy = par > 0 && par < 3.2;
-                const isBassHeavy = lowRatio > 1.8;
+                // HARDENED THRESHOLDS: 
+                // - RMS > 150 (Deliberate)
+                // - PAR < 2.5 (Pure Noise/Wind)
+                // - SubBassRatio > 4.0 (Physical Air Pressure)
+                // - HighEnergyRatio < 0.10 (No musical harmonics)
+                const isValidPuff = rms > 150 && par < 2.5 && subBassRatio > 4.0 && highEnergyRatio < 0.10;
                 
-                if (rms > BLOW_THRESHOLD && isNoisy && isBassHeavy && !inBurst) { 
+                if (isValidPuff && !inBurst) { 
                     inBurst = true; 
                     burstStartTime = now;
-                } else if ((rms < BLOW_THRESHOLD * 0.4 || !isNoisy) && inBurst) {
+                } else if ((rms < 50 || !isValidPuff) && inBurst) {
                     const dur = now - burstStartTime;
                     // Filter: Must sustain for > 150ms but < 400ms
                     if (dur > MIN_BLOW_DURATION && dur < BLOW_MAX_DURATION && now - lastBlowTime > 1000) {
                         lastBlowTime = now;
-                        console.log(`[BlowDetect] Valid blow! dur:${dur}ms par:${par.toFixed(2)} low:${lowRatio.toFixed(2)}`);
+                        console.log(`[BlowDetect] Valid blow! dur:${dur}ms par:${par.toFixed(2)} sub:${subBassRatio.toFixed(2)} high:${highEnergyRatio.toFixed(2)}`);
                         const container = scrollContainerRef.current;
                         if (container) {
                             lastManualScrollTime.current = 0;
