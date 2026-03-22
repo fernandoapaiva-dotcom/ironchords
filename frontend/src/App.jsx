@@ -1235,6 +1235,9 @@ function App() {
     const [isManualColumns, setIsManualColumns] = useState(false);
     const [showBottomToolsDrawer, setShowBottomToolsDrawer] = useState(false);
 
+    // Derived State
+    const currentSong = songs[selectedManualIndex] || null;
+
     // Refs
     const sharedAudioStreamRef = useRef(null);
     const audioTrackerRef = useRef(null);
@@ -1846,9 +1849,15 @@ function App() {
 
     // Apply Pinch-to-Zoom Hook — pass enabled flag so the effect re-runs when the player opens
     // (the scroll container element only exists once the player renders)
-    const isPinchPlayerActive = isFullScreenPlayer || mainNav === 'player';
-    usePinchZoom(scrollContainerRef, playerFontSize, setPlayerFontSize, 12, 60, handlePinchActive, setPinchLiveFontSize, isPinchPlayerActive, isStageModeActive);
-    usePinchZoom(manualScrollContainerRef, manualFontSize, setManualFontSize, 12, 60, handlePinchActive, setPinchLiveFontSize, isPinchPlayerActive, isManualFullscreen);
+    // Expanded to include Acervo and Manual tabs for the manualScrollContainerRef
+    const isPinchPlayerActive = isFullScreenPlayer || mainNav === 'player' || mainNav === 'acervo' || mainNav === 'manual' || !!manualPreviewSong;
+    
+    // isStageModeActive and currentSong?.song_name are keys that switch the element for scrollContainerRef
+    usePinchZoom(scrollContainerRef, playerFontSize, setPlayerFontSize, 12, 60, handlePinchActive, setPinchLiveFontSize, isPinchPlayerActive, `${isStageModeActive}-${currentSong?.song_name}`);
+    
+    // isManualFullscreen and manualPreviewSong?.song_name are the triggers for manualScrollContainerRef
+    usePinchZoom(manualScrollContainerRef, manualFontSize, setManualFontSize, 12, 60, handlePinchActive, setPinchLiveFontSize, isPinchPlayerActive, `${isManualFullscreen}-${manualPreviewSong?.song_name}`);
+
 
 
     // AutoScroll Effect with Mic interaction (Manual / Player / Presentation)
@@ -4028,8 +4037,6 @@ function App() {
         setSongs(newSongs);
     };
 
-    const currentSong = songs[selectedManualIndex] || null;
-
     if (isAuthenticating) {
         return (
             <div className="min-h-screen bg-[#070709] flex items-center justify-center">
@@ -4780,8 +4787,9 @@ function App() {
                                     </button>
                                 )}
                                 <div 
-                                    ref={scrollContainerRef} 
+                                    ref={!isStageModeActive ? scrollContainerRef : null} 
                                     className="flex-1 overflow-auto overflow-x-auto p-4 md:p-16 scroll-smooth scrollbar-none pb-64 w-full"
+
                                     style={{ 
                                         fontSize: `var(--dynamic-zoom-fs, ${showPinchBar ? pinchLiveFontSize : playerFontSize}px)`
                                     }}
