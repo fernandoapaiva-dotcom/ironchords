@@ -28,7 +28,7 @@ const API_BASE_URL = getBaseUrl().replace(/\/api\/?$/, '');
 
 // -------------------------------------------------------------------
 // enabled flag allows re-running the effect when the container element becomes available (player opens)
-function usePinchZoom(containerRef, fontSize, setFontSize, minSize = 12, maxSize = 60, onPinchActive = null, onPinchUpdate = null, enabled = true) {
+function usePinchZoom(containerRef, fontSize, setFontSize, minSize = 12, maxSize = 60, onPinchActive = null, onPinchUpdate = null, enabled = true, trigger = null) {
     const lastDistRef = React.useRef(null);
     const targetFontSizeRef = React.useRef(fontSize);
 
@@ -38,73 +38,73 @@ function usePinchZoom(containerRef, fontSize, setFontSize, minSize = 12, maxSize
 
     React.useEffect(() => {
         if (!enabled) return;
-        const el = containerRef?.current;
-        if (!el) return;
+        
+        // Wait a tiny bit to ensure the ref is populated after a mode switch
+        const timeout = setTimeout(() => {
+            const el = containerRef?.current;
+            if (!el) return;
 
-        const getTouchDist = (touches) => {
-            if (touches.length < 2) return 0;
-            const dx = Math.abs(touches[0].clientX - touches[1].clientX);
-            const dy = Math.abs(touches[0].clientY - touches[1].clientY);
-            return Math.sqrt(dx * dx + dy * dy);
-        };
+            const getTouchDist = (touches) => {
+                if (touches.length < 2) return 0;
+                const dx = Math.abs(touches[0].clientX - touches[1].clientX);
+                const dy = Math.abs(touches[0].clientY - touches[1].clientY);
+                return Math.sqrt(dx * dx + dy * dy);
+            };
 
-        const onTouchStart = (e) => {
-            if (e.touches.length === 2) {
-                // Stop browser zoom dead in its tracks
+            const onTouchStart = (e) => {
+                if (e.touches.length === 2) {
+                    if (e.cancelable) e.preventDefault();
+                    lastDistRef.current = getTouchDist(e.touches);
+                    if (onPinchActive) onPinchActive(true);
+                }
+            };
+
+            const onTouchMove = (e) => {
+                if (e.touches.length !== 2 || lastDistRef.current === null) return;
                 if (e.cancelable) e.preventDefault();
-                lastDistRef.current = getTouchDist(e.touches);
-                if (onPinchActive) onPinchActive(true);
-            }
-        };
+                e.stopPropagation();
 
-        const onTouchMove = (e) => {
-            if (e.touches.length !== 2 || lastDistRef.current === null) return;
-            
-            // KILL ALL BROWSER ZOOM/SCROLL during pinch
-            if (e.cancelable) e.preventDefault();
-            e.stopPropagation();
+                const newDist = getTouchDist(e.touches);
+                if (newDist === 0) return;
 
-            const newDist = getTouchDist(e.touches);
-            if (newDist === 0) return;
+                const ratio = newDist / lastDistRef.current;
+                const newSize = Math.min(maxSize, Math.max(minSize, targetFontSizeRef.current * ratio));
+                targetFontSizeRef.current = newSize;
 
-            // Ratio-based scaling
-            const ratio = newDist / lastDistRef.current;
-            const newSize = Math.min(maxSize, Math.max(minSize, targetFontSizeRef.current * ratio));
-            targetFontSizeRef.current = newSize;
+                el.style.setProperty('--dynamic-zoom-fs', `${newSize}px`);
+                el.style.fontSize = `${newSize}px`; 
 
-            // APPLY CSS VARIABLE - this is the most reliable way to override React's render cycles
-            el.style.setProperty('--dynamic-zoom-fs', `${newSize}px`);
-            el.style.fontSize = `${newSize}px`; 
+                if (onPinchUpdate) onPinchUpdate(newSize);
+                lastDistRef.current = newDist;
+            };
 
-            if (onPinchUpdate) onPinchUpdate(newSize);
-            lastDistRef.current = newDist;
-        };
+            const onTouchEnd = () => {
+                if (lastDistRef.current !== null) {
+                    if (onPinchActive) onPinchActive(false);
+                    setFontSize(Math.round(targetFontSizeRef.current * 10) / 10);
+                }
+                lastDistRef.current = null;
+            };
 
-        const onTouchEnd = () => {
-            if (lastDistRef.current !== null) {
-                if (onPinchActive) onPinchActive(false);
-                setFontSize(Math.round(targetFontSizeRef.current * 10) / 10);
-            }
-            lastDistRef.current = null;
-        };
+            el.addEventListener('touchstart', onTouchStart, { capture: true, passive: false });
+            el.addEventListener('touchmove', onTouchMove, { capture: true, passive: false });
+            el.addEventListener('touchend', onTouchEnd, { capture: true, passive: true });
+            el.addEventListener('touchcancel', onTouchEnd, { capture: true, passive: true });
 
-        // Capture phase + passive:false is required for modern mobile browsers
-        el.addEventListener('touchstart', onTouchStart, { capture: true, passive: false });
-        el.addEventListener('touchmove', onTouchMove, { capture: true, passive: false });
-        el.addEventListener('touchend', onTouchEnd, { capture: true, passive: true });
-        el.addEventListener('touchcancel', onTouchEnd, { capture: true, passive: true });
+            el.style.touchAction = 'none';
 
-        // Ensure this element is ready to handle touches
-        el.style.touchAction = 'none';
+            return () => {
+                el.removeEventListener('touchstart', onTouchStart, { capture: true });
+                el.removeEventListener('touchmove', onTouchMove, { capture: true });
+                el.removeEventListener('touchend', onTouchEnd, { capture: true });
+                el.removeEventListener('touchcancel', onTouchEnd, { capture: true });
+            };
+        }, 80); // Small delay to let React committed refs
 
-        return () => {
-            el.removeEventListener('touchstart', onTouchStart, { capture: true });
-            el.removeEventListener('touchmove', onTouchMove, { capture: true });
-            el.removeEventListener('touchend', onTouchEnd, { capture: true });
-            el.removeEventListener('touchcancel', onTouchEnd, { capture: true });
-        };
-    }, [containerRef, setFontSize, minSize, maxSize, onPinchActive, onPinchUpdate, enabled]);
+        return () => clearTimeout(timeout);
+    }, [containerRef, setFontSize, minSize, maxSize, onPinchActive, onPinchUpdate, enabled, trigger]);
 }
+
 
 
 
@@ -1847,8 +1847,9 @@ function App() {
     // Apply Pinch-to-Zoom Hook — pass enabled flag so the effect re-runs when the player opens
     // (the scroll container element only exists once the player renders)
     const isPinchPlayerActive = isFullScreenPlayer || mainNav === 'player';
-    usePinchZoom(scrollContainerRef, playerFontSize, setPlayerFontSize, 12, 60, handlePinchActive, setPinchLiveFontSize, isPinchPlayerActive);
-    usePinchZoom(manualScrollContainerRef, manualFontSize, setManualFontSize, 12, 60, handlePinchActive, setPinchLiveFontSize, isPinchPlayerActive);
+    usePinchZoom(scrollContainerRef, playerFontSize, setPlayerFontSize, 12, 60, handlePinchActive, setPinchLiveFontSize, isPinchPlayerActive, isStageModeActive);
+    usePinchZoom(manualScrollContainerRef, manualFontSize, setManualFontSize, 12, 60, handlePinchActive, setPinchLiveFontSize, isPinchPlayerActive, isManualFullscreen);
+
 
     // AutoScroll Effect with Mic interaction (Manual / Player / Presentation)
     useEffect(() => {
@@ -4052,7 +4053,7 @@ function App() {
             {/* =========================================
                  GLOBAL HAMBURGER MENU 
                  ========================================= */}
-            <div className={`fixed top-2 right-2 sm:top-4 sm:right-4 z-[400] no-print transition-all duration-300 ${isImmersiveMode && !showImmersiveControls && !showGlobalMenu ? '-translate-y-full opacity-0 relative' : 'translate-y-0 opacity-100 relative'}`}>
+            <div className={`fixed top-2 right-2 sm:top-4 sm:right-4 z-[600] no-print transition-all duration-300 ${isImmersiveMode && !showImmersiveControls && !showGlobalMenu ? '-translate-y-full opacity-0' : 'translate-y-0 opacity-100'}`}>
                 {/* Menu Toggle Button */}
                 <button
                     onClick={() => setShowGlobalMenu(true)}
@@ -4067,11 +4068,13 @@ function App() {
                     <>
                         {/* Backdrop */}
                         <div
-                            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[390]"
+                            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[590]"
                             onClick={() => setShowGlobalMenu(false)}
                         />
+
                         {/* Dropdown/Drawer Content */}
-                        <div className="absolute top-0 right-0 w-64 bg-[#12121A] border border-white/10 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.8)] overflow-hidden z-[410] animate-in fade-in slide-in-from-top-2 duration-200">
+                        <div className="absolute top-0 right-0 w-64 bg-[#12121A] border border-white/10 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.8)] overflow-hidden z-[610] animate-in fade-in slide-in-from-top-2 duration-200">
+
                             
                             {/* Header */}
                             <div className="flex items-center justify-between p-4 border-b border-white/5 bg-black/20">
@@ -4171,8 +4174,7 @@ function App() {
                                     ref={scrollContainerRef}
                                     className="flex-1 overflow-auto px-6 py-10 scrollbar-none"
                                     style={{ 
-                                        fontSize: `var(--dynamic-zoom-fs, ${Math.max(playerFontSize, 22)}px)`,
-                                        touchAction: 'pan-y'
+                                        fontSize: `var(--dynamic-zoom-fs, ${Math.max(playerFontSize, 22)}px)`
                                     }}
                                 >
                                     <div className="max-w-4xl mx-auto space-y-1">
@@ -4781,8 +4783,7 @@ function App() {
                                     ref={scrollContainerRef} 
                                     className="flex-1 overflow-auto overflow-x-auto p-4 md:p-16 scroll-smooth scrollbar-none pb-64 w-full"
                                     style={{ 
-                                        fontSize: `var(--dynamic-zoom-fs, ${showPinchBar ? pinchLiveFontSize : playerFontSize}px)`,
-                                        touchAction: 'pan-y'
+                                        fontSize: `var(--dynamic-zoom-fs, ${showPinchBar ? pinchLiveFontSize : playerFontSize}px)`
                                     }}
                                 >
 
@@ -5360,8 +5361,7 @@ function App() {
                                                                 `}
                                                                 style={{ 
                                                                     maxHeight: isManualFullscreen ? '100vh' : '500px',
-                                                                    fontSize: `var(--dynamic-zoom-fs, ${showPinchBar ? pinchLiveFontSize : manualFontSize}px)`,
-                                                                    touchAction: 'pan-y'
+                                                                    fontSize: `var(--dynamic-zoom-fs, ${showPinchBar ? pinchLiveFontSize : manualFontSize}px)`
                                                                 }}
                                                             >
                                                                 <div className="printable-area">
