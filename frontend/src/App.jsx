@@ -31,73 +31,71 @@ const API_BASE_URL = getBaseUrl().replace(/\/api\/?$/, '');
 function usePinchZoom(containerRef, fontSize, setFontSize, minSize = 12, maxSize = 60, onPinchActive = null, onPinchUpdate = null, enabled = true) {
     const lastDistRef = React.useRef(null);
     const targetFontSizeRef = React.useRef(fontSize);
-    const savedOverflowRef = React.useRef('');
 
     React.useEffect(() => {
         targetFontSizeRef.current = fontSize;
     }, [fontSize]);
 
     React.useEffect(() => {
-        if (!enabled) return;  // player not open yet — skip
+        if (!enabled) return;
         const el = containerRef?.current;
         if (!el) return;
 
         const getTouchDist = (touches) => {
             if (touches.length < 2) return 0;
-            const dx = touches[0].clientX - touches[1].clientX;
-            const dy = touches[0].clientY - touches[1].clientY;
+            const dx = Math.abs(touches[0].clientX - touches[1].clientX);
+            const dy = Math.abs(touches[0].clientY - touches[1].clientY);
             return Math.sqrt(dx * dx + dy * dy);
         };
 
         const onTouchStart = (e) => {
             if (e.touches.length === 2) {
-                e.preventDefault();
+                // Stop browser zoom dead in its tracks
+                if (e.cancelable) e.preventDefault();
                 lastDistRef.current = getTouchDist(e.touches);
-                // Disable native scroll so iOS/Android don't steal the gesture
-                savedOverflowRef.current = el.style.overflow;
-                el.style.overflow = 'hidden';
-                el.style.touchAction = 'none';
                 if (onPinchActive) onPinchActive(true);
             }
         };
 
         const onTouchMove = (e) => {
             if (e.touches.length !== 2 || lastDistRef.current === null) return;
-            e.preventDefault();
+            
+            // KILL ALL BROWSER ZOOM/SCROLL during pinch
+            if (e.cancelable) e.preventDefault();
+            e.stopPropagation();
 
             const newDist = getTouchDist(e.touches);
             if (newDist === 0) return;
 
-            // Ratio-based scaling: 1:1 with finger movement
+            // Ratio-based scaling
             const ratio = newDist / lastDistRef.current;
             const newSize = Math.min(maxSize, Math.max(minSize, targetFontSizeRef.current * ratio));
             targetFontSizeRef.current = newSize;
 
-            // Apply directly for instant visual feedback
-            el.style.fontSize = `${newSize}px`;
-            if (onPinchUpdate) onPinchUpdate(newSize);
+            // APPLY CSS VARIABLE - this is the most reliable way to override React's render cycles
+            el.style.setProperty('--dynamic-zoom-fs', `${newSize}px`);
+            el.style.fontSize = `${newSize}px`; 
 
+            if (onPinchUpdate) onPinchUpdate(newSize);
             lastDistRef.current = newDist;
         };
 
         const onTouchEnd = () => {
             if (lastDistRef.current !== null) {
-                // Restore native scroll
-                el.style.overflow = savedOverflowRef.current || '';
-                el.style.touchAction = 'pan-y';
                 if (onPinchActive) onPinchActive(false);
                 setFontSize(Math.round(targetFontSizeRef.current * 10) / 10);
             }
             lastDistRef.current = null;
         };
 
-        // Use capture phase to ensure we intercept the touch before child elements (like pre tags) swallow it
+        // Capture phase + passive:false is required for modern mobile browsers
         el.addEventListener('touchstart', onTouchStart, { capture: true, passive: false });
         el.addEventListener('touchmove', onTouchMove, { capture: true, passive: false });
         el.addEventListener('touchend', onTouchEnd, { capture: true, passive: true });
         el.addEventListener('touchcancel', onTouchEnd, { capture: true, passive: true });
 
-        el.style.touchAction = 'pan-y';
+        // Ensure this element is ready to handle touches
+        el.style.touchAction = 'none';
 
         return () => {
             el.removeEventListener('touchstart', onTouchStart, { capture: true });
@@ -105,7 +103,6 @@ function usePinchZoom(containerRef, fontSize, setFontSize, minSize = 12, maxSize
             el.removeEventListener('touchend', onTouchEnd, { capture: true });
             el.removeEventListener('touchcancel', onTouchEnd, { capture: true });
         };
-    // enabled in deps so effect re-runs when player opens and element becomes available
     }, [containerRef, setFontSize, minSize, maxSize, onPinchActive, onPinchUpdate, enabled]);
 }
 
@@ -1411,6 +1408,21 @@ function App() {
             }
         }
     };
+
+    useEffect(() => {
+        const preventNativeZoom = (e) => {
+            if (e.touches && e.touches.length > 1) {
+                if (e.cancelable) e.preventDefault();
+            }
+        };
+        // Add as non-passive to reliably block browser zoom
+        document.addEventListener('touchstart', preventNativeZoom, { passive: false });
+        document.addEventListener('touchmove', preventNativeZoom, { passive: false });
+        return () => {
+            document.removeEventListener('touchstart', preventNativeZoom);
+            document.removeEventListener('touchmove', preventNativeZoom);
+        };
+    }, []);
     // Pinch Font Size Bar
 
     const handlePinchActive = useCallback((active) => {
@@ -4146,20 +4158,6 @@ function App() {
                 </>
             )}
 
-            <main className="max-w-7xl mx-auto px-2 sm:px-6 pt-24 sm:pt-32 pb-20 relative">
-                {/* Visual Header */}
-                <div className="absolute top-10 left-1/2 -translate-x-1/2 flex flex-col items-center space-y-4 no-print">
-                    <div className="flex items-center space-x-4">
-                        <Flame className="w-10 h-10 text-[#B87333]" />
-                        <h1 className="text-6xl font-black text-white italic tracking-tighter uppercase leading-none">IRON<span className="text-[#B87333]">CHORDS</span></h1>
-                    </div>
-                    <div className="flex items-center space-x-3 opacity-40">
-                        <div className="h-0.5 w-12 bg-[#B87333]"></div>
-                        <span className="text-[10px] font-black uppercase tracking-[0.5em]">Forge Your Sound</span>
-                        <div className="h-0.5 w-12 bg-[#B87333]"></div>
-                    </div>
-                </div>
-
                 {(isFullScreenPlayer || mainNav === 'player') ? (
                     <div className="fixed inset-0 bg-[#070709] z-[100] flex flex-col animate-in fade-in zoom-in-95 duration-500">
                         {/* === STAGE MODE OVERLAY === */}
@@ -4171,10 +4169,11 @@ function App() {
                                 {/* Song content — max size, no distractions */}
                                 <div 
                                     ref={scrollContainerRef}
-                                    onTouchStart={() => { lastManualScrollTime.current = Date.now(); }}
-                                    onTouchMove={() => { lastManualScrollTime.current = Date.now(); }}
                                     className="flex-1 overflow-auto px-6 py-10 scrollbar-none"
-                                    style={{ fontSize: `${Math.max(playerFontSize, 22)}px` }}
+                                    style={{ 
+                                        fontSize: `var(--dynamic-zoom-fs, ${Math.max(playerFontSize, 22)}px)`,
+                                        touchAction: 'pan-y'
+                                    }}
                                 >
                                     <div className="max-w-4xl mx-auto space-y-1">
                                         {((currentSong?.include_tabs ?? includeTabs) === false
@@ -4780,11 +4779,11 @@ function App() {
                                 )}
                                 <div 
                                     ref={scrollContainerRef} 
-                                    onTouchStart={() => { lastManualScrollTime.current = Date.now(); }}
-                                    onTouchMove={() => { lastManualScrollTime.current = Date.now(); }}
-                                    onWheel={() => { lastManualScrollTime.current = Date.now(); }}
                                     className="flex-1 overflow-auto overflow-x-auto p-4 md:p-16 scroll-smooth scrollbar-none pb-64 w-full"
-                                    style={{ fontSize: `${showPinchBar ? pinchLiveFontSize : playerFontSize}px` }}
+                                    style={{ 
+                                        fontSize: `var(--dynamic-zoom-fs, ${showPinchBar ? pinchLiveFontSize : playerFontSize}px)`,
+                                        touchAction: 'pan-y'
+                                    }}
                                 >
 
                                     <div className="max-w-4xl mx-auto space-y-1 printable-area">
@@ -4838,7 +4837,7 @@ function App() {
                                                         {isActive && <div className="absolute left-0 w-2 h-full bg-[#B87333] rounded-full shadow-[0_0_20px_rgba(184,115,51,0.8)] animate-pulse"></div>}
                                                         <pre className={`font-mono leading-relaxed whitespace-pre transition-colors duration-500
                                                         ${isActive ? 'text-white font-black' : isChordLine ? 'text-[#B87333] font-bold italic opacity-80' : 'text-slate-400 font-medium'}
-                                                    `}>
+                                                    `} style={{ fontSize: 'inherit' }}>
                                                             {isChordLine
                                                                 ? renderChordLine(line, (chord, anchor, isPersistent) => setChordTooltip({ chord, anchor, isPersistent }), songs[selectedManualIndex]?.capo || 0)
                                                                 : (line || ' ')}
@@ -4917,7 +4916,21 @@ function App() {
                         <button onClick={() => { resetSearchSession(); setIsFullScreenPlayer(false); setActiveTab('manual'); }} className="absolute top-10 right-10 p-5 bg-white/5 hover:bg-white/10 rounded-2xl text-white opacity-0 hover:opacity-100 transition-all"><X className="w-8 h-8" /></button>
                     </div>
                 ) : (
-                    <div className="selection-branch-root flex flex-col min-h-[600px] h-full">
+                    <main className="max-w-7xl mx-auto px-2 sm:px-6 pt-24 sm:pt-32 pb-20 relative">
+                        {/* Visual Header */}
+                        <div className="absolute top-10 left-1/2 -translate-x-1/2 flex flex-col items-center space-y-4 no-print">
+                            <div className="flex items-center space-x-4">
+                                <Flame className="w-10 h-10 text-[#B87333]" />
+                                <h1 className="text-6xl font-black text-white italic tracking-tighter uppercase leading-none">IRON<span className="text-[#B87333]">CHORDS</span></h1>
+                            </div>
+                            <div className="flex items-center space-x-3 opacity-40">
+                                <div className="h-0.5 w-12 bg-[#B87333]"></div>
+                                <span className="text-[10px] font-black uppercase tracking-[0.5em]">Forge Your Sound</span>
+                                <div className="h-0.5 w-12 bg-[#B87333]"></div>
+                            </div>
+                        </div>
+
+                        <div className="selection-branch-root flex flex-col min-h-[600px] h-full">
                         <div className="no-print">
 
                         </div>
@@ -5347,7 +5360,8 @@ function App() {
                                                                 `}
                                                                 style={{ 
                                                                     maxHeight: isManualFullscreen ? '100vh' : '500px',
-                                                                    fontSize: `${showPinchBar ? pinchLiveFontSize : manualFontSize}px`
+                                                                    fontSize: `var(--dynamic-zoom-fs, ${showPinchBar ? pinchLiveFontSize : manualFontSize}px)`,
+                                                                    touchAction: 'pan-y'
                                                                 }}
                                                             >
                                                                 <div className="printable-area">
@@ -5388,7 +5402,7 @@ function App() {
                                                                                 const isChordLine = !!(line && line.trim().length > 0 && (line.match(CHORD_TOKEN_RE) || []).length > 0 && line.replace(CHORD_TOKEN_RE, '').replace(/[\s|()\-xX0-9:]/g, '').length < Math.max(2, line.trim().length * 0.5));
 
                                                                                 return (
-                                                                                    <pre key={lIdx} className={`font-mono leading-relaxed whitespace-pre break-inside-avoid ${isChordLine ? 'text-[#B87333] print:text-[#B87333] font-black italic tracking-tight mb-0' : 'text-slate-300 print:text-gray-900 font-medium mb-1'}`}>
+                                                                                    <pre key={lIdx} className={`font-mono leading-relaxed whitespace-pre break-inside-avoid ${isChordLine ? 'text-[#B87333] print:text-[#B87333] font-black italic tracking-tight mb-0' : 'text-slate-300 print:text-gray-900 font-medium mb-1'}`} style={{ fontSize: 'inherit' }}>
                                                                                         {isChordLine
                                                                                             ? renderChordLine(line, (chord, anchor, isPersistent) => setChordTooltip({ chord, anchor, isPersistent }), manualPreviewSong.capo || 0)
                                                                                             : (line || ' ')}
@@ -5905,11 +5919,10 @@ function App() {
                                     </div>
                                 )
                             }
-
                         </div>
                     </div>
-                )}
-            </main>
+                </main>
+            )}
 
             {/* SettingsModal - Always rendered, visibility controlled by isOpen */}
             <SettingsModal
