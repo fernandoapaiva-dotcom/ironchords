@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { PhoneticMatcher } from './utils/PhoneticMatcher';
-import { Music, UploadCloud, Plus, Minus, FileText, CheckCircle, AlertCircle, Eye, EyeOff, FileAudio, Info, X, Guitar, Settings2, Image as ImageIcon, Database, Edit3, Trash2, ArrowRight, Play, Maximize, Maximize2, Pause, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Download, ArrowLeft, SkipBack, SkipForward, Save, Share2, FolderHeart, Flame, Hammer, Sparkles, RefreshCw, Zap, ShieldCheck, Monitor, Tv, Check, Users, LayoutList, Layout, Mic, Search, RotateCcw, Printer, Archive, GripVertical, Minimize2, Link, MessageCircle, Mail, ExternalLink, Smartphone, Apple, Copy, Wind, Footprints } from 'lucide-react';
+import { Music, UploadCloud, Plus, Minus, FileText, CheckCircle, AlertCircle, Eye, EyeOff, FileAudio, Info, X, Guitar, Settings2, Image as ImageIcon, Database, Edit3, Trash2, ArrowRight, Play, Maximize, Maximize2, Pause, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Download, ArrowLeft, SkipBack, SkipForward, Save, Share2, FolderHeart, Flame, Hammer, Sparkles, RefreshCw, Zap, ShieldCheck, Monitor, Tv, Check, Users, LayoutList, Layout, Mic, Search, RotateCcw, Printer, Archive, GripVertical, Minimize2, Link, MessageCircle, Mail, ExternalLink, Smartphone, Apple, Copy, Wind, Footprints, MoreVertical } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { SVGuitarChord } from 'svguitar';
 import { AudioTracker } from './utils/AudioTracker';
@@ -27,9 +27,8 @@ const getBaseUrl = () => {
 const API_BASE_URL = getBaseUrl().replace(/\/api\/?$/, '');
 
 // -------------------------------------------------------------------
-// PINCH-TO-ZOOM HOOK – adjusts font size when user pinches on mobile
-// -------------------------------------------------------------------
-function usePinchZoom(containerRef, fontSize, setFontSize, minSize = 12, maxSize = 60, onPinchActive = null, onPinchUpdate = null) {
+// enabled flag allows re-running the effect when the container element becomes available (player opens)
+function usePinchZoom(containerRef, fontSize, setFontSize, minSize = 12, maxSize = 60, onPinchActive = null, onPinchUpdate = null, enabled = true) {
     const lastDistRef = React.useRef(null);
     const targetFontSizeRef = React.useRef(fontSize);
     const savedOverflowRef = React.useRef('');
@@ -39,6 +38,7 @@ function usePinchZoom(containerRef, fontSize, setFontSize, minSize = 12, maxSize
     }, [fontSize]);
 
     React.useEffect(() => {
+        if (!enabled) return;  // player not open yet — skip
         const el = containerRef?.current;
         if (!el) return;
 
@@ -105,7 +105,8 @@ function usePinchZoom(containerRef, fontSize, setFontSize, minSize = 12, maxSize
             el.removeEventListener('touchend', onTouchEnd);
             el.removeEventListener('touchcancel', onTouchEnd);
         };
-    }, [containerRef, setFontSize, minSize, maxSize, onPinchActive, onPinchUpdate]);
+    // enabled in deps so effect re-runs when player opens and element becomes available
+    }, [containerRef, setFontSize, minSize, maxSize, onPinchActive, onPinchUpdate, enabled]);
 }
 
 
@@ -1189,6 +1190,7 @@ function App() {
     const [savedPlaylists, setSavedPlaylists] = useState(() => getSafeJSON('iron_chords_playlists', []));
     const [activePlaylistName, setActivePlaylistName] = useState(null);
     const [activeTab, setActiveTab] = useState('manual');
+    const [isPlayerUtilMenuOpen, setIsPlayerUtilMenuOpen] = useState(false);
     const [playerSidebarTab, setPlayerSidebarTab] = useState('fila'); 
     const [listasSubTab, setListasSubTab] = useState('salvas');
     const [songs, setSongs] = useState([]);
@@ -1829,9 +1831,11 @@ function App() {
         }
     }, []);
 
-    // Apply Pinch-to-Zoom Hook to both containers safely
-    usePinchZoom(scrollContainerRef, playerFontSize, setPlayerFontSize, 12, 60, handlePinchActive, setPinchLiveFontSize);
-    usePinchZoom(manualScrollContainerRef, manualFontSize, setManualFontSize, 12, 60, handlePinchActive, setPinchLiveFontSize);
+    // Apply Pinch-to-Zoom Hook — pass enabled flag so the effect re-runs when the player opens
+    // (the scroll container element only exists once the player renders)
+    const isPinchPlayerActive = isFullScreenPlayer || mainNav === 'player';
+    usePinchZoom(scrollContainerRef, playerFontSize, setPlayerFontSize, 12, 60, handlePinchActive, setPinchLiveFontSize, isPinchPlayerActive);
+    usePinchZoom(manualScrollContainerRef, manualFontSize, setManualFontSize, 12, 60, handlePinchActive, setPinchLiveFontSize, isPinchPlayerActive);
 
     // AutoScroll Effect with Mic interaction (Manual / Player / Presentation)
     useEffect(() => {
@@ -4205,6 +4209,35 @@ function App() {
                                         <span className="text-white/15 text-[9px]">•</span>
                                         <span className="text-[10px] font-bold text-slate-500 uppercase truncate">{currentSong?.artist_name}</span>
                                     </div>
+                                </div>
+                                {/* Utility menu — compact ⋯ button with dropdown for Compartilhar/Livreto/Em Lote */}
+                                <div className="relative shrink-0">
+                                    <button
+                                        onClick={() => setIsPlayerUtilMenuOpen(s => !s)}
+                                        className="p-2 rounded-xl text-slate-500 hover:text-white hover:bg-white/5 transition-all"
+                                        title="Mais opções"
+                                    >
+                                        <MoreVertical className="w-4 h-4" />
+                                    </button>
+                                    {isPlayerUtilMenuOpen && (
+                                        <>
+                                            <div className="fixed inset-0 z-[290]" onClick={() => setIsPlayerUtilMenuOpen(false)} />
+                                            <div className="absolute top-full right-0 mt-1 w-44 bg-[#16161D] border border-white/10 rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.7)] overflow-hidden z-[400] animate-in fade-in zoom-in-95 duration-150">
+                                                <button onClick={() => { handleShareList(); setIsPlayerUtilMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-[11px] font-bold text-slate-300 hover:text-white hover:bg-[#B87333]/15 border-b border-white/5 transition-all">
+                                                    <Share2 className="w-4 h-4 text-blue-400" />
+                                                    Compartilhar
+                                                </button>
+                                                <button onClick={() => { setCurrentExportList({ name: 'Fila Atual', songs: songs || [] }); setExportStep(1); setDownloadUrl(null); setExportFormat('docx'); setCoverImage(null); setShowExportModal(true); setIsPlayerUtilMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-[11px] font-bold text-slate-300 hover:text-white hover:bg-[#B87333]/15 border-b border-white/5 transition-all">
+                                                    <FileText className="w-4 h-4 text-[#B87333]" />
+                                                    Gerar Livreto
+                                                </button>
+                                                <button onClick={() => { setBatchModalOpen(true); setIsPlayerUtilMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-[11px] font-bold text-slate-300 hover:text-white hover:bg-[#B87333]/15 transition-all">
+                                                    <UploadCloud className="w-4 h-4 text-slate-400" />
+                                                    Adicionar em Lote
+                                                </button>
+                                            </div>
+                                        </>
+                                    )}
                                 </div>
                                 <button onClick={() => { setIsImmersiveMode(!isImmersiveMode); setShowImmersiveControls(false); }} className={`p-2 rounded-xl transition-all shrink-0 ${isImmersiveMode ? 'text-[#B87333] bg-[#B87333]/15' : 'text-slate-500 hover:text-white hover:bg-white/5'}`} title="Tela Cheia">
                                     {isImmersiveMode ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
