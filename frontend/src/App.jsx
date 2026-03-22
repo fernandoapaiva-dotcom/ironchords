@@ -91,19 +91,19 @@ function usePinchZoom(containerRef, fontSize, setFontSize, minSize = 12, maxSize
             lastDistRef.current = null;
         };
 
-        // Non-passive so preventDefault() works on both start and move
-        el.addEventListener('touchstart', onTouchStart, { passive: false });
-        el.addEventListener('touchmove', onTouchMove, { passive: false });
-        el.addEventListener('touchend', onTouchEnd, { passive: true });
-        el.addEventListener('touchcancel', onTouchEnd, { passive: true });
+        // Use capture phase to ensure we intercept the touch before child elements (like pre tags) swallow it
+        el.addEventListener('touchstart', onTouchStart, { capture: true, passive: false });
+        el.addEventListener('touchmove', onTouchMove, { capture: true, passive: false });
+        el.addEventListener('touchend', onTouchEnd, { capture: true, passive: true });
+        el.addEventListener('touchcancel', onTouchEnd, { capture: true, passive: true });
 
         el.style.touchAction = 'pan-y';
 
         return () => {
-            el.removeEventListener('touchstart', onTouchStart);
-            el.removeEventListener('touchmove', onTouchMove);
-            el.removeEventListener('touchend', onTouchEnd);
-            el.removeEventListener('touchcancel', onTouchEnd);
+            el.removeEventListener('touchstart', onTouchStart, { capture: true });
+            el.removeEventListener('touchmove', onTouchMove, { capture: true });
+            el.removeEventListener('touchend', onTouchEnd, { capture: true });
+            el.removeEventListener('touchcancel', onTouchEnd, { capture: true });
         };
     // enabled in deps so effect re-runs when player opens and element becomes available
     }, [containerRef, setFontSize, minSize, maxSize, onPinchActive, onPinchUpdate, enabled]);
