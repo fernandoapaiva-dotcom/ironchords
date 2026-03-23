@@ -1893,6 +1893,53 @@ function App() {
 
     const [transcriptRaw, setTranscriptRaw] = useState('');
     const [detectedNote, setDetectedNote] = useState(null);
+    const [singerKey, setSingerKey] = useState(null);
+    const noteHistogramRef = useRef({});
+    const noteTimestampsRef = useRef([]);// Rolling window of {note, time}
+
+    // KEY ANALYZER: Accumulate notes over time to determine singer's key
+    useEffect(() => {
+        if (!detectedNote || !isDynamicSpeedActive) return;
+        const now = Date.now();
+        // Add to rolling window
+        noteTimestampsRef.current.push({ note: detectedNote, time: now });
+        // Prune entries older than 10 seconds
+        noteTimestampsRef.current = noteTimestampsRef.current.filter(e => now - e.time < 10000);
+        // Build histogram from recent notes
+        const histogram = {};
+        for (const entry of noteTimestampsRef.current) {
+            histogram[entry.note] = (histogram[entry.note] || 0) + 1;
+        }
+        noteHistogramRef.current = histogram;
+        // Find the most common note (the likely key)
+        let maxCount = 0;
+        let dominantNote = null;
+        for (const [note, count] of Object.entries(histogram)) {
+            if (count > maxCount) {
+                maxCount = count;
+                dominantNote = note;
+            }
+        }
+        // Only update if we have enough samples (at least 10 detections)
+        if (noteTimestampsRef.current.length >= 10 && dominantNote) {
+            setSingerKey(dominantNote);
+        }
+    }, [detectedNote, isDynamicSpeedActive]);
+
+    // Extract song's key from the first chord in the content
+    const getSongKey = (song) => {
+        if (!song || !song.content) return null;
+        const lines = song.content.split('\n');
+        for (const line of lines) {
+            if (isChordOnlyLine(line)) {
+                const match = line.match(/\b([A-G][#b]?)(m|M|maj|min|dim|aug|sus|7|9)?\b/);
+                if (match) return match[1];
+            }
+        }
+        // Fallback: look in the song's key field if available
+        return song.key || null;
+    };
+
     useEffect(() => { isPausedBySilenceRef.current = isPausedBySilence; }, [isPausedBySilence]);
 
     // URL-Based Import Check (Short Links & Legacy B64)
@@ -4927,28 +4974,51 @@ function App() {
                                 <span className="text-white text-[15px] font-black uppercase">A</span>
                             </div>
 
-                            {/* SUBTLE PITCH GAUGE */}
-                            {micEnabled && isDynamicSpeedActive && (
-                                <div className="absolute bottom-20 right-4 px-3 py-1.5 bg-black/40 backdrop-blur-xl border border-white/10 rounded-full flex items-center gap-3 z-[150] animate-in fade-in slide-in-from-right-4 transition-all duration-500">
-                                    <div className="flex items-center gap-2">
-                                        <div className={`w-1.5 h-1.5 rounded-full ${Math.abs(detectedCents) < 15 ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-red-500'}`} />
-                                        <span className="text-[11px] font-black text-white italic">{detectedNote || "--"}</span>
+                            {/* KEY ANALYZER & IA SYNC STATUS */}
+                            {micEnabled && isDynamicSpeedActive && (() => {
+                                const songKey = getSongKey(currentSong);
+                                const keyMatch = singerKey && songKey && singerKey.replace('#','').replace('b','').toUpperCase() === songKey.replace('#','').replace('b','').toUpperCase();
+                                const isClose = singerKey && songKey && !keyMatch && (() => {
+                                    const notes = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+                                    const si = notes.indexOf(singerKey);
+                                    const so = notes.indexOf(songKey);
+                                    if (si === -1 || so === -1) return false;
+                                    const diff = Math.min(Math.abs(si - so), 12 - Math.abs(si - so));
+                                    return diff <= 2;
+                                })();
+                                return (
+                                    <div className="absolute bottom-20 right-4 flex flex-col gap-2 z-[150] animate-in fade-in slide-in-from-right-4">
+                                        {/* Key Analyzer Pill */}
+                                        <div className="px-3 py-2 bg-black/50 backdrop-blur-xl border border-white/10 rounded-2xl flex items-center gap-3 transition-all duration-500">
+                                            {singerKey ? (
+                                                <>
+                                                    <div className="flex flex-col items-center">
+                                                        <span className="text-[8px] font-black uppercase tracking-widest text-slate-500">Você</span>
+                                                        <span className={`text-lg font-black italic ${keyMatch ? 'text-green-400' : isClose ? 'text-amber-400' : 'text-red-400'}`}>{singerKey}</span>
+                                                    </div>
+                                                    <div className={`w-0.5 h-6 rounded-full ${keyMatch ? 'bg-green-500/50' : isClose ? 'bg-amber-500/50' : 'bg-red-500/50'}`} />
+                                                    <div className="flex flex-col items-center">
+                                                        <span className="text-[8px] font-black uppercase tracking-widest text-slate-500">Música</span>
+                                                        <span className="text-lg font-black italic text-white/70">{songKey || '?'}</span>
+                                                    </div>
+                                                    <div className={`w-2 h-2 rounded-full ml-1 ${keyMatch ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : isClose ? 'bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.6)]' : 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]'}`} />
+                                                </>
+                                            ) : (
+                                                <div className="flex items-center gap-2">
+                                                    <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+                                                    <span className="text-[10px] font-bold text-slate-400 italic">Analisando tom...</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                        {/* Live Transcript Preview */}
+                                        {transcriptRaw && (
+                                            <div className="px-3 py-1.5 bg-black/40 backdrop-blur-xl border border-blue-500/20 rounded-xl max-w-[200px]">
+                                                <span className="text-[9px] font-bold text-blue-300/70 italic truncate block">🎤 {transcriptRaw.substring(0, 40)}{transcriptRaw.length > 40 ? '...' : ''}</span>
+                                            </div>
+                                        )}
                                     </div>
-                                    <div className="w-12 h-1 bg-white/10 rounded-full relative overflow-hidden">
-                                        <div 
-                                            className={`absolute top-0 bottom-0 w-2 rounded-full transition-all duration-300 ${Math.abs(detectedCents) < 15 ? 'bg-green-500' : 'bg-red-500'}`}
-                                            style={{ left: `calc(50% + ${(detectedCents / 50) * 40}%)`, transform: 'translateX(-50%)' }}
-                                        />
-                                    </div>
-                                    <button
-                                        onClick={() => setIsAutoPitchEnabled(!isAutoPitchEnabled)}
-                                        className={`transition-all ${isAutoPitchEnabled ? 'text-[#B87333]' : 'text-white/20 hover:text-white'}`}
-                                        title="Auto-Tom"
-                                    >
-                                        <Zap className="w-3 h-3" />
-                                    </button>
-                                </div>
-                            )}
+                                );
+                            })()}
                         </div>
                     </div>
                 ) : activeTab === 'presentation' ? (

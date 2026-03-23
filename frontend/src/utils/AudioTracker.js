@@ -161,104 +161,137 @@ export class AudioTracker {
     }
 
     stopSpeechRecognition() {
-        if (this.speechBufferInterval) clearInterval(this.speechBufferInterval);
-        try { if (this.recognitionA) this.recognitionA.abort(); } catch(e){}
-        try { if (this.recognitionB) this.recognitionB.abort(); } catch(e){}
+        console.log('[AudioTracker] Stopping SpeechRec');
+        if (this.speechHeartbeat) clearInterval(this.speechHeartbeat);
+        this.speechHeartbeat = null;
+        try { if (this.recognition) this.recognition.abort(); } catch(e){}
+        this.recognition = null;
         this.activeRec = null;
-    }
-
-    createRecognizer(id) {
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        const rec = new SpeechRecognition();
-        rec.continuous = true;
-        rec.interimResults = true;
-        rec.lang = 'pt-BR';
-
-        rec.onresult = (event) => {
-            // Only process results from the ACTIVE recognizer
-            if (this.activeRec !== id) return;
-            let interimText = '';
-            let finalText = '';
-            for (let i = event.resultIndex; i < event.results.length; i++) {
-                if (event.results[i].isFinal) finalText += event.results[i][0].transcript + ' ';
-                else interimText += event.results[i][0].transcript;
-            }
-            if (this.onSpeechResult) {
-                if (finalText.trim()) this.onSpeechResult(finalText.trim(), true);
-                else if (interimText.trim()) this.onSpeechResult(interimText.trim(), false);
-            }
-        };
-
-        rec.onerror = (e) => {
-            console.warn(`[AudioTracker] SpeechRec Error (${id}):`, e.error);
-            if (e.error === 'aborted' || e.error === 'no-speech') return;
-            // network error happens often when they compete for mic, ignore it gracefully
-        };
-
-        rec.onend = () => {
-            // If it's the active one that died prematurely, restart it aggressively
-            if (this.activeRec === id && this.isMicActive) {
-                setTimeout(() => {
-                    try { if (this.activeRec === id) rec.start(); } catch (e) {}
-                }, 50);
-            }
-        };
-
-        return rec;
-    }
-
-    switchRecognizer() {
-        if (!this.isMicActive) return;
-        const oldId = this.activeRec;
-        const newId = oldId === 'A' ? 'B' : 'A';
-        this.activeRec = newId;
-
-        try {
-            if (newId === 'A') this.recognitionA.start();
-            else this.recognitionB.start();
-            
-            // Stop the old one after a tiny overlap to avoid missing words
-            setTimeout(() => {
-                try {
-                    if (oldId === 'A') this.recognitionA.stop();
-                    else this.recognitionB.stop();
-                } catch(e){}
-            }, 300);
-
-            console.log(`[AudioTracker] IA Sync Double Buffer swapped ${oldId} -> ${newId}`);
-        } catch (e) {
-            console.warn("[AudioTracker] Fast switch overlap blocked:", e.message);
-        }
+        this._speechResultCount = 0;
     }
 
     startSpeechRecognition() {
         if (!this.isMicActive) return;
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        if (!SpeechRecognition) return;
-
-        if (!this.recognitionA) {
-            this.recognitionA = this.createRecognizer('A');
-            this.recognitionB = this.createRecognizer('B');
-            this.activeRec = 'A';
+        if (!SpeechRecognition) {
+            console.warn('[AudioTracker] SpeechRecognition API not available');
+            return;
         }
 
-        try {
-            if (this.activeRec === 'A') this.recognitionA.start();
-            else this.recognitionB.start();
-            console.log("[AudioTracker] SpeechRec DOUBLE BUFFER started with:", this.activeRec);
-        } catch (e) {
-            console.error("[AudioTracker] Failed to start Double Buffer SpeechRecognition:", e);
-        }
+        // Clean up any existing recognizer
+        this.stopSpeechRecognition();
 
-        // Start the double buffer alternator
-        if (this.speechBufferInterval) clearInterval(this.speechBufferInterval);
-        this.speechBufferInterval = setInterval(() => {
-            if (!this.isMicActive) {
-                clearInterval(this.speechBufferInterval);
+        this._speechResultCount = 0;
+        this._lastSpeechResultTime = Date.now();
+        this._speechRestartCount = 0;
+
+        const createAndStart = () => {
+            if (!this.isMicActive) return;
+
+            const rec = new SpeechRecognition();
+            rec.continuous = true;
+            rec.interimResults = true;
+            rec.lang = 'pt-BR';
+            // maxAlternatives = 1 reduces processing overhead on mobile
+            rec.maxAlternatives = 1;
+
+            rec.onstart = () => {
+                console.log('[AudioTracker] SpeechRec STARTED (instance #' + this._speechRestartCount + ')');
+            };
+
+            rec.onresult = (event) => {
+                this._speechResultCount++;
+                this._lastSpeechResultTime = Date.now();
+                let interimText = '';
+                let finalText = '';
+                for (let i = event.resultIndex; i < event.results.length; i++) {
+                    if (event.results[i].isFinal) finalText += event.results[i][0].transcript + ' ';
+                    else interimText += event.results[i][0].transcript;
+                }
+                if (this.onSpeechResult) {
+                    if (finalText.trim()) {
+                        console.log('[AudioTracker] SpeechRec FINAL:', finalText.trim().substring(0, 40));
+                        this.onSpeechResult(finalText.trim(), true);
+                    }
+                    else if (interimText.trim()) {
+                        this.onSpeechResult(interimText.trim(), false);
+                    }
+                }
+            };
+
+            rec.onerror = (e) => {
+                console.warn('[AudioTracker] SpeechRec Error:', e.error);
+                // 'no-speech' is normal — just means silence. Don't restart for it.
+                // 'aborted' means we stopped it intentionally.
+                // 'network' means the cloud service failed — restart.
+                // 'not-allowed' means mic was denied — don't restart.
+                if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+                    console.error('[AudioTracker] Mic permission denied for SpeechRec');
+                    return;
+                }
+            };
+
+            rec.onend = () => {
+                console.log('[AudioTracker] SpeechRec ENDED (results so far:', this._speechResultCount + ')');
+                // Auto-restart if we're still supposed to be active
+                if (this.isMicActive && this.onSpeechResult) {
+                    this._speechRestartCount++;
+                    // Exponential backoff: 200ms, 400ms, 800ms, max 2000ms
+                    const delay = Math.min(2000, 200 * Math.pow(1.5, Math.min(this._speechRestartCount, 6)));
+                    console.log(`[AudioTracker] SpeechRec auto-restart in ${delay}ms (restart #${this._speechRestartCount})`);
+                    setTimeout(() => {
+                        if (this.isMicActive && this.onSpeechResult) {
+                            try {
+                                rec.start();
+                                // Reset restart count on successful start
+                                this._speechRestartCount = Math.max(0, this._speechRestartCount - 1);
+                            } catch (e) {
+                                console.warn('[AudioTracker] SpeechRec restart failed:', e.message);
+                                // If restart failed, try creating a fresh instance
+                                if (this._speechRestartCount < 10) {
+                                    setTimeout(() => createAndStart(), 1000);
+                                }
+                            }
+                        }
+                    }, delay);
+                }
+            };
+
+            this.recognition = rec;
+            this.activeRec = 'active';
+
+            try {
+                rec.start();
+            } catch (e) {
+                console.error('[AudioTracker] SpeechRec initial start failed:', e);
+                // Retry once after 500ms
+                setTimeout(() => {
+                    try { rec.start(); } catch(e2) {
+                        console.error('[AudioTracker] SpeechRec retry also failed');
+                    }
+                }, 500);
+            }
+        };
+
+        createAndStart();
+
+        // HEARTBEAT: Every 15 seconds, check if we're getting results.
+        // If not, force a full restart with a fresh recognizer instance.
+        this.speechHeartbeat = setInterval(() => {
+            if (!this.isMicActive || !this.onSpeechResult) {
+                clearInterval(this.speechHeartbeat);
                 return;
             }
-            this.switchRecognizer();
-        }, 12000); // Swap engine every 12 seconds (reduced frequency for mobile stability)
+            const silenceMs = Date.now() - this._lastSpeechResultTime;
+            // If 20 seconds with no result, the engine is probably dead
+            if (silenceMs > 20000 && this._speechResultCount > 0) {
+                console.warn('[AudioTracker] HEARTBEAT: SpeechRec silent for 20s, forcing restart');
+                this._speechRestartCount = 0;
+                try { if (this.recognition) this.recognition.abort(); } catch(e){}
+                this.recognition = null;
+                setTimeout(() => createAndStart(), 300);
+            }
+        }, 15000);
     }
 
     async setupWebSocket() {
@@ -480,14 +513,11 @@ export class AudioTracker {
         if (this.animationFrameId) cancelAnimationFrame(this.animationFrameId);
         if (this.pitchAnimationFrameId) cancelAnimationFrame(this.pitchAnimationFrameId);
 
+        this.stopSpeechRecognition();
+
         if (this.ws) {
             this.ws.close();
             this.ws = null;
-        }
-
-        if (this.recognition) {
-            try { this.recognition.abort(); } catch (e) { }
-            this.recognition = null;
         }
 
         if (this.alignmentNode) {
