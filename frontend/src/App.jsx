@@ -2142,12 +2142,11 @@ function App() {
                 rms = Math.sqrt(rms / buf.length) * 500;
                 const now = Date.now();
                 
-                // STRICT PUFF DETECTION (Instantaneous trigger)
-                // - RMS > 60: Firm physical air pressure (prevents breathing from triggering it)
-                // - PAR < 3.5: Eliminates sharp noises like claps, pick attacks, or clicks
-                // - SubBassRatio > 2.5: Must be predominantly low-frequency wind rumble (0-172Hz)
-                // - HighEnergyRatio < 0.15: Must lack harmonics (rejects voice singing, guitar strumming)
-                const isValidPuff = rms > 60 && par < 3.5 && subBassRatio > 2.5 && highEnergyRatio < 0.15;
+                // BROADBAND WIND NOISE DETECTION ("Chiadão")
+                // - RMS > 50: Moderate volume to ignore room hiss
+                // - PAR < 2.2: The "Magic" wind filter. Hiss/wind is white noise (flat frequencies, PAR near 1.5-2.0). 
+                //              Guitars and voices have distinct note peaks, creating PAR > 3.0.
+                const isValidPuff = rms > 50 && par < 2.2;
                 
                 // Instantaneous trigger (bypasses mobile AGC/Limiters that cut off audio)
                 if (isValidPuff && now - lastBlowTime > 1500) {
