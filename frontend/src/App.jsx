@@ -1272,6 +1272,98 @@ function App() {
     // Version
     const APP_VERSION = '1.0.1';
 
+    // Auto-Fit Font Size Logic
+    const handleAutoFitFontSize = useCallback(() => {
+        const isPlayerActive = isFullScreenPlayer || activeTab === 'player' || mainNav === 'player' || isManualFullscreen;
+        // Don't auto-fit if we're not actually looking at a song view
+        if (!isPlayerActive && activeTab !== 'manual') return;
+
+        const container = isPlayerActive ? scrollContainerRef.current : manualScrollContainerRef.current;
+        if (!container) return;
+
+        // Give React a frame to paint the DOM with the new song
+        requestAnimationFrame(() => {
+            const preElements = container.querySelectorAll('pre');
+            if (!preElements || preElements.length === 0) return;
+
+            let maxLineWidth = 0;
+            // Sample up to 100 lines to find the widest (avoiding massive DOM queries if song is huge)
+            const sampleSize = Math.min(preElements.length, 100);
+            for (let i = 0; i < sampleSize; i++) {
+                // Use scrollWidth to get the intrinsic width of the text inside the <pre>
+                const width = preElements[i].scrollWidth;
+                if (width > maxLineWidth) maxLineWidth = width;
+            }
+
+            const containerWidth = container.getBoundingClientRect().width;
+            if (containerWidth === 0) return; // Hidden container
+
+            // We leave some breathing room (padding + safety margin)
+            const padding = 60; 
+            const availableWidth = containerWidth - padding;
+
+            if (maxLineWidth > 0 && availableWidth > 0) {
+                // Determine what font size was used to render these pixels
+                const currentDocFs = parseFloat(window.getComputedStyle(preElements[0]).fontSize) || (isPlayerActive ? playerFontSize : manualFontSize);
+                
+                // Proportional math: if maxLineWidth took currentDocFs, what takes availableWidth?
+                let newFs = (availableWidth / maxLineWidth) * currentDocFs;
+                
+                // Bounds (don't make it unreadably small, and cap the max size so it doesn't look ridiculous on tablets)
+                const MIN_FONT_SIZE = 11;
+                const MAX_FONT_SIZE = 22;
+                newFs = Math.max(MIN_FONT_SIZE, Math.min(newFs, MAX_FONT_SIZE));
+
+                if (Math.abs(newFs - currentDocFs) > 1.0) {
+                    const roundedFs = Math.round(newFs * 10) / 10;
+                    if (isPlayerActive) {
+                        setPlayerFontSize(roundedFs);
+                    } else {
+                        setManualFontSize(roundedFs);
+                    }
+                    
+                    // Always try to keep the pinch bar in sync if it's currently showing
+                    setPinchLiveFontSize(roundedFs);
+                    
+                    // Also force the CSS variable so the transition is instant
+                    container.style.setProperty('--dynamic-zoom-fs', `${roundedFs}px`);
+                    container.style.fontSize = `${roundedFs}px`;
+                }
+            }
+        });
+    }, [playerFontSize, manualFontSize, activeTab, mainNav, isFullScreenPlayer, isManualFullscreen]);
+
+    // Trigger Auto-Fit
+    useEffect(() => {
+        // Wait a tiny bit for the layout to settle after state changes
+        const timer = setTimeout(() => {
+            handleAutoFitFontSize();
+        }, 150);
+        
+        return () => clearTimeout(timer);
+    }, [
+        songs[selectedManualIndex]?.id,
+        manualPreviewSong?.id, 
+        activeTab,
+        mainNav,
+        isFullScreenPlayer,
+        isManualFullscreen
+    ]);
+
+    // Re-run on window resize
+    useEffect(() => {
+        let resizeTimer;
+        const handleResize = () => {
+            clearTimeout(resizeTimer);
+            resizeTimer = setTimeout(handleAutoFitFontSize, 300);
+        };
+        window.addEventListener('resize', handleResize);
+        return () => {
+            clearTimeout(resizeTimer);
+            window.removeEventListener('resize', handleResize);
+        };
+    }, [handleAutoFitFontSize]);
+
     useEffect(() => {
         const handleBeforeInstallPrompt = (e) => {
             e.preventDefault();
@@ -2056,11 +2148,11 @@ function App() {
                 const now = Date.now();
                 
                 // HARDENED THRESHOLDS: 
-                // - RMS > 150 (Deliberate)
+                // - RMS > 100 (Deliberate)
                 // - PAR < 2.5 (Pure Noise/Wind)
-                // - SubBassRatio > 4.0 (Physical Air Pressure)
-                // - HighEnergyRatio < 0.10 (No musical harmonics)
-                const isValidPuff = rms > 150 && par < 2.5 && subBassRatio > 4.0 && highEnergyRatio < 0.10;
+                // - SubBassRatio > 3.5 (Physical Air Pressure)
+                // - HighEnergyRatio < 0.12 (No musical harmonics)
+                const isValidPuff = rms > 100 && par < 2.5 && subBassRatio > 3.5 && highEnergyRatio < 0.12;
                 
                 if (isValidPuff && !inBurst) { 
                     inBurst = true; 
@@ -2071,13 +2163,16 @@ function App() {
                     if (dur > MIN_BLOW_DURATION && dur < BLOW_MAX_DURATION && now - lastBlowTime > 1000) {
                         lastBlowTime = now;
                         console.log(`[BlowDetect] Valid blow! dur:${dur}ms par:${par.toFixed(2)} sub:${subBassRatio.toFixed(2)} high:${highEnergyRatio.toFixed(2)}`);
-                        const container = scrollContainerRef.current;
-                        if (container) {
-                            lastManualScrollTime.current = 0;
-                            container.scrollBy({ top: container.clientHeight * 0.85, behavior: 'smooth' });
+                        const cPlayer = scrollContainerRef.current;
+                        const cManual = manualScrollContainerRef.current;
+                        lastManualScrollTime.current = 0;
+                        if (cPlayer) cPlayer.scrollBy({ top: cPlayer.clientHeight * 0.85, behavior: 'smooth' });
+                        if (cManual) cManual.scrollBy({ top: cManual.clientHeight * 0.85, behavior: 'smooth' });
+                        
+                        try {
                             setBlowFlash(true);
                             setTimeout(() => setBlowFlash(false), 300);
-                        }
+                        } catch(e) {}
                     }
                     inBurst = false;
                 }
