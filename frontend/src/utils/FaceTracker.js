@@ -171,16 +171,30 @@ export class FaceTracker {
         // Average EAR from both eyes
         const ear = (leftEAR + rightEAR) / 2.0;
 
+        // --- AUTO-CALIBRATION: 5-second rolling window ---
+        const nowMs = Date.now();
+        if (!this.recentEARs) this.recentEARs = [];
+        this.recentEARs.push({ time: nowMs, value: ear });
+        this.recentEARs = this.recentEARs.filter(e => nowMs - e.time <= 5000);
+
+        // Calculate baseline robustly: 90th percentile (ignores blinks effectively)
+        const sortedEARs = [...this.recentEARs].map(e => e.value).sort((a,b) => a-b);
+        const baselineEAR = sortedEARs[Math.floor(sortedEARs.length * 0.9)] || 0.25;
+
+        // Dynamic Thresholds
+        const thresholdClose = baselineEAR * 0.70; // 30% drop = blink
+        const thresholdOpen = baselineEAR * 0.85;  // 15% drop = open
+
         if (this.onDebugInfo) {
-            this.onDebugInfo(`EAR: ${ear.toFixed(3)} | Piscadas: ${this.blinkTimestamps.length}/3`);
+            this.onDebugInfo(`EAR: ${ear.toFixed(3)} | Limite: <${thresholdClose.toFixed(3)} | Piscadas: ${this.blinkTimestamps.length}/3`);
         }
 
         // Simple State Machine for Blinks
-        if (ear < this.EAR_THRESHOLD_CLOSE && !this.isEyesClosed) {
+        if (ear < thresholdClose && !this.isEyesClosed) {
             // Eyes just closed
             this.isEyesClosed = true;
         } 
-        else if (ear > this.EAR_THRESHOLD_OPEN && this.isEyesClosed) {
+        else if (ear > thresholdOpen && this.isEyesClosed) {
             // Eyes just opened: Register a successful blink
             this.isEyesClosed = false;
             
