@@ -2142,43 +2142,30 @@ function App() {
                 rms = Math.sqrt(rms / buf.length) * 500;
                 const now = Date.now();
                 
-                // STRICT PUFF DETECTION (Anti-Noise)
-                // - RMS > 60 (Requires physical air hitting the mic)
-                // - PAR < 3.0 (Eliminates claps, clicks, or sharp noises)
-                // - SubBassRatio > 3.0 (Must be predominantly low-frequency wind rumble)
-                // - HighEnergyRatio < 0.15 (Must not have high-frequency musical content/speech)
-                const isValidPuff = rms > 60 && par < 3.0 && subBassRatio > 3.0 && highEnergyRatio < 0.15;
+                const isValidPuff = rms > 80 && subBassRatio > 2.0 && highEnergyRatio < 0.25;
                 
-                if (isValidPuff && !inBurst) { 
-                    inBurst = true; 
-                    burstStartTime = now;
-                } else if ((rms < 30 || !isValidPuff) && inBurst) {
-                    const dur = now - burstStartTime;
-                    // Filter: Must sustain for > 150ms but < 500ms
-                    if (dur > MIN_BLOW_DURATION && dur < 500 && now - lastBlowTime > 1000) {
-                        lastBlowTime = now;
-                        console.log(`[BlowDetect] Valid blow! dur:${dur}ms par:${par.toFixed(2)} sub:${subBassRatio.toFixed(2)} high:${highEnergyRatio.toFixed(2)}`);
-                        const cPlayer = scrollContainerRef.current;
-                        const cManual = manualScrollContainerRef.current;
-                        lastManualScrollTime.current = 0;
-                        const scrollAmount = window.innerHeight * 0.85;
+                // Instantaneous trigger (bypasses mobile AGC/Limiters that cut off audio)
+                if (isValidPuff && now - lastBlowTime > 1500) {
+                    lastBlowTime = now;
+                    console.log(`[BlowDetect] Instant Blow! rms:${rms.toFixed(0)} sub:${subBassRatio.toFixed(2)} high:${highEnergyRatio.toFixed(2)}`);
+                    
+                    const cPlayer = scrollContainerRef.current;
+                    const cManual = manualScrollContainerRef.current;
+                    lastManualScrollTime.current = 0;
+                    
+                    const scrollAmount = window.innerHeight * 0.85;
 
-                        if (cPlayer) cPlayer.scrollBy({ top: scrollAmount, behavior: 'smooth' });
-                        if (cManual) cManual.scrollBy({ top: scrollAmount, behavior: 'smooth' });
+                    if (cPlayer) cPlayer.scrollBy({ top: scrollAmount, behavior: 'smooth' });
+                    if (cManual) cManual.scrollBy({ top: scrollAmount, behavior: 'smooth' });
+                    
+                    try {
+                        window.scrollBy({ top: scrollAmount, behavior: 'smooth' });
+                        document.documentElement.scrollBy({ top: scrollAmount, behavior: 'smooth' });
+                        document.body.scrollBy({ top: scrollAmount, behavior: 'smooth' });
                         
-                        // Fail-safe global scrolls for all mobile layouts
-                        try {
-                            window.scrollBy({ top: scrollAmount, behavior: 'smooth' });
-                            document.documentElement.scrollBy({ top: scrollAmount, behavior: 'smooth' });
-                            document.body.scrollBy({ top: scrollAmount, behavior: 'smooth' });
-                        } catch(e) {}
-                        
-                        try {
-                            setBlowFlash(true);
-                            setTimeout(() => setBlowFlash(false), 300);
-                        } catch(e) {}
-                    }
-                    inBurst = false;
+                        setBlowFlash(true);
+                        setTimeout(() => setBlowFlash(false), 300);
+                    } catch(e) {}
                 }
             }
             raf = requestAnimationFrame(checkBlow);
