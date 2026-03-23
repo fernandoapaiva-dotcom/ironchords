@@ -1280,58 +1280,54 @@ function App() {
 
         const container = isPlayerActive ? scrollContainerRef.current : manualScrollContainerRef.current;
         if (!container) return;
+        
+        const songToMeasure = isPlayerActive ? currentSong : manualPreviewSong;
+        if (!songToMeasure || !songToMeasure.content) return;
 
-        // Give React a frame to paint the DOM with the new song
-        requestAnimationFrame(() => {
-            const preElements = container.querySelectorAll('pre');
-            if (!preElements || preElements.length === 0) return;
+        // Bypassing React DOM timing completely: Calculate by string length
+        const lines = songToMeasure.content.split('\n');
+        let maxChars = 0;
+        // Sample up to 100 lines
+        for (let i = 0; i < Math.min(lines.length, 100); i++) {
+            const len = lines[i].replace(/\r/g, '').length;
+            if (len > maxChars) maxChars = len;
+        }
 
-            let maxLineWidth = 0;
-            // Sample up to 100 lines to find the widest (avoiding massive DOM queries if song is huge)
-            const sampleSize = Math.min(preElements.length, 100);
-            for (let i = 0; i < sampleSize; i++) {
-                // Use scrollWidth to get the intrinsic width of the text inside the <pre>
-                const width = preElements[i].scrollWidth;
-                if (width > maxLineWidth) maxLineWidth = width;
-            }
+        if (maxChars === 0) return;
 
-            const containerWidth = container.getBoundingClientRect().width;
-            if (containerWidth === 0) return; // Hidden container
+        const containerWidth = container.getBoundingClientRect().width;
+        if (containerWidth === 0) return; // Hidden container
 
-            // We leave some breathing room (padding + safety margin)
-            const padding = 60; 
-            const availableWidth = containerWidth - padding;
+        const padding = 60; 
+        const availableWidth = containerWidth - padding;
 
-            if (maxLineWidth > 0 && availableWidth > 0) {
-                // Determine what font size was used to render these pixels
-                const currentDocFs = parseFloat(window.getComputedStyle(preElements[0]).fontSize) || (isPlayerActive ? playerFontSize : manualFontSize);
-                
-                // Proportional math: if maxLineWidth took currentDocFs, what takes availableWidth?
-                let newFs = (availableWidth / maxLineWidth) * currentDocFs;
-                
-                // Bounds (don't make it unreadably small, and cap the max size so it doesn't look ridiculous on tablets)
-                const MIN_FONT_SIZE = 11;
-                const MAX_FONT_SIZE = 22;
-                newFs = Math.max(MIN_FONT_SIZE, Math.min(newFs, MAX_FONT_SIZE));
+        if (availableWidth > 0) {
+            // An average monospace character width is roughly 60% of its font-size.
+            // newFs = availableWidth / (maxChars * 0.60)
+            let newFs = availableWidth / (maxChars * 0.60);
+            
+            // Bounds
+            const MIN_FONT_SIZE = 11;
+            const MAX_FONT_SIZE = 22;
+            newFs = Math.max(MIN_FONT_SIZE, Math.min(newFs, MAX_FONT_SIZE));
 
-                if (Math.abs(newFs - currentDocFs) > 1.0) {
-                    const roundedFs = Math.round(newFs * 10) / 10;
-                    if (isPlayerActive) {
-                        setPlayerFontSize(roundedFs);
-                    } else {
-                        setManualFontSize(roundedFs);
-                    }
-                    
-                    // Always try to keep the pinch bar in sync if it's currently showing
-                    setPinchLiveFontSize(roundedFs);
-                    
-                    // Also force the CSS variable so the transition is instant
-                    container.style.setProperty('--dynamic-zoom-fs', `${roundedFs}px`);
-                    container.style.fontSize = `${roundedFs}px`;
+            const currentDocFs = isPlayerActive ? playerFontSize : manualFontSize;
+
+            if (Math.abs(newFs - currentDocFs) > 0.5) {
+                const roundedFs = Math.round(newFs * 10) / 10;
+                if (isPlayerActive) {
+                    setPlayerFontSize(roundedFs);
+                } else {
+                    setManualFontSize(roundedFs);
                 }
+                setPinchLiveFontSize(roundedFs);
+                
+                // Force CSS update
+                container.style.setProperty('--dynamic-zoom-fs', `${roundedFs}px`);
+                container.style.fontSize = `${roundedFs}px`;
             }
-        });
-    }, [playerFontSize, manualFontSize, activeTab, isFullScreenPlayer, isManualFullscreen]);
+        }
+    }, [playerFontSize, manualFontSize, activeTab, isFullScreenPlayer, isManualFullscreen, currentSong?.content, manualPreviewSong?.content]);
 
     // Trigger Auto-Fit
     useEffect(() => {
@@ -2146,29 +2142,35 @@ function App() {
                 rms = Math.sqrt(rms / buf.length) * 500;
                 const now = Date.now();
                 
-                // - RMS > 60 (Deliberate but gentle puff)
-                // - PAR < 4.0 (Tolerate typical mobile clipping)
-                // - SubBassRatio > 2.0 (Standard pressure)
-                // - HighEnergyRatio < 0.20 (Tolerate some hiss)
-                const isValidPuff = rms > 60 && par < 4.0 && subBassRatio > 2.0 && highEnergyRatio < 0.20;
+                // - RMS > 40 (Very gentle puff)
+                // - PAR < 5.0 (Tolerate high clipping)
+                // - SubBassRatio > 1.2 (Slight low-end priority)
+                // - HighEnergyRatio < 0.30 (Tolerate general noise)
+                const isValidPuff = rms > 40 && par < 5.0 && subBassRatio > 1.2 && highEnergyRatio < 0.30;
                 
                 if (isValidPuff && !inBurst) { 
                     inBurst = true; 
                     burstStartTime = now;
-                } else if ((rms < 50 || !isValidPuff) && inBurst) {
+                } else if ((rms < 30 || !isValidPuff) && inBurst) {
                     const dur = now - burstStartTime;
-                    // Filter: Must sustain for > 150ms but < 400ms
-                    if (dur > MIN_BLOW_DURATION && dur < BLOW_MAX_DURATION && now - lastBlowTime > 1000) {
+                    // Filter: Must sustain for > 150ms but < 500ms
+                    if (dur > MIN_BLOW_DURATION && dur < 500 && now - lastBlowTime > 1000) {
                         lastBlowTime = now;
                         console.log(`[BlowDetect] Valid blow! dur:${dur}ms par:${par.toFixed(2)} sub:${subBassRatio.toFixed(2)} high:${highEnergyRatio.toFixed(2)}`);
                         const cPlayer = scrollContainerRef.current;
                         const cManual = manualScrollContainerRef.current;
                         lastManualScrollTime.current = 0;
-                        if (cPlayer) cPlayer.scrollBy({ top: cPlayer.clientHeight * 0.85, behavior: 'smooth' });
-                        if (cManual) cManual.scrollBy({ top: cManual.clientHeight * 0.85, behavior: 'smooth' });
+                        const scrollAmount = window.innerHeight * 0.85;
+
+                        if (cPlayer) cPlayer.scrollBy({ top: scrollAmount, behavior: 'smooth' });
+                        if (cManual) cManual.scrollBy({ top: scrollAmount, behavior: 'smooth' });
                         
-                        // Fallback: Also scroll the main window, which is often the scroll container on strict mobile views
-                        window.scrollBy({ top: window.innerHeight * 0.85, behavior: 'smooth' });
+                        // Fail-safe global scrolls for all mobile layouts
+                        try {
+                            window.scrollBy({ top: scrollAmount, behavior: 'smooth' });
+                            document.documentElement.scrollBy({ top: scrollAmount, behavior: 'smooth' });
+                            document.body.scrollBy({ top: scrollAmount, behavior: 'smooth' });
+                        } catch(e) {}
                         
                         try {
                             setBlowFlash(true);
