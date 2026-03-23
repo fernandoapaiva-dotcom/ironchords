@@ -2142,11 +2142,11 @@ function App() {
                 rms = Math.sqrt(rms / buf.length) * 500;
                 const now = Date.now();
                 
-                // BROADBAND WIND NOISE DETECTION ("Chiadão")
-                // - RMS > 50: Moderate volume to ignore room hiss
-                // - PAR < 2.2: The "Magic" wind filter. Hiss/wind is white noise (flat frequencies, PAR near 1.5-2.0). 
-                //              Guitars and voices have distinct note peaks, creating PAR > 3.0.
-                const isValidPuff = rms > 50 && par < 2.2;
+                // BROADBAND WIND NOISE DETECTION ("Chiadão") - WIDENED
+                // - RMS > 40: Moderate volume to ignore distant room noise/hiss
+                // - PAR < 3.5: Accepts wind noise (which can have higher PAR on mobile mics due to compression artifacts).
+                //              Rejects strong musical harmonics (Guitar/Voice are usually PAR > 4.0).
+                const isValidPuff = rms > 40 && par < 3.5;
                 
                 // Instantaneous trigger (bypasses mobile AGC/Limiters that cut off audio)
                 if (isValidPuff && now - lastBlowTime > 1500) {
