@@ -1274,7 +1274,7 @@ function App() {
 
     // Auto-Fit Font Size Logic
     const handleAutoFitFontSize = useCallback(() => {
-        const isPlayerActive = isFullScreenPlayer || activeTab === 'player' || mainNav === 'player' || isManualFullscreen;
+        const isPlayerActive = isFullScreenPlayer || activeTab === 'player' || isManualFullscreen;
         // Don't auto-fit if we're not actually looking at a song view
         if (!isPlayerActive && activeTab !== 'manual') return;
 
@@ -1331,7 +1331,7 @@ function App() {
                 }
             }
         });
-    }, [playerFontSize, manualFontSize, activeTab, mainNav, isFullScreenPlayer, isManualFullscreen]);
+    }, [playerFontSize, manualFontSize, activeTab, isFullScreenPlayer, isManualFullscreen]);
 
     // Trigger Auto-Fit
     useEffect(() => {
@@ -1345,7 +1345,6 @@ function App() {
         songs[selectedManualIndex]?.id,
         manualPreviewSong?.id, 
         activeTab,
-        mainNav,
         isFullScreenPlayer,
         isManualFullscreen
     ]);
