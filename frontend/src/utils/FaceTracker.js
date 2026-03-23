@@ -16,9 +16,9 @@ export class FaceTracker {
         this.isEyesClosed = false;
         
         // EAR Constants
-        this.EAR_THRESHOLD_CLOSE = 0.20; // 0.20 or lower is a closed eye
-        this.EAR_THRESHOLD_OPEN = 0.25;  // 0.25 or higher is an open eye
-        this.BLINK_WINDOW_MS = 1500;     // Must do 3 blinks in 1.5 seconds
+        this.EAR_THRESHOLD_CLOSE = 0.22; // Relaxed: easy to trigger close
+        this.EAR_THRESHOLD_OPEN = 0.24;  // Relaxed: easy to trigger open
+        this.BLINK_WINDOW_MS = 2500;     // 2.5 seconds to do 3 blinks
         
         // Landmark indices (MediaPipe Face Mesh)
         this.LEFT_EYE = [362, 385, 387, 263, 373, 380];
@@ -36,7 +36,7 @@ export class FaceTracker {
             this.landmarker = await FaceLandmarker.createFromOptions(filesetResolver, {
                 baseOptions: {
                     modelAssetPath: "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
-                    delegate: "GPU"
+                    delegate: "CPU" // CPU is much safer on mobile Chrome than GPU
                 },
                 outputFaceBlendshapes: false,
                 runningMode: "VIDEO",
@@ -72,10 +72,21 @@ export class FaceTracker {
             this.video = document.createElement("video");
             this.video.playsInline = true;
             this.video.autoplay = true;
+            this.video.style.position = "absolute";
+            this.video.style.opacity = "0";
+            this.video.style.pointerEvents = "none";
+            this.video.style.width = "1px";
+            this.video.style.height = "1px";
+            // MUST append to DOM on mobile, otherwise the browser suspends playback!
+            document.body.appendChild(this.video);
+            
             this.video.srcObject = this.stream;
 
             await new Promise((resolve) => {
-                this.video.onloadeddata = () => resolve();
+                this.video.onloadeddata = () => {
+                    this.video.play().catch(e => console.warn("Video autplay blocked", e));
+                    resolve();
+                };
             });
 
             this.isTracking = true;
@@ -122,6 +133,9 @@ export class FaceTracker {
 
         if (this.video) {
             this.video.srcObject = null;
+            if (this.video.parentNode) {
+                this.video.parentNode.removeChild(this.video);
+            }
             this.video = null;
         }
 
