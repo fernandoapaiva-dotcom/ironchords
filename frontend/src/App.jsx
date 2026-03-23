@@ -2162,7 +2162,10 @@ function App() {
                     const cManual = manualScrollContainerRef.current;
                     lastManualScrollTime.current = 0;
                     
-                    const scrollAmount = window.innerHeight * 0.85;
+                    // Scroll by 65% of the screen height. 
+                    // This leaves 35% of the previous content visible at the top, 
+                    // ensuring the user doesn't lose their place (holds the last lines/chords).
+                    const scrollAmount = window.innerHeight * 0.65;
 
                     if (cPlayer) cPlayer.scrollBy({ top: scrollAmount, behavior: 'smooth' });
                     if (cManual) cManual.scrollBy({ top: scrollAmount, behavior: 'smooth' });
