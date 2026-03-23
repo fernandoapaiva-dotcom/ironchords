@@ -62,22 +62,11 @@ export class AudioTracker {
             }
 
             this.mediaStreamSource = this.audioContext.createMediaStreamSource(stream);
-            
-            // Focus on closest voice: Dynamics Compressor
-            // This reduces background noise and peaks, making the closest voice more prominent
-            this.compressor = this.audioContext.createDynamicsCompressor();
-            this.compressor.threshold.setValueAtTime(-35, this.audioContext.currentTime);
-            this.compressor.knee.setValueAtTime(30, this.audioContext.currentTime);
-            this.compressor.ratio.setValueAtTime(12, this.audioContext.currentTime);
-            this.compressor.attack.setValueAtTime(0.003, this.audioContext.currentTime);
-            this.compressor.release.setValueAtTime(0.25, this.audioContext.currentTime);
-
             this.gainNode = this.audioContext.createGain();
             this.gainNode.gain.value = this.micGain;
             
-            // Chain: Source -> Compressor -> Gain
-            this.mediaStreamSource.connect(this.compressor);
-            this.compressor.connect(this.gainNode);
+            // Chain: Source -> Gain
+            this.mediaStreamSource.connect(this.gainNode);
 
             this.analyser = this.audioContext.createAnalyser();
             this.analyser.fftSize = 256;
@@ -86,32 +75,8 @@ export class AudioTracker {
             this.pitchAnalyser = this.audioContext.createAnalyser();
             this.pitchAnalyser.fftSize = 2048;
 
-            // Voice-focused bandpass filter: keep only vocal range (80Hz - 1100Hz)
-            // High-pass: cuts sub-bass and deep guitar rumble
-            this.voiceHighPass = this.audioContext.createBiquadFilter();
-            this.voiceHighPass.type = 'highpass';
-            this.voiceHighPass.frequency.value = 80;  // cut below 80Hz
-            this.voiceHighPass.Q.value = 1.0;
-
-            // Low-pass: cuts high-frequency guitar string harmonics & cymbals
-            this.voiceLowPass = this.audioContext.createBiquadFilter();
-            this.voiceLowPass.type = 'lowpass';
-            this.voiceLowPass.frequency.value = 1100; // cut above 1100Hz
-            this.voiceLowPass.Q.value = 1.0;
-
-            // Voice Presence Boost: emphasizes consonants and vowels (1.5kHz - 4kHz)
-            // This is primarily for the SpeechRecognition engine, but we apply it to the pre-analysis chain
-            this.voiceBoost = this.audioContext.createBiquadFilter();
-            this.voiceBoost.type = 'peaking';
-            this.voiceBoost.frequency.value = 2500;
-            this.voiceBoost.Q.value = 1.0;
-            this.voiceBoost.gain.value = 6.0;
-
-            // Chain: gain → highpass → lowpass → boost → pitchAnalyser
-            this.gainNode.connect(this.voiceHighPass);
-            this.voiceHighPass.connect(this.voiceLowPass);
-            this.voiceLowPass.connect(this.voiceBoost);
-            this.voiceBoost.connect(this.pitchAnalyser);
+            // Chain: gain → pitchAnalyser
+            this.gainNode.connect(this.pitchAnalyser);
 
             // WebSocket is OPTIONAL — if it fails, mic + speech still work
             try {
@@ -189,7 +154,9 @@ export class AudioTracker {
             if (!this.isMicActive) return;
 
             const rec = new SpeechRecognition();
-            rec.continuous = true;
+            // continuous=false is required on Android Chrome to prevent silent halts.
+            // When it ends, the onend handler will immediately restart it.
+            rec.continuous = false;
             rec.interimResults = true;
             rec.lang = 'pt-BR';
             // maxAlternatives = 1 reduces processing overhead on mobile
@@ -368,12 +335,7 @@ export class AudioTracker {
                 const subBass = freqBuf[0];
                 const subBassRatio = avg > 0 ? subBass / avg : 0;
 
-                // COMPRESSOR-ADJUSTED SENSITIVITY
-                // The DynamicsCompressor makes the signal much hotter and denser.
-                // We must raise the level threshold and the sub-bass requirement
-                // so that normal speech doesn't trigger a blow.
-                const now = Date.now();
-                const isValidPuff = level > 75 && par < 2.5 && subBassRatio > 3.5;
+                const isValidPuff = level > 55 && par < 2.8 && subBassRatio > 2.2;
 
                 if (isValidPuff) {
                     if (!this.inBurst) {
