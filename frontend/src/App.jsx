@@ -2145,9 +2145,9 @@ function App() {
                 // TRANSIENT & PALM MUTE FILTER
                 // Guitar strums and palm mutes (abrupt stops) create a 50-80ms hiss/thump.
                 // To reject the slap of stopping the guitar, we must drastically raise the RMS volume threshold.
-                // A palm mute from half a meter away cannot physically reach RMS > 120, but a direct blow easily hits 300+.
+                // A palm mute from half a meter away cannot physically reach RMS > 85, but a direct blow easily hits 100+.
                 // We keep PAR < 3.0 to reject resonant strings, and require 3 frames (50ms) to bypass the OS limiter.
-                const isValidPuff = rms > 120 && par < 3.0 && subBassRatio > 2.0;
+                const isValidPuff = rms > 85 && par < 3.0 && subBassRatio > 2.0;
                 
                 if (isValidPuff) {
                     // Accumulate frames
