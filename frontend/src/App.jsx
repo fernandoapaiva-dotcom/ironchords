@@ -2142,11 +2142,12 @@ function App() {
                 rms = Math.sqrt(rms / buf.length) * 500;
                 const now = Date.now();
                 
-                // - RMS > 40 (Very gentle puff)
-                // - PAR < 5.0 (Tolerate high clipping)
-                // - SubBassRatio > 1.2 (Slight low-end priority)
-                // - HighEnergyRatio < 0.30 (Tolerate general noise)
-                const isValidPuff = rms > 40 && par < 5.0 && subBassRatio > 1.2 && highEnergyRatio < 0.30;
+                // STRICT PUFF DETECTION (Anti-Noise)
+                // - RMS > 60 (Requires physical air hitting the mic)
+                // - PAR < 3.0 (Eliminates claps, clicks, or sharp noises)
+                // - SubBassRatio > 3.0 (Must be predominantly low-frequency wind rumble)
+                // - HighEnergyRatio < 0.15 (Must not have high-frequency musical content/speech)
+                const isValidPuff = rms > 60 && par < 3.0 && subBassRatio > 3.0 && highEnergyRatio < 0.15;
                 
                 if (isValidPuff && !inBurst) { 
                     inBurst = true; 
