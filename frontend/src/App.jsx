@@ -1208,7 +1208,6 @@ function App() {
     const [isBlowDetectEnabled, setIsBlowDetectEnabled] = useState(false);
     const [isDynamicSpeedActive, setIsDynamicSpeedActive] = useState(false);
     const [isAutoScrolling, setIsAutoScrolling] = useState(false);
-    const [isMobileToolsOpen, setIsMobileToolsOpen] = useState(false);
     const [queueSearchTerm, setQueueSearchTerm] = useState('');
     const [scrollSpeed, setScrollSpeed] = useState(1);
     const [playerFontSize, setPlayerFontSize] = useState(19);
@@ -4367,8 +4366,8 @@ function App() {
                                 </div>
                             </div>
 
-                            {/* ── ROW C: Tools chips (IA Sync, Sopro, Pedal first — always visible on mobile) ── */}
-                            <div className="flex items-center gap-1.5 px-3 pb-2.5 pt-2 w-full overflow-x-auto scrollbar-none border-t border-white/[0.04] bg-white/[0.02] backdrop-blur-md">
+                            {/* ── ROW C: Tools Dashboard (2-row grid on mobile, row on desktop) ── */}
+                            <div className="flex flex-wrap md:flex-nowrap items-center justify-center md:justify-start gap-2 px-3 pb-4 pt-3 w-full border-t border-white/[0.06] bg-black/40 backdrop-blur-3xl sticky bottom-0 z-[100] sm:relative">
 
                                 {/* IA Sync — first chip, always visible */}
                                 <button
@@ -4392,17 +4391,15 @@ function App() {
 
                                 {/* Bluetooth Pedal — third chip */}
                                 <button
-                                    className="shrink-0 hidden md:flex items-center gap-1 px-2.5 py-1.5 rounded-full border bg-white/5 border-white/10 text-slate-500 text-[10px] font-black uppercase tracking-wide cursor-default"
+                                    className="shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-full border bg-white/5 border-white/10 text-slate-500 text-[10px] font-black uppercase tracking-wide cursor-default"
                                     title="Pedal BT — conecte um pedal/teclado Bluetooth: Space/↓ avança, ↑ volta"
                                 >
                                     <Footprints className="w-3.5 h-3.5" />
                                     <span>Pedal BT</span>
                                 </button>
 
-                                <div className="w-px h-4 bg-white/10 shrink-0 mx-0.5" />
-
                                 {/* Capo */}
-                                <div className="hidden md:flex items-center shrink-0 bg-white/5 rounded-full border border-white/10 overflow-hidden">
+                                <div className="flex items-center shrink-0 bg-white/5 rounded-full border border-white/10 overflow-hidden">
                                     <span className="px-2 py-1.5 text-[10px] font-black text-slate-500 uppercase tracking-wide border-r border-white/10">Capo</span>
                                     <button onClick={() => { if (selectedManualIndex !== null && songs[selectedManualIndex]) { const n = [...songs]; n[selectedManualIndex].capo = Math.max(0, (n[selectedManualIndex].capo || 0) - 1); setSongs(n); } }} className="px-1.5 py-1.5 text-slate-400 hover:text-white transition-colors"><Minus className="w-3 h-3" /></button>
                                     <span className="text-sm font-black text-[#B87333] w-5 text-center leading-none">{currentSong?.capo || 0}</span>
@@ -4410,7 +4407,7 @@ function App() {
                                 </div>
 
                                 {/* Transpose */}
-                                <div className="hidden md:flex items-center shrink-0 bg-white/5 rounded-full border border-[#B87333]/25 overflow-hidden">
+                                <div className="flex items-center shrink-0 bg-white/5 rounded-full border border-[#B87333]/25 overflow-hidden">
                                     <span className="px-2 py-1.5 text-[10px] font-black text-[#B87333] uppercase tracking-wide border-r border-[#B87333]/15 flex items-center gap-1">
                                         {isTransposing ? <RefreshCw className="w-3 h-3 animate-spin" /> : 'Tom'}
                                     </span>
@@ -4444,11 +4441,9 @@ function App() {
                                 </div>
 
                                 {/* Undo Transpose */}
-                                <button onClick={handleResetSongToOriginal} className="shrink-0 hidden md:block p-1.5 rounded-full bg-white/5 border border-white/10 text-[#B87333] hover:bg-[#B87333] hover:text-white transition-all" title="Tom Original">
+                                <button onClick={handleResetSongToOriginal} className="shrink-0 block p-1.5 rounded-full bg-white/5 border border-white/10 text-[#B87333] hover:bg-[#B87333] hover:text-white transition-all order-last md:order-none" title="Tom Original">
                                     <RotateCcw className="w-3.5 h-3.5" />
                                 </button>
-
-                                <div className="w-px h-4 bg-white/10 shrink-0 mx-0.5" />
 
                                 {/* Tabs Toggle */}
                                 <button onClick={() => {
@@ -4460,14 +4455,14 @@ function App() {
                                         setSongs(n);
                                     }
                                 }}
-                                className={`shrink-0 hidden md:flex items-center gap-1 px-2.5 py-1.5 rounded-full border text-[10px] font-black uppercase tracking-wide transition-all ${includeTabs ? 'bg-[#B87333]/20 border-[#B87333]/60 text-[#B87333]' : 'bg-white/5 border-white/10 text-slate-400 hover:border-white/25 hover:text-white'}`}>
+                                className={`shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-full border text-[10px] font-black uppercase tracking-wide transition-all ${includeTabs ? 'bg-[#B87333]/20 border-[#B87333]/60 text-[#B87333]' : 'bg-white/5 border-white/10 text-slate-400 hover:border-white/25 hover:text-white'}`}>
                                     <FileText className="w-3.5 h-3.5" />
                                     <span>Tabs</span>
                                 </button>
 
                                 {/* Versions */}
                                 {currentPlayerVersions.length > 1 && (
-                                    <div className="relative shrink-0 hidden md:block">
+                                    <div className="relative shrink-0 block">
                                         <button onClick={() => setIsPlayerVersionsOpen(!isPlayerVersionsOpen)} className={`flex items-center gap-1 px-2.5 py-1.5 rounded-full border text-[10px] font-black uppercase tracking-wide transition-all ${isPlayerVersionsOpen ? 'bg-[#B87333] border-[#B87333] text-white' : 'bg-white/5 border-white/10 text-slate-400 hover:border-white/25 hover:text-white'}`}>
                                             {playerVersionLoading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Layout className="w-3.5 h-3.5" />}
                                             <span>Versões</span>
@@ -4475,7 +4470,7 @@ function App() {
                                         {isPlayerVersionsOpen && (
                                             <>
                                                 <div className="fixed inset-0 z-[290] sm:hidden" onClick={() => setIsPlayerVersionsOpen(false)} />
-                                                <div className="absolute top-full mt-2 left-0 w-48 bg-[#12121A] border border-[#B87333]/40 rounded-xl shadow-[0_0_20px_rgba(184,115,51,0.3)] overflow-hidden z-[400] max-h-48 overflow-y-auto">
+                                                <div className="absolute top-full mt-2 left-0 w-48 bg-[#16161D] border border-[#B87333]/40 rounded-xl shadow-[0_0_20px_rgba(184,115,51,0.3)] overflow-hidden z-[400] max-h-48 overflow-y-auto">
                                                     {currentPlayerVersions.map((v, i) => (
                                                         <button key={v.key || i} onClick={() => { handleSwitchVersion(v.key); setIsPlayerVersionsOpen(false); }} className="w-full px-3 py-2.5 text-left text-[11px] font-bold text-slate-300 hover:text-white hover:bg-[#B87333]/20 border-b border-white/5 last:border-0">
                                                             {v.name}
@@ -5449,7 +5444,7 @@ function App() {
                                                                                 <h1 className="text-6xl font-black text-white italic tracking-tighter uppercase">{manualPreviewSong.song_name}</h1>
                                                                                 {manualPreviewSong.capo > 0 && (
                                                                                     <span className="text-2xl font-black text-[#B87333] border-l border-white/10 pl-6 uppercase tracking-widest">Capo {manualPreviewSong.capo}ª Casa</span>
-                                                                                )}
+                                                                                    )}
                                                                             </div>
                                                                             <p className="text-xl font-black text-[#B87333] uppercase tracking-[0.4em] mt-4 opacity-70 italic">{manualPreviewSong.artist_name}</p>
                                                                         </div>
@@ -7244,130 +7239,6 @@ function App() {
                     document.body
                 )
             }
-
-            {/* ——— MOBILE COMMAND CENTER (Steve Jobs style) ——— */}
-            {isMobileToolsOpen && (
-                <div className="fixed inset-0 z-[1000] flex flex-col md:hidden animate-in fade-in duration-300">
-                    <div className="absolute inset-0 bg-black/60 backdrop-blur-3xl" onClick={() => setIsMobileToolsOpen(false)} />
-                    
-                    <div className="mt-auto bg-[#0A0A0F]/90 backdrop-blur-3xl border-t border-white/10 rounded-t-[42px] p-8 pb-12 shadow-[0_-20px_50px_rgba(0,0,0,0.8)] z-10 animate-in slide-in-from-bottom duration-500 ring-1 ring-white/5">
-                        <div className="w-16 h-1.5 bg-white/10 rounded-full mx-auto mb-10" />
-                        
-                        <div className="flex items-center justify-between mb-10 px-2">
-                            <h2 className="text-2xl font-black text-white italic tracking-tighter uppercase">Command Center</h2>
-                            <button onClick={() => setIsMobileToolsOpen(false)} className="p-3 bg-white/5 rounded-full text-slate-400">
-                                <X className="w-5 h-5" />
-                            </button>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-4">
-                            {/* Performance Group */}
-                            <div className="col-span-2 grid grid-cols-2 gap-4 mb-4">
-                                <button 
-                                    onClick={() => { const s = !isDynamicSpeedActive; setIsDynamicSpeedActive(s); if (s) { setIsAutoScrolling(false); startAudioTracker(); } else if (!isBlowDetectEnabled) { stopAudioTracker(); }; setIsMobileToolsOpen(false); }}
-                                    className={`flex flex-col items-center justify-center gap-3 p-6 rounded-[32px] border transition-all ${isDynamicSpeedActive ? 'bg-blue-600 border-blue-500 text-white shadow-[0_10px_30px_rgba(37,99,235,0.4)]' : 'bg-white/5 border-white/10 text-slate-400'}`}
-                                >
-                                    <Zap className={`w-8 h-8 ${isDynamicSpeedActive ? 'animate-pulse' : ''}`} />
-                                    <span className="text-[10px] font-black uppercase tracking-widest text-center">IA Sync</span>
-                                </button>
-                                <button 
-                                    onClick={() => { setIsBlowDetectEnabled(!isBlowDetectEnabled); setIsMobileToolsOpen(false); }}
-                                    className={`flex flex-col items-center justify-center gap-3 p-6 rounded-[32px] border transition-all ${isBlowDetectEnabled ? 'bg-emerald-600 border-emerald-500 text-white shadow-[0_10px_30px_rgba(5,150,105,0.4)]' : 'bg-white/5 border-white/10 text-slate-400'}`}
-                                >
-                                    <Wind className={`w-8 h-8 ${isBlowDetectEnabled ? 'animate-pulse' : ''}`} />
-                                    <span className="text-[10px] font-black uppercase tracking-widest text-center">Sopro</span>
-                                </button>
-                            </div>
-
-                            {/* Sound Setup Group */}
-                            <div className="flex flex-col gap-3 p-5 bg-white/5 border border-white/10 rounded-[32px]">
-                                <div className="flex items-center gap-2 mb-2 px-1">
-                                    <Activity className="w-4 h-4 text-[#B87333]" />
-                                    <span className="text-[9px] font-black uppercase tracking-widest text-[#B87333]">Afinação</span>
-                                </div>
-                                <div className="flex items-center justify-between">
-                                    <button onClick={() => { if (selectedManualIndex !== null) transposeSong(selectedManualIndex, -1); }} className="w-10 h-10 flex items-center justify-center bg-white/5 rounded-full text-white active:bg-white/10"><Minus className="w-4 h-4" /></button>
-                                    <span className="text-xl font-black text-white italic">{getSoundingKey(songs[selectedManualIndex])}</span>
-                                    <button onClick={() => { if (selectedManualIndex !== null) transposeSong(selectedManualIndex, 1); }} className="w-10 h-10 flex items-center justify-center bg-white/5 rounded-full text-white active:bg-white/10"><Plus className="w-4 h-4" /></button>
-                                </div>
-                            </div>
-
-                            <div className="flex flex-col gap-3 p-5 bg-white/5 border border-white/10 rounded-[32px]">
-                                <div className="flex items-center gap-2 mb-2 px-1">
-                                    <Hammer className="w-4 h-4 text-[#B87333]" />
-                                    <span className="text-[9px] font-black uppercase tracking-widest text-[#B87333]">Capo</span>
-                                </div>
-                                <div className="flex items-center justify-between">
-                                    <button onClick={() => { if (selectedManualIndex !== null) { let n = [...songs]; n[selectedManualIndex].capo = Math.max(0, (n[selectedManualIndex].capo || 0) - 1); setSongs(n); } }} className="w-10 h-10 flex items-center justify-center bg-white/5 rounded-full text-white active:bg-white/10"><Minus className="w-4 h-4" /></button>
-                                    <span className="text-xl font-black text-white italic">{songs[selectedManualIndex]?.capo || 0}</span>
-                                    <button onClick={() => { if (selectedManualIndex !== null) { let n = [...songs]; n[selectedManualIndex].capo = Math.max(0, (n[selectedManualIndex].capo || 0) + 1); setSongs(n); } }} className="w-10 h-10 flex items-center justify-center bg-white/5 rounded-full text-white active:bg-white/10"><Plus className="w-4 h-4" /></button>
-                                </div>
-                            </div>
-
-                            {/* View Group */}
-                            <button 
-                                onClick={() => { 
-                                    const next = !includeTabs;
-                                    setIncludeTabs(next);
-                                    if (selectedManualIndex !== null && songs[selectedManualIndex]) {
-                                        const n = [...songs];
-                                        n[selectedManualIndex] = { ...n[selectedManualIndex], include_tabs: next };
-                                        setSongs(n);
-                                    }
-                                }}
-                                className={`flex items-center gap-4 p-5 rounded-[32px] border transition-all ${includeTabs ? 'bg-[#B87333]/20 border-[#B87333]/60 text-white' : 'bg-white/5 border-white/10 text-slate-400'}`}
-                            >
-                                <div className={`w-10 h-10 rounded-full flex items-center justify-center ${includeTabs ? 'bg-[#B87333]' : 'bg-white/5'}`}>
-                                    <FileText className="w-5 h-5" />
-                                </div>
-                                <div className="flex flex-col items-start text-left">
-                                    <span className="text-[10px] font-black uppercase tracking-widest leading-none mb-1">Tabs</span>
-                                    <span className="text-[8px] opacity-60 uppercase">{includeTabs ? 'Ativo' : 'Oculto'}</span>
-                                </div>
-                            </button>
-
-                            {currentPlayerVersions.length > 1 && (
-                                <button 
-                                    onClick={() => { setIsPlayerVersionsOpen(!isPlayerVersionsOpen); }}
-                                    className={`flex items-center gap-4 p-5 rounded-[32px] border transition-all ${isPlayerVersionsOpen ? 'bg-[#B87333]/20 border-[#B87333]/60 text-white' : 'bg-white/5 border-white/10 text-slate-400'}`}
-                                >
-                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${isPlayerVersionsOpen ? 'bg-[#B87333]' : 'bg-white/5'}`}>
-                                        <Layout className="w-5 h-5" />
-                                    </div>
-                                    <div className="flex flex-col items-start text-left">
-                                        <span className="text-[10px] font-black uppercase tracking-widest leading-none mb-1">Versões</span>
-                                        <span className="text-[8px] opacity-60 uppercase">{currentPlayerVersions.length} Opções</span>
-                                    </div>
-                                </button>
-                            )}
-
-                            {/* Versões inline */}
-                            {isPlayerVersionsOpen && currentPlayerVersions.length > 1 && (
-                                <div className="col-span-2 grid grid-cols-1 gap-2 mt-4 max-h-48 overflow-y-auto pr-2 scrollbar-none animate-in zoom-in-95 duration-300">
-                                    {currentPlayerVersions.map((v, i) => (
-                                        <button 
-                                            key={i} 
-                                            onClick={() => { handleSwitchVersion(v.key); setIsPlayerVersionsOpen(false); setIsMobileToolsOpen(false); }}
-                                            className="w-full p-5 bg-white/5 hover:bg-[#B87333]/20 border border-white/10 rounded-[28px] text-left flex items-center justify-between transition-all active:scale-95"
-                                        >
-                                            <span className="text-[11px] font-black uppercase tracking-tight text-white">{v.name}</span>
-                                            <ChevronRight className="w-4 h-4 text-[#B87333]" />
-                                        </button>
-                                    ))}
-                                </div>
-                            )}
-
-                        </div>
-
-                        <button 
-                            onClick={() => setIsMobileToolsOpen(false)}
-                            className="w-full mt-10 py-6 bg-white text-black rounded-[32px] font-black uppercase tracking-[0.3em] text-[11px] shadow-[0_20px_40px_rgba(255,255,255,0.1)] active:scale-95 transition-all outline-none"
-                        >
-                            Fechar
-                        </button>
-                    </div>
-                </div>
-            )}
         </div>
     );
 }
