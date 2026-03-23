@@ -5,6 +5,7 @@ import { Music, UploadCloud, Plus, Minus, FileText, CheckCircle, AlertCircle, Ey
 import * as XLSX from 'xlsx';
 import { SVGuitarChord } from 'svguitar';
 import { AudioTracker } from './utils/AudioTracker';
+import { FaceTracker } from './utils/FaceTracker';
 import { CifraParser } from './utils/CifraParser';
 import LoginScreen from './components/LoginScreen';
 
@@ -1473,8 +1474,12 @@ function App() {
     // Stage Mode (Modo Palco) — distraction-free display
 
     // Wake Lock
-    // Blow Detection
     const [blowFlash, setBlowFlash] = useState(false);
+
+    // Face Tracking
+    const [isBlinkDetectEnabled, setIsBlinkDetectEnabled] = useState(false);
+    const faceTrackerRef = useRef(null);
+    const [faceTrackerStatus, setFaceTrackerStatus] = useState('inativo');
 
     const getSharedMicStream = async () => {
         if (sharedAudioStreamRef.current && sharedAudioStreamRef.current.active) return sharedAudioStreamRef.current;
@@ -2147,8 +2152,8 @@ function App() {
     // === BLOW DETECTION: Sustained mic puff advances a page ===
     // === BLOW DETECTION: Unification Logic ===
     // (Actual logic moved to AudioTracker.js. Action handled via startAudioTracker callback)
-    const handleBlowAction = useCallback(() => {
-        if (!isBlowDetectEnabledRef.current) return;
+    const handleBlowAction = useCallback((force = false) => {
+        if (!isBlowDetectEnabledRef.current && !force) return;
         
         const cPlayer = scrollContainerRef.current;
         const cManual = manualScrollContainerRef.current;
@@ -2349,6 +2354,26 @@ function App() {
             setMicEnabled(false);
         }
     };
+
+    // === BLINK DETECTION MANAGER ===
+    useEffect(() => {
+        if (isBlinkDetectEnabled) {
+            if (!faceTrackerRef.current) {
+                faceTrackerRef.current = new FaceTracker();
+                faceTrackerRef.current.onStatusChange = setFaceTrackerStatus;
+                faceTrackerRef.current.onThreeBlinksDetected = () => {
+                    handleBlowAction(true); // force scroll
+                    setBlowFlash(true); // reuse the visual flash
+                    setTimeout(() => setBlowFlash(false), 300);
+                };
+            }
+            faceTrackerRef.current.start();
+        } else {
+            if (faceTrackerRef.current) {
+                faceTrackerRef.current.stop();
+            }
+        }
+    }, [isBlinkDetectEnabled, handleBlowAction]);
 
     const stopAudioTracker = () => {
         if (audioTrackerRef.current) {
@@ -4436,6 +4461,27 @@ function App() {
                                 >
                                     <Wind className={`w-3.5 h-3.5 ${isBlowDetectEnabled ? 'animate-pulse' : ''}`} />
                                     <span>Sopro</span>
+                                </button>
+
+                                {/* Blink Detection — third chip */}
+                                <button
+                                    onClick={() => setIsBlinkDetectEnabled(s => !s)}
+                                    className={`shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-full border text-[10px] font-black uppercase tracking-wide transition-all ${isBlinkDetectEnabled ? 'bg-purple-500/20 border-purple-500 text-purple-300 shadow-[0_0_10px_rgba(168,85,247,0.35)]' : 'bg-white/5 border-white/10 text-slate-400 hover:border-white/25 hover:text-white'}`}
+                                    title="Piscar 3x rápido para avançar a tela (Câmera)"
+                                >
+                                    {isBlinkDetectEnabled && faceTrackerStatus === 'rastreando' ? (
+                                        <Eye className="w-3.5 h-3.5 animate-pulse text-purple-400" />
+                                    ) : isBlinkDetectEnabled ? (
+                                        <Activity className="w-3.5 h-3.5 animate-spin text-purple-400" />
+                                    ) : (
+                                        <EyeOff className="w-3.5 h-3.5" />
+                                    )}
+                                    <span>
+                                        {!isBlinkDetectEnabled ? 'Piscar' : 
+                                         faceTrackerStatus === 'carregando_ia' ? 'Baixando IA...' : 
+                                         faceTrackerStatus === 'rastreando' ? 'Olhando' : 
+                                         faceTrackerStatus === 'erro_camera' ? 'Câmera Negada' : 'Piscar'}
+                                    </span>
                                 </button>
 
                                 {/* Bluetooth Pedal — third chip */}
