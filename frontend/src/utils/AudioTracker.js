@@ -154,9 +154,7 @@ export class AudioTracker {
             if (!this.isMicActive) return;
 
             const rec = new SpeechRecognition();
-            // continuous=false is required on Android Chrome to prevent silent halts.
-            // When it ends, the onend handler will immediately restart it.
-            rec.continuous = false;
+            rec.continuous = true;
             rec.interimResults = true;
             rec.lang = 'pt-BR';
             // maxAlternatives = 1 reduces processing overhead on mobile
@@ -335,6 +333,7 @@ export class AudioTracker {
                 const subBass = freqBuf[0];
                 const subBassRatio = avg > 0 ? subBass / avg : 0;
 
+                const now = Date.now();
                 const isValidPuff = level > 55 && par < 2.8 && subBassRatio > 2.2;
 
                 if (isValidPuff) {
