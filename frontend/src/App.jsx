@@ -2142,44 +2142,47 @@ function App() {
                 rms = Math.sqrt(rms / buf.length) * 500;
                 const now = Date.now();
                 
-                // BROADBAND WIND NOISE DETECTION ("Chiadão") - WIDENED
-                // - RMS > 40: Moderate volume to ignore distant room noise/hiss
-                // - PAR < 3.5: Accepts wind noise (which can have higher PAR on mobile mics due to compression artifacts).
-                //              Rejects strong musical harmonics (Guitar/Voice are usually PAR > 4.0).
-                const isValidPuff = rms > 40 && par < 3.5;
+                // TRANSIENT FILTER FOR GUITAR STRUMS
+                // Guitar strums have a sharp 10-20ms percussive attack (hiss) before the note rings.
+                // We must require the noise to sustain for at least 3 frames (~50ms) to ignore the strum,
+                // but still trigger fast enough (< 100ms) to beat the mobile audio limiter.
+                // Also require subBassRatio > 2.0, as wind physically pops the mic diaphragm (0-80Hz), while guitars rarely do.
+                const isValidPuff = rms > 50 && par < 3.0 && subBassRatio > 2.0;
                 
-                // Keep AudioContext alive! Mobile browsers will silently 'suspend' it during heavy renders or navigation.
-                if (localCtx && localCtx.state === 'suspended' && now - lastBlowTime > 1000) {
-                    localCtx.resume();
-                }
-
-                // Instantaneous trigger (bypasses mobile AGC/Limiters that cut off audio)
-                if (isValidPuff && now - lastBlowTime > 1500) {
-                    lastBlowTime = now;
-                    console.log(`[BlowDetect] Instant Blow! rms:${rms.toFixed(0)} sub:${subBassRatio.toFixed(2)} high:${highEnergyRatio.toFixed(2)}`);
-                    
-                    const cPlayer = scrollContainerRef.current;
-                    const cManual = manualScrollContainerRef.current;
-                    lastManualScrollTime.current = 0;
-                    
-                    // Scroll by 65% of the screen height. 
-                    // This leaves 35% of the previous content visible at the top, 
-                    // ensuring the user doesn't lose their place (holds the last lines/chords).
-                    const scrollAmount = window.innerHeight * 0.65;
-
-                    if (cPlayer) cPlayer.scrollBy({ top: scrollAmount, behavior: 'smooth' });
-                    if (cManual) cManual.scrollBy({ top: scrollAmount, behavior: 'smooth' });
-                    
-                    try {
-                        window.scrollBy({ top: scrollAmount, behavior: 'smooth' });
-                        document.documentElement.scrollBy({ top: scrollAmount, behavior: 'smooth' });
-                        document.body.scrollBy({ top: scrollAmount, behavior: 'smooth' });
+                if (isValidPuff) {
+                    // Accumulate frames
+                    if (!inBurst) {
+                        inBurst = true;
+                        burstStartTime = now;
+                    } else if (now - burstStartTime >= 50 && now - lastBlowTime > 1500) {
+                        // Sustained for at least 50ms (3-4 frames) -> Valid!
+                        lastBlowTime = now;
+                        inBurst = false; // reset for next
+                        console.log(`[BlowDetect] 50ms Blow! rms:${rms.toFixed(0)} sub:${subBassRatio.toFixed(2)}`);
                         
-                        setBlowFlash(true);
-                        setTimeout(() => setBlowFlash(false), 300);
-                    } catch(e) {}
+                        const cPlayer = scrollContainerRef.current;
+                        const cManual = manualScrollContainerRef.current;
+                        lastManualScrollTime.current = 0;
+                        
+                        // Scroll by 65% of the screen height. 
+                        const scrollAmount = window.innerHeight * 0.65;
+
+                        if (cPlayer) cPlayer.scrollBy({ top: scrollAmount, behavior: 'smooth' });
+                        if (cManual) cManual.scrollBy({ top: scrollAmount, behavior: 'smooth' });
+                        
+                        try {
+                            window.scrollBy({ top: scrollAmount, behavior: 'smooth' });
+                            document.documentElement.scrollBy({ top: scrollAmount, behavior: 'smooth' });
+                            document.body.scrollBy({ top: scrollAmount, behavior: 'smooth' });
+                            
+                            setBlowFlash(true);
+                            setTimeout(() => setBlowFlash(false), 300);
+                        } catch(e) {}
+                    }
+                } else {
+                    inBurst = false;
                 }
-            }
+            } // Closes if (localAnalyser)
             raf = requestAnimationFrame(checkBlow);
         };
 
