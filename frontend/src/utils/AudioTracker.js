@@ -37,7 +37,14 @@ export class AudioTracker {
     }
 
     async start(externalStream) {
-        if (this.isMicActive) return;
+        if (this.isMicActive) {
+            // If already active, just ensure components that weren't started are running
+            if (this.onSpeechResult && !this.activeRec) {
+                console.log("[AudioTracker] Restarting SpeechRec on active context");
+                this.startSpeechRecognition();
+            }
+            return;
+        }
 
         try {
             const stream = externalStream || await navigator.mediaDevices.getUserMedia({
@@ -55,10 +62,22 @@ export class AudioTracker {
             }
 
             this.mediaStreamSource = this.audioContext.createMediaStreamSource(stream);
+            
+            // Focus on closest voice: Dynamics Compressor
+            // This reduces background noise and peaks, making the closest voice more prominent
+            this.compressor = this.audioContext.createDynamicsCompressor();
+            this.compressor.threshold.setValueAtTime(-35, this.audioContext.currentTime);
+            this.compressor.knee.setValueAtTime(30, this.audioContext.currentTime);
+            this.compressor.ratio.setValueAtTime(12, this.audioContext.currentTime);
+            this.compressor.attack.setValueAtTime(0.003, this.audioContext.currentTime);
+            this.compressor.release.setValueAtTime(0.25, this.audioContext.currentTime);
 
             this.gainNode = this.audioContext.createGain();
             this.gainNode.gain.value = this.micGain;
-            this.mediaStreamSource.connect(this.gainNode);
+            
+            // Chain: Source -> Compressor -> Gain
+            this.mediaStreamSource.connect(this.compressor);
+            this.compressor.connect(this.gainNode);
 
             this.analyser = this.audioContext.createAnalyser();
             this.analyser.fftSize = 256;
@@ -111,7 +130,12 @@ export class AudioTracker {
             this.isMicActive = true;
             this.startLevelAnalysis();
             this.startPitchAnalysis();
-            this.startSpeechRecognition();
+            
+            // Only start Speech Recognition if a callback is provided
+            // This prevents overhead when only using Sopro or Tuner
+            if (this.onSpeechResult) {
+                this.startSpeechRecognition();
+            }
 
         } catch (err) {
             console.error("Failed to start audio tracker", err);
@@ -157,6 +181,7 @@ export class AudioTracker {
         };
 
         rec.onerror = (e) => {
+            console.warn(`[AudioTracker] SpeechRec Error (${id}):`, e.error);
             if (e.error === 'aborted' || e.error === 'no-speech') return;
             // network error happens often when they compete for mic, ignore it gracefully
         };
@@ -224,7 +249,7 @@ export class AudioTracker {
                 return;
             }
             this.switchRecognizer();
-        }, 5000); // Swap engine every 5 seconds to prevent Android native freeze
+        }, 12000); // Swap engine every 12 seconds (reduced frequency for mobile stability)
     }
 
     async setupWebSocket() {
@@ -271,6 +296,13 @@ export class AudioTracker {
                 sumSquares += dataArray[i] * dataArray[i];
             }
             const rms = Math.sqrt(sumSquares / bufferLength);
+
+            // NOISE GATE: If it's extremely quiet, skip further processing to save CPU
+            if (rms < 0.005) {
+                if (this.onMicLevel) this.onMicLevel(0);
+                this.animationFrameId = requestAnimationFrame(checkAudio);
+                return;
+            }
 
             // Normalize level (0 to 100) for UI display
             const level = Math.min(100, rms * 500);
