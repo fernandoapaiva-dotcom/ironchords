@@ -368,11 +368,12 @@ export class AudioTracker {
                 const subBass = freqBuf[0];
                 const subBassRatio = avg > 0 ? subBass / avg : 0;
 
-                // CHURCH-READY SENSITIVITY (Optimized)
-                // We use the gain-adjusted RMS. 55 is the standard threshold.
-                // We loosen subBassRatio slightly to 2.2 for better consistency.
+                // COMPRESSOR-ADJUSTED SENSITIVITY
+                // The DynamicsCompressor makes the signal much hotter and denser.
+                // We must raise the level threshold and the sub-bass requirement
+                // so that normal speech doesn't trigger a blow.
                 const now = Date.now();
-                const isValidPuff = level > 55 && par < 2.8 && subBassRatio > 2.2;
+                const isValidPuff = level > 75 && par < 2.5 && subBassRatio > 3.5;
 
                 if (isValidPuff) {
                     if (!this.inBurst) {
