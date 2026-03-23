@@ -4926,7 +4926,7 @@ function App() {
                             </div>
 
                             {/* PITCH GAUGE & AUTO-TRANSPOSE UI */}
-                            {micEnabled && (
+                            {micEnabled && isDynamicSpeedActive && (
                                 <div className="absolute bottom-10 right-10 bg-black/80 backdrop-blur-3xl border border-white/10 rounded-3xl p-6 shadow-2xl flex flex-col items-center z-[150] w-64 animate-in fade-in slide-in-from-bottom-10">
                                     <div className="flex justify-between w-full mb-4 items-center">
                                         <span className="text-[10px] font-black uppercase tracking-[0.2em] text-[#B87333]">Afinação</span>
