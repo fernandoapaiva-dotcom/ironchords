@@ -2142,12 +2142,12 @@ function App() {
                 rms = Math.sqrt(rms / buf.length) * 500;
                 const now = Date.now();
                 
-                // TRANSIENT FILTER FOR GUITAR STRUMS
-                // Guitar strums have a sharp 10-20ms percussive attack (hiss) before the note rings.
-                // We must require the noise to sustain for at least 3 frames (~50ms) to ignore the strum,
-                // but still trigger fast enough (< 100ms) to beat the mobile audio limiter.
-                // Also require subBassRatio > 2.0, as wind physically pops the mic diaphragm (0-80Hz), while guitars rarely do.
-                const isValidPuff = rms > 50 && par < 3.0 && subBassRatio > 2.0;
+                // TRANSIENT & PALM MUTE FILTER
+                // Guitar strums and palm mutes (abrupt stops) create a 50-80ms hiss/thump.
+                // To reject the slap of stopping the guitar, we must drastically raise the RMS volume threshold.
+                // A palm mute from half a meter away cannot physically reach RMS > 120, but a direct blow easily hits 300+.
+                // We keep PAR < 3.0 to reject resonant strings, and require 3 frames (50ms) to bypass the OS limiter.
+                const isValidPuff = rms > 120 && par < 3.0 && subBassRatio > 2.0;
                 
                 if (isValidPuff) {
                     // Accumulate frames
