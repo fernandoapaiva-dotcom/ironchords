@@ -1343,7 +1343,7 @@ function App() {
         return () => clearTimeout(timer);
     }, [
         songs[selectedManualIndex]?.id,
-        manualPreviewSong?.id, 
+        manualPreviewSong?.song_name, 
         activeTab,
         isFullScreenPlayer,
         isManualFullscreen
@@ -2146,12 +2146,11 @@ function App() {
                 rms = Math.sqrt(rms / buf.length) * 500;
                 const now = Date.now();
                 
-                // HARDENED THRESHOLDS: 
-                // - RMS > 100 (Deliberate)
-                // - PAR < 2.5 (Pure Noise/Wind)
-                // - SubBassRatio > 3.5 (Physical Air Pressure)
-                // - HighEnergyRatio < 0.12 (No musical harmonics)
-                const isValidPuff = rms > 100 && par < 2.5 && subBassRatio > 3.5 && highEnergyRatio < 0.12;
+                // - RMS > 60 (Deliberate but gentle puff)
+                // - PAR < 4.0 (Tolerate typical mobile clipping)
+                // - SubBassRatio > 2.0 (Standard pressure)
+                // - HighEnergyRatio < 0.20 (Tolerate some hiss)
+                const isValidPuff = rms > 60 && par < 4.0 && subBassRatio > 2.0 && highEnergyRatio < 0.20;
                 
                 if (isValidPuff && !inBurst) { 
                     inBurst = true; 
@@ -2167,6 +2166,9 @@ function App() {
                         lastManualScrollTime.current = 0;
                         if (cPlayer) cPlayer.scrollBy({ top: cPlayer.clientHeight * 0.85, behavior: 'smooth' });
                         if (cManual) cManual.scrollBy({ top: cManual.clientHeight * 0.85, behavior: 'smooth' });
+                        
+                        // Fallback: Also scroll the main window, which is often the scroll container on strict mobile views
+                        window.scrollBy({ top: window.innerHeight * 0.85, behavior: 'smooth' });
                         
                         try {
                             setBlowFlash(true);
