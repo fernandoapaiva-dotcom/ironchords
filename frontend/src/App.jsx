@@ -2148,6 +2148,11 @@ function App() {
                 //              Rejects strong musical harmonics (Guitar/Voice are usually PAR > 4.0).
                 const isValidPuff = rms > 40 && par < 3.5;
                 
+                // Keep AudioContext alive! Mobile browsers will silently 'suspend' it during heavy renders or navigation.
+                if (localCtx && localCtx.state === 'suspended' && now - lastBlowTime > 1000) {
+                    localCtx.resume();
+                }
+
                 // Instantaneous trigger (bypasses mobile AGC/Limiters that cut off audio)
                 if (isValidPuff && now - lastBlowTime > 1500) {
                     lastBlowTime = now;
