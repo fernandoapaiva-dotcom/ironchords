@@ -1208,6 +1208,7 @@ function App() {
     const [isBlowDetectEnabled, setIsBlowDetectEnabled] = useState(false);
     const [isDynamicSpeedActive, setIsDynamicSpeedActive] = useState(false);
     const [isAutoScrolling, setIsAutoScrolling] = useState(false);
+    const [queueSearchTerm, setQueueSearchTerm] = useState('');
     const [scrollSpeed, setScrollSpeed] = useState(1);
     const [playerFontSize, setPlayerFontSize] = useState(19);
     const [manualFontSize, setManualFontSize] = useState(18);
@@ -4125,27 +4126,28 @@ function App() {
                             {/* Menu Items */}
                             <div className="flex flex-col py-2 max-h-[70vh] overflow-y-auto min-h-0 custom-scrollbar">
                                 
-                                {/* Visible everywhere except Player */}
-                                {!(isFullScreenPlayer || mainNav === 'player') && (
-                                    <>
-                                        <button onClick={() => { setBatchModalOpen(true); setShowGlobalMenu(false); }} className="w-full flex items-center gap-3 px-5 py-3.5 text-left text-[11px] font-bold text-slate-300 hover:text-white hover:bg-[#B87333]/15 transition-all group">
-                                            <UploadCloud className="w-4 h-4 text-slate-500 group-hover:text-[#B87333]" />
-                                            Adicionar em Lote
-                                        </button>
+                                {/* Always visible actions (Shared/Booklet/Batch) */}
+                                <button onClick={() => { setBatchModalOpen(true); setShowGlobalMenu(false); }} className="w-full flex items-center gap-3 px-5 py-3.5 text-left text-[11px] font-bold text-slate-300 hover:text-white hover:bg-[#B87333]/15 transition-all group">
+                                    <UploadCloud className="w-4 h-4 text-slate-500 group-hover:text-[#B87333]" />
+                                    Adicionar em Lote
+                                </button>
 
-                                        <button onClick={() => { setCurrentExportList({ name: "Fila Atual", songs: songs || [] }); setExportStep(1); setDownloadUrl(null); setExportFormat('docx'); setCoverImage(null); setShowExportModal(true); setShowGlobalMenu(false); }} className="w-full flex items-center gap-3 px-5 py-3.5 text-left text-[11px] font-bold text-slate-300 hover:text-white hover:bg-[#B87333]/15 transition-all group">
-                                            <FileText className="w-4 h-4 text-slate-500 group-hover:text-[#B87333]" />
-                                            Gerar Livreto
-                                        </button>
+                                <button onClick={() => { setCurrentExportList({ name: "Fila Atual", songs: songs || [] }); setExportStep(1); setDownloadUrl(null); setExportFormat('docx'); setCoverImage(null); setShowExportModal(true); setShowGlobalMenu(false); }} className="w-full flex items-center gap-3 px-5 py-3.5 text-left text-[11px] font-bold text-slate-300 hover:text-white hover:bg-[#B87333]/15 transition-all group">
+                                    <FileText className="w-4 h-4 text-slate-500 group-hover:text-[#B87333]" />
+                                    Gerar Livreto
+                                </button>
 
-                                        <button onClick={() => { handleShareList(); setShowGlobalMenu(false); }} className="w-full flex items-center gap-3 px-5 py-3.5 text-left text-[11px] font-bold text-slate-300 hover:text-white hover:bg-[#B87333]/15 transition-all group">
-                                            <Share2 className="w-4 h-4 text-slate-500 group-hover:text-[#B87333]" />
-                                            Compartilhar
-                                        </button>
+                                <button onClick={() => { handlePrint(); setShowGlobalMenu(false); }} className="w-full flex items-center gap-3 px-5 py-3.5 text-left text-[11px] font-bold text-slate-300 hover:text-white hover:bg-[#B87333]/15 transition-all group">
+                                    <Printer className="w-4 h-4 text-slate-500 group-hover:text-[#B87333]" />
+                                    Impressão
+                                </button>
 
-                                        <div className="my-2 h-px bg-white/5 mx-4" />
-                                    </>
-                                )}
+                                <button onClick={() => { handleShareList(); setShowGlobalMenu(false); }} className="w-full flex items-center gap-3 px-5 py-3.5 text-left text-[11px] font-bold text-slate-300 hover:text-white hover:bg-[#B87333]/15 transition-all group">
+                                    <Share2 className="w-4 h-4 text-slate-500 group-hover:text-blue-400" />
+                                    Compartilhar
+                                </button>
+
+                                <div className="my-2 h-px bg-white/5 mx-4" />
 
                                 {/* Always visible */}
                                 <button onClick={() => { setIsImmersiveMode(!isImmersiveMode); setShowImmersiveControls(false); setShowGlobalMenu(false); }} className={`w-full flex items-center gap-3 px-5 py-3.5 text-left text-[11px] font-bold transition-all group ${isImmersiveMode ? 'text-[#B87333] bg-[#B87333]/10' : 'text-slate-300 hover:text-white hover:bg-[#B87333]/15'}`}>
@@ -4544,26 +4546,47 @@ function App() {
                                         )}
 
                                         {/* ——— HEADER: title + save button ——— */}
-                                        <div className={`flex items-center ${isSidebarCollapsed ? 'justify-center' : 'justify-between'}`}>
-                                            <div className="flex items-center space-x-3" title="Fila de Execução">
-                                                <LayoutList className="w-5 h-5 text-[#B87333] shrink-0" />
-                                                {!isSidebarCollapsed && <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] whitespace-nowrap">Fila de Execução</h3>}
+                                        <div className="flex flex-col space-y-3">
+                                            <div className={`flex items-center ${isSidebarCollapsed ? 'justify-center' : 'justify-between'}`}>
+                                                <div className="flex items-center space-x-3" title="Fila de Execução">
+                                                    <LayoutList className="w-5 h-5 text-[#B87333] shrink-0" />
+                                                    {!isSidebarCollapsed && <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] whitespace-nowrap">Fila de Execução</h3>}
+                                                </div>
+                                                {!isSidebarCollapsed && (
+                                                    <div className="flex items-center space-x-1">
+                                                        <button onClick={() => {
+                                                            if (window.confirm("Deseja realmente zerar toda a fila da forja?")) {
+                                                                setSongs([]);
+                                                                setManualPreviewSong(null);
+                                                                setSelectedManualIndex(null);
+                                                                setActivePlaylistName(null);
+                                                            }
+                                                        }} className="p-1.5 rounded-md text-slate-600 hover:text-red-500 hover:bg-red-500/10 transition-all" title="Zerar Fila">
+                                                            <RotateCcw className="w-3.5 h-3.5" />
+                                                        </button>
+                                                        <button onClick={() => { setShowPlaylistManager(!showPlaylistManager); setSaveMode('new'); }} className={`p-1.5 rounded-md transition-all ${showPlaylistManager ? 'bg-[#B87333] text-white' : 'text-slate-600 hover:text-slate-400'}`} title="Salvar Setlist">
+                                                            <Save className="w-3.5 h-3.5" />
+                                                        </button>
+                                                    </div>
+                                                )}
                                             </div>
+
+                                            {/* Local Queue Search (Feature 2) */}
                                             {!isSidebarCollapsed && (
-                                                <div className="flex items-center space-x-1">
-                                                    <button onClick={() => {
-                                                        if (window.confirm("Deseja realmente zerar toda a fila da forja?")) {
-                                                            setSongs([]);
-                                                            setManualPreviewSong(null);
-                                                            setSelectedManualIndex(null);
-                                                            setActivePlaylistName(null);
-                                                        }
-                                                    }} className="p-1.5 rounded-md text-slate-600 hover:text-red-500 hover:bg-red-500/10 transition-all" title="Zerar Fila">
-                                                        <RotateCcw className="w-3.5 h-3.5" />
-                                                    </button>
-                                                    <button onClick={() => { setShowPlaylistManager(!showPlaylistManager); setSaveMode('new'); }} className={`p-1.5 rounded-md transition-all ${showPlaylistManager ? 'bg-[#B87333] text-white' : 'text-slate-600 hover:text-slate-400'}`} title="Salvar Setlist">
-                                                        <Save className="w-3.5 h-3.5" />
-                                                    </button>
+                                                <div className="relative group">
+                                                    <Search className={`absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 transition-colors ${queueSearchTerm ? 'text-[#B87333]' : 'text-slate-600'}`} />
+                                                    <input
+                                                        type="text"
+                                                        placeholder="Localizar na fila..."
+                                                        value={queueSearchTerm}
+                                                        onChange={e => setQueueSearchTerm(e.target.value)}
+                                                        className="w-full bg-white/5 border border-white/5 rounded-xl pl-9 pr-8 py-2.5 text-[10px] font-bold text-white placeholder:text-slate-600 focus:outline-none focus:border-[#B87333]/30 transition-all"
+                                                    />
+                                                    {queueSearchTerm && (
+                                                        <button onClick={() => setQueueSearchTerm('')} className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-slate-600 hover:text-white transition-all">
+                                                            <X className="w-3 h-3" />
+                                                        </button>
+                                                    )}
                                                 </div>
                                             )}
                                         </div>
@@ -4621,92 +4644,89 @@ function App() {
                                             {!isSidebarCollapsed && (
                                                 <div className="absolute right-0 top-0 bottom-0 w-8 pointer-events-none bg-gradient-to-l from-black/20 to-transparent z-10" title="Zona de deslize" />
                                             )}
-                                            {songs.map((s, idx) => (
-                                                <div key={idx} className="relative group/song flex items-center space-x-1">
-                                                    {!isSidebarCollapsed && (
-                                                        <div 
-                                                            className="p-2 cursor-grab active:cursor-grabbing text-slate-700 hover:text-[#B87333] transition-colors shrink-0"
-                                                            onTouchStart={(e) => { 
-                                                                dragItem.current = idx; 
-                                                                const parent = e.currentTarget.closest('[data-drag-index]');
-                                                                if (parent) parent.style.opacity = '0.5';
-                                                                // This specific handle needs touch-none or similar to prevent scroll while dragging
-                                                                e.currentTarget.style.touchAction = 'none';
-                                                            }}
-                                                            onMouseDown={() => (dragItem.current = idx)}
-                                                            title="Arrastar para reordenar"
-                                                        >
-                                                            <GripVertical className="w-4 h-4" />
-                                                        </div>
-                                                    )}
-                                                    <button
-                                                        draggable={!isSidebarCollapsed}
-                                                        onDragStart={(e) => {
-                                                            // On desktop, we still allow dragging the whole item if desired, 
-                                                            // but we focus on the handle for mobile.
-                                                            if (dragItem.current === null) dragItem.current = idx;
-                                                        }}
-                                                        onDragEnter={() => { dragOverItem.current = idx; setDragOverIdx(idx); }}
-                                                        onDragEnd={handleSort}
-                                                        onDragOver={(e) => e.preventDefault()}
-                                                        onTouchMove={(e) => {
-                                                            if (isSidebarCollapsed || dragItem.current === null) return;
-                                                            // We don't preventDefault here globally to allow page scroll if not dragging
-                                                            const touchIndex = e.touches[0];
-                                                            const hoverElement = document.elementFromPoint(touchIndex.clientX, touchIndex.clientY);
-                                                            if (hoverElement) {
-                                                                const targetButton = hoverElement.closest('[data-drag-index]');
-                                                                if (targetButton) {
-                                                                    const targetIdx = parseInt(targetButton.getAttribute('data-drag-index'), 10);
-                                                                    if (!isNaN(targetIdx) && targetIdx !== dragOverItem.current) { 
-                                                                        dragOverItem.current = targetIdx; 
-                                                                        setDragOverIdx(targetIdx); 
-                                                                    }
-                                                                }
-                                                            }
-                                                        }}
-                                                        onTouchEnd={(e) => {
-                                                            if (isSidebarCollapsed) return;
-                                                            const parents = document.querySelectorAll('[data-drag-index]');
-                                                            parents.forEach(p => p.style.opacity = '1');
-                                                            
-                                                            if (dragItem.current !== null && dragOverItem.current !== null) handleSort();
-                                                            else { dragItem.current = null; dragOverItem.current = null; setDragOverIdx(null); }
-                                                        }}
-                                                        onClick={() => { setSelectedManualIndex(idx); setCurrentLineIndex(0); currentLineIndexRef.current = 0; }}
-                                                        className={`flex-1 ${isSidebarCollapsed ? 'p-2 justify-center' : 'p-3'} rounded-2xl border transition-all text-left flex items-center ${isSidebarCollapsed ? 'space-x-0' : 'space-x-3'} relative overflow-hidden ${selectedManualIndex === idx ? 'bg-[#B87333] border-[#B87333] shadow-lg shadow-[#B87333]/20' : 'bg-white/5 border-white/5 hover:border-[#B87333]/30'} ${dragOverIdx === idx ? (dragItem.current !== null && dragOverItem.current !== null && dragItem.current < dragOverItem.current ? 'border-b-4 border-b-orange-500' : 'border-t-4 border-t-orange-500') : ''} ${!isSidebarCollapsed ? 'cursor-default' : ''}`}
-                                                        title={isSidebarCollapsed ? `${idx + 1}. ${s.song_name}` : "Clique para tocar"}
-                                                        data-drag-index={idx}
-                                                    >
-                                                        <div className={`w-7 h-7 rounded-xl flex items-center justify-center font-black text-xs shrink-0 transition-all ${selectedManualIndex === idx ? 'bg-white text-[#B87333]' : 'bg-black/60 text-slate-700 group-hover/song:text-white'}`}>{idx + 1}</div>
+                                            {songs.map((s, idx) => {
+                                                if (queueSearchTerm && !s.song_name.toLowerCase().includes(queueSearchTerm.toLowerCase())) return null;
+                                                return (
+                                                    <div key={idx} className="relative group/song flex items-center space-x-1">
                                                         {!isSidebarCollapsed && (
-                                                            <div className="flex-1 min-w-0">
-                                                                <p className={`text-[11px] font-black uppercase italic truncate tracking-tight ${selectedManualIndex === idx ? 'text-white' : 'text-slate-400 group-hover/song:text-slate-200'}`}>{s.song_name}</p>
-                                                                <p className={`text-[9px] font-bold uppercase truncate ${selectedManualIndex === idx ? 'text-white/60' : 'text-slate-600'}`}>{s.artist_name}</p>
+                                                            <div 
+                                                                className="p-2 cursor-grab active:cursor-grabbing text-slate-700 hover:text-[#B87333] transition-colors shrink-0"
+                                                                onTouchStart={(e) => { 
+                                                                    dragItem.current = idx; 
+                                                                    const parent = e.currentTarget.closest('[data-drag-index]');
+                                                                    if (parent) parent.style.opacity = '0.5';
+                                                                    e.currentTarget.style.touchAction = 'none';
+                                                                }}
+                                                                onMouseDown={() => (dragItem.current = idx)}
+                                                                title="Arrastar para reordenar"
+                                                            >
+                                                                <GripVertical className="w-4 h-4" />
                                                             </div>
                                                         )}
-                                                    </button>
-                                                    {/* Edit + Trash action buttons */}
-                                                    {!isSidebarCollapsed && (
-                                                        <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center space-x-0.5 opacity-0 group-hover/song:opacity-100 transition-all">
-                                                            <button
-                                                                onClick={(e) => { e.stopPropagation(); const song = songs[idx]; setEditQueueSong({ idx, song_name: song.song_name, artist_name: song.artist_name, song_key: song.key || song.song_key || 'C', capo: song.capo || 0, include_tabs: song.include_tabs || false, content: song.content || '' }); }}
-                                                                className="p-1.5 rounded-lg bg-black/60 text-slate-500 hover:text-[#B87333] hover:bg-[#B87333]/10 transition-all"
-                                                                title="Editar música"
-                                                            >
-                                                                <Edit3 className="w-3 h-3" />
-                                                            </button>
-                                                            <button
-                                                                onClick={(e) => { e.stopPropagation(); handleDeleteSongFromQueue(idx); }}
-                                                                className="p-1.5 rounded-lg bg-black/60 text-red-900 hover:text-red-400 hover:bg-red-500/10 transition-all"
-                                                                title="Remover da fila"
-                                                            >
-                                                                <Trash2 className="w-3 h-3" />
-                                                            </button>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            ))}
+                                                        <button
+                                                            draggable={!isSidebarCollapsed}
+                                                            onDragStart={(e) => {
+                                                                if (dragItem.current === null) dragItem.current = idx;
+                                                            }}
+                                                            onDragEnter={() => { dragOverItem.current = idx; setDragOverIdx(idx); }}
+                                                            onDragEnd={handleSort}
+                                                            onDragOver={(e) => e.preventDefault()}
+                                                            onTouchMove={(e) => {
+                                                                if (isSidebarCollapsed || dragItem.current === null) return;
+                                                                const touchIndex = e.touches[0];
+                                                                const hoverElement = document.elementFromPoint(touchIndex.clientX, touchIndex.clientY);
+                                                                if (hoverElement) {
+                                                                    const targetButton = hoverElement.closest('[data-drag-index]');
+                                                                    if (targetButton) {
+                                                                        const targetIdx = parseInt(targetButton.getAttribute('data-drag-index'), 10);
+                                                                        if (!isNaN(targetIdx) && targetIdx !== dragOverItem.current) { 
+                                                                            dragOverItem.current = targetIdx; 
+                                                                            setDragOverIdx(targetIdx); 
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }}
+                                                            onTouchEnd={(e) => {
+                                                                if (isSidebarCollapsed) return;
+                                                                const parents = document.querySelectorAll('[data-drag-index]');
+                                                                parents.forEach(p => p.style.opacity = '1');
+                                                                if (dragItem.current !== null && dragOverItem.current !== null) handleSort();
+                                                                else { dragItem.current = null; dragOverItem.current = null; setDragOverIdx(null); }
+                                                            }}
+                                                            onClick={() => { setSelectedManualIndex(idx); setCurrentLineIndex(0); currentLineIndexRef.current = 0; }}
+                                                            className={`flex-1 ${isSidebarCollapsed ? 'p-2 justify-center' : 'p-3'} rounded-2xl border transition-all text-left flex items-center ${isSidebarCollapsed ? 'space-x-0' : 'space-x-3'} relative overflow-hidden ${selectedManualIndex === idx ? 'bg-[#B87333] border-[#B87333] shadow-lg shadow-[#B87333]/20' : 'bg-white/5 border-white/5 hover:border-[#B87333]/30'} ${dragOverIdx === idx ? (dragItem.current !== null && dragOverItem.current !== null && dragItem.current < dragOverItem.current ? 'border-b-4 border-b-orange-500' : 'border-t-4 border-t-orange-500') : ''} ${!isSidebarCollapsed ? 'cursor-default' : ''}`}
+                                                            title={isSidebarCollapsed ? `${idx + 1}. ${s.song_name}` : "Clique para tocar"}
+                                                            data-drag-index={idx}
+                                                        >
+                                                            <div className={`w-7 h-7 rounded-xl flex items-center justify-center font-black text-xs shrink-0 transition-all ${selectedManualIndex === idx ? 'bg-white text-[#B87333]' : 'bg-black/60 text-slate-700 group-hover/song:text-white'}`}>{idx + 1}</div>
+                                                            {!isSidebarCollapsed && (
+                                                                <div className="flex-1 min-w-0">
+                                                                    <p className={`text-[11px] font-black uppercase italic truncate tracking-tight ${selectedManualIndex === idx ? 'text-white' : 'text-slate-400 group-hover/song:text-slate-200'}`}>{s.song_name}</p>
+                                                                    <p className={`text-[9px] font-bold uppercase truncate ${selectedManualIndex === idx ? 'text-white/60' : 'text-slate-600'}`}>{s.artist_name}</p>
+                                                                </div>
+                                                            )}
+                                                        </button>
+                                                        {!isSidebarCollapsed && (
+                                                            <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center space-x-0.5 opacity-0 group-hover/song:opacity-100 transition-all">
+                                                                <button
+                                                                    onClick={(e) => { e.stopPropagation(); const song = songs[idx]; setEditQueueSong({ idx, song_name: song.song_name, artist_name: song.artist_name, song_key: song.key || song.song_key || 'C', capo: song.capo || 0, include_tabs: song.include_tabs || false, content: song.content || '' }); }}
+                                                                    className="p-1.5 rounded-lg bg-black/60 text-slate-500 hover:text-[#B87333] hover:bg-[#B87333]/10 transition-all"
+                                                                    title="Editar música"
+                                                                >
+                                                                    <Edit3 className="w-3 h-3" />
+                                                                </button>
+                                                                <button
+                                                                    onClick={(e) => { e.stopPropagation(); handleDeleteSongFromQueue(idx); }}
+                                                                    className="p-1.5 rounded-lg bg-black/60 text-red-900 hover:text-red-400 hover:bg-red-500/10 transition-all"
+                                                                    title="Remover da fila"
+                                                                >
+                                                                    <Trash2 className="w-3 h-3" />
+                                                                </button>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
                                         </div>
                                         <div className="h-4" />
                                     </div>
@@ -4754,42 +4774,7 @@ function App() {
                                         <div className="h-4" />
                                     </div>
                                 )}
-                                {/* ——— SIDEBAR FOOTER: utility buttons (Batch, Booklet, Share) ——— */}
-                                {!isSidebarCollapsed && (
-                                    <div className="shrink-0 border-t border-white/5 pt-4 flex items-center justify-center gap-2">
-                                        <button
-                                            onClick={() => setBatchModalOpen(true)}
-                                            className="flex-1 flex flex-col items-center gap-1 py-2.5 rounded-xl bg-white/5 border border-white/5 text-slate-500 hover:text-[#B87333] hover:border-[#B87333]/30 transition-all text-center"
-                                            title="Adicionar em Lote"
-                                        >
-                                            <UploadCloud className="w-4 h-4" />
-                                            <span className="text-[8px] font-black uppercase tracking-widest">Em Lote</span>
-                                        </button>
-                                        <button
-                                            onClick={() => {
-                                                setCurrentExportList({ name: "Fila Atual", songs: songs || [] });
-                                                setExportStep(1);
-                                                setDownloadUrl(null);
-                                                setExportFormat('docx');
-                                                setCoverImage(null);
-                                                setShowExportModal(true);
-                                            }}
-                                            className="flex-1 flex flex-col items-center gap-1 py-2.5 rounded-xl bg-white/5 border border-white/5 text-slate-500 hover:text-[#B87333] hover:border-[#B87333]/30 transition-all text-center"
-                                            title="Gerar Livreto"
-                                        >
-                                            <FileText className="w-4 h-4" />
-                                            <span className="text-[8px] font-black uppercase tracking-widest">Livreto</span>
-                                        </button>
-                                        <button
-                                            onClick={handleShareList}
-                                            className="flex-1 flex flex-col items-center gap-1 py-2.5 rounded-xl bg-white/5 border border-white/5 text-slate-500 hover:text-blue-400 hover:border-blue-400/30 transition-all text-center"
-                                            title="Compartilhar Lista"
-                                        >
-                                            <Share2 className="w-4 h-4" />
-                                            <span className="text-[8px] font-black uppercase tracking-widest">Partilhar</span>
-                                        </button>
-                                    </div>
-                                )}
+                                {/* SIDEBAR FOOTER REMOVED (Moved to Global Menu) */}
                             </div>
 
                             {/* PLAYER LYRICS/CHORDS AREA */}
