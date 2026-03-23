@@ -4288,16 +4288,17 @@ function App() {
                         <div className={`flex flex-col bg-black/95 border-b border-white/5 backdrop-blur-3xl shrink-0 no-print w-full z-[300] transition-all duration-300 ${isImmersiveMode && !showImmersiveControls ? '-translate-y-full opacity-0 absolute' : 'translate-y-0 opacity-100 relative'}`}>
 
                             {/* ── ROW A: Song Info Bar ── */}
-                            <div className="flex items-center gap-2.5 px-3 pt-2.5 pb-2 w-full border-b border-white/5">
-                                <button onClick={() => { setIsFullScreenPlayer(false); setMainNav('selection'); }} className="p-2 rounded-full text-slate-400 hover:text-white hover:bg-white/5 transition-all shrink-0 -ml-1" title="Voltar">
-                                    <ArrowLeft className="w-5 h-5" />
-                                </button>
+                            <div className="flex items-center gap-3 px-4 pt-4 pb-3 w-full border-b border-white/5 bg-white/[0.02]">
                                 <div className="flex-1 min-w-0">
-                                    <h2 className="text-sm font-black text-white uppercase italic tracking-tighter leading-tight truncate">{currentSong?.song_name || '—'}</h2>
-                                    <div className="flex items-center gap-1.5 mt-0.5">
-                                        <span className="text-[10px] font-bold text-[#B87333] uppercase truncate max-w-[110px] opacity-90">{activePlaylistName || 'Avulsa'}</span>
-                                        <span className="text-white/15 text-[9px]">•</span>
-                                        <span className="text-[10px] font-bold text-slate-500 uppercase truncate">{currentSong?.artist_name}</span>
+                                    <h2 className="text-base font-black text-white uppercase italic tracking-tighter leading-tight truncate">{currentSong?.song_name || '—'}</h2>
+                                    <div className="flex items-center gap-2 mt-0.5">
+                                        <div className="flex items-center gap-1.5 px-2 py-0.5 bg-[#B87333]/10 rounded-md border border-[#B87333]/20">
+                                            <span className="text-[10px] font-black text-[#B87333] uppercase italic tracking-wider leading-none">
+                                                {activePlaylistName || 'Avulsa'}
+                                            </span>
+                                        </div>
+                                        <span className="text-white/10 text-[10px] select-none">•</span>
+                                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide truncate">{currentSong?.artist_name || 'Artista Desconhecido'}</span>
                                     </div>
                                 </div>
                                 {/* Utility menu — compact ⋯ button with dropdown for Compartilhar/Livreto/Em Lote */}
