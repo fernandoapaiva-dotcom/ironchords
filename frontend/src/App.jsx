@@ -1270,7 +1270,7 @@ function App() {
     const isPausedBySilenceRef = useRef(false);
 
     // Version
-    const APP_VERSION = '1.0.1';
+    const APP_VERSION = '1.0.3';
 
     // Auto-Fit Font Size Logic
     const handleAutoFitFontSize = useCallback(() => {
@@ -2142,7 +2142,9 @@ function App() {
                 rms = Math.sqrt(rms / buf.length) * 500;
                 const now = Date.now();
                 
-                const isValidPuff = rms > 80 && subBassRatio > 2.0 && highEnergyRatio < 0.25;
+                // EXTREMELY PERMISSIVE (DEBUG / FALLBACK)
+                // - RMS > 30 (Any moderate/loud noise will trigger it)
+                const isValidPuff = rms > 30;     
                 
                 // Instantaneous trigger (bypasses mobile AGC/Limiters that cut off audio)
                 if (isValidPuff && now - lastBlowTime > 1500) {
@@ -4903,7 +4905,7 @@ function App() {
                                             <div className="flex flex-col items-center mb-12">
                                                 <div className="flex items-center space-x-4">
                                                     <Flame className="w-10 h-10 text-black" />
-                                                    <h1 className="text-5xl font-black italic tracking-tighter uppercase leading-none">IRON<span className="text-black">CHORDS</span></h1>
+                                                    <h1 className="text-5xl font-black italic tracking-tighter uppercase leading-none">IRON<span className="text-black">CHORDS</span> <span className="text-sm">v{APP_VERSION}</span></h1>
                                                 </div>
                                             </div>
                                             <h1 className="text-5xl font-black uppercase italic tracking-tighter mb-2">{currentSong?.song_name}</h1>
@@ -5032,7 +5034,7 @@ function App() {
                         <div className="absolute top-10 left-1/2 -translate-x-1/2 flex flex-col items-center space-y-4 no-print">
                             <div className="flex items-center space-x-4">
                                 <Flame className="w-10 h-10 text-[#B87333]" />
-                                <h1 className="text-6xl font-black text-white italic tracking-tighter uppercase leading-none">IRON<span className="text-[#B87333]">CHORDS</span></h1>
+                                <h1 className="text-6xl font-black text-white italic tracking-tighter uppercase leading-none">IRON<span className="text-[#B87333]">CHORDS</span> <span className="text-sm">v{APP_VERSION}</span></h1>
                             </div>
                             <div className="flex items-center space-x-3 opacity-40">
                                 <div className="h-0.5 w-12 bg-[#B87333]"></div>
@@ -5480,7 +5482,7 @@ function App() {
                                                                         <div className="flex flex-col items-center mb-12">
                                                                             <div className="flex items-center space-x-4">
                                                                                 <Flame className="w-10 h-10 text-black" />
-                                                                                <h1 className="text-5xl font-black italic tracking-tighter uppercase leading-none">IRON<span className="text-black">CHORDS</span></h1>
+                                                                                <h1 className="text-5xl font-black italic tracking-tighter uppercase leading-none">IRON<span className="text-black">CHORDS</span> <span className="text-sm">v{APP_VERSION}</span></h1>
                                                                             </div>
                                                                         </div>
                                                                         <h1 className="text-5xl font-black uppercase italic tracking-tighter mb-2">{manualPreviewSong?.song_name}</h1>
