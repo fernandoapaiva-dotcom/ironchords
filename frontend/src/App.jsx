@@ -2142,9 +2142,12 @@ function App() {
                 rms = Math.sqrt(rms / buf.length) * 500;
                 const now = Date.now();
                 
-                // EXTREMELY PERMISSIVE (DEBUG / FALLBACK)
-                // - RMS > 30 (Any moderate/loud noise will trigger it)
-                const isValidPuff = rms > 30;     
+                // STRICT PUFF DETECTION (Instantaneous trigger)
+                // - RMS > 60: Firm physical air pressure (prevents breathing from triggering it)
+                // - PAR < 3.5: Eliminates sharp noises like claps, pick attacks, or clicks
+                // - SubBassRatio > 2.5: Must be predominantly low-frequency wind rumble (0-172Hz)
+                // - HighEnergyRatio < 0.15: Must lack harmonics (rejects voice singing, guitar strumming)
+                const isValidPuff = rms > 60 && par < 3.5 && subBassRatio > 2.5 && highEnergyRatio < 0.15;
                 
                 // Instantaneous trigger (bypasses mobile AGC/Limiters that cut off audio)
                 if (isValidPuff && now - lastBlowTime > 1500) {
@@ -4905,7 +4908,7 @@ function App() {
                                             <div className="flex flex-col items-center mb-12">
                                                 <div className="flex items-center space-x-4">
                                                     <Flame className="w-10 h-10 text-black" />
-                                                    <h1 className="text-5xl font-black italic tracking-tighter uppercase leading-none">IRON<span className="text-black">CHORDS</span> <span className="text-sm">v{APP_VERSION}</span></h1>
+                                                    <h1 className="text-5xl font-black italic tracking-tighter uppercase leading-none">IRON<span className="text-black">CHORDS</span></h1>
                                                 </div>
                                             </div>
                                             <h1 className="text-5xl font-black uppercase italic tracking-tighter mb-2">{currentSong?.song_name}</h1>
@@ -4964,7 +4967,7 @@ function App() {
                             </div>
 
                             {/* === PINCH FONT SIZE VISUAL BAR === */}
-                            <div className={`absolute bottom-[100px] left-1/2 -translate-x-1/2 bg-black/85 backdrop-blur-3xl border border-white/10 rounded-full px-5 py-2.5 shadow-[0_20px_40px_rgba(0,0,0,0.8)] flex items-center justify-center gap-4 z-[350] transition-all duration-300 pointer-events-none ${showPinchBar ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-8 scale-90'}`}>
+                            <div className={`absolute bottom-[100px] left-1/2 -translate-x-1/2 bg-black/85 backdrop-blur-3xl border border-white/10 rounded-full px-5 py-2.5 shadow-[0_20px_40px_rgba(0,0,0,0.8)] flex items-center justify-center gap-4 z-[350] transition-all duration-300 pointer-events-none ${showPinchBar ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-8 scale-95'}`}>
                                 <span className="absolute -top-7 text-[10px] font-black tracking-widest text-[#B87333]">
                                     {Math.round(pinchLiveFontSize)}
                                 </span>
@@ -5034,7 +5037,7 @@ function App() {
                         <div className="absolute top-10 left-1/2 -translate-x-1/2 flex flex-col items-center space-y-4 no-print">
                             <div className="flex items-center space-x-4">
                                 <Flame className="w-10 h-10 text-[#B87333]" />
-                                <h1 className="text-6xl font-black text-white italic tracking-tighter uppercase leading-none">IRON<span className="text-[#B87333]">CHORDS</span> <span className="text-sm">v{APP_VERSION}</span></h1>
+                                <h1 className="text-6xl font-black text-white italic tracking-tighter uppercase leading-none">IRON<span className="text-[#B87333]">CHORDS</span></h1>
                             </div>
                             <div className="flex items-center space-x-3 opacity-40">
                                 <div className="h-0.5 w-12 bg-[#B87333]"></div>
@@ -5482,7 +5485,7 @@ function App() {
                                                                         <div className="flex flex-col items-center mb-12">
                                                                             <div className="flex items-center space-x-4">
                                                                                 <Flame className="w-10 h-10 text-black" />
-                                                                                <h1 className="text-5xl font-black italic tracking-tighter uppercase leading-none">IRON<span className="text-black">CHORDS</span> <span className="text-sm">v{APP_VERSION}</span></h1>
+                                                                                <h1 className="text-5xl font-black italic tracking-tighter uppercase leading-none">IRON<span className="text-black">CHORDS</span></h1>
                                                                             </div>
                                                                         </div>
                                                                         <h1 className="text-5xl font-black uppercase italic tracking-tighter mb-2">{manualPreviewSong?.song_name}</h1>
