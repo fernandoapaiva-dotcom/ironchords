@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { PhoneticMatcher } from './utils/PhoneticMatcher';
-import { Music, UploadCloud, Plus, Minus, FileText, CheckCircle, AlertCircle, Eye, EyeOff, FileAudio, Info, X, Guitar, Settings2, Image as ImageIcon, Database, Edit3, Trash2, ArrowRight, Play, Maximize, Maximize2, Pause, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Download, ArrowLeft, SkipBack, SkipForward, Save, Share2, FolderHeart, Flame, Hammer, Sparkles, RefreshCw, Zap, ShieldCheck, Monitor, Tv, Check, Users, LayoutList, Layout, Mic, Search, RotateCcw, Printer, Archive, GripVertical, Minimize2, Link, MessageCircle, Mail, ExternalLink, Smartphone, Apple, Copy, Wind, Footprints, MoreVertical, Menu, LogOut } from 'lucide-react';
+import { Music, UploadCloud, Plus, Minus, FileText, CheckCircle, AlertCircle, Eye, EyeOff, FileAudio, Info, X, Guitar, Settings2, Activity, Image as ImageIcon, Database, Edit3, Trash2, ArrowRight, Play, Maximize, Maximize2, Pause, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Download, ArrowLeft, SkipBack, SkipForward, Save, Share2, FolderHeart, Flame, Hammer, Sparkles, RefreshCw, Zap, ShieldCheck, Monitor, Tv, Check, Users, LayoutList, Layout, Mic, Search, RotateCcw, Printer, Archive, GripVertical, Minimize2, Link, MessageCircle, Mail, ExternalLink, Smartphone, Apple, Copy, Wind, Footprints, MoreVertical, Menu, LogOut } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { SVGuitarChord } from 'svguitar';
 import { AudioTracker } from './utils/AudioTracker';
@@ -1208,6 +1208,7 @@ function App() {
     const [isBlowDetectEnabled, setIsBlowDetectEnabled] = useState(false);
     const [isDynamicSpeedActive, setIsDynamicSpeedActive] = useState(false);
     const [isAutoScrolling, setIsAutoScrolling] = useState(false);
+    const [isMobileToolsOpen, setIsMobileToolsOpen] = useState(false);
     const [queueSearchTerm, setQueueSearchTerm] = useState('');
     const [scrollSpeed, setScrollSpeed] = useState(1);
     const [playerFontSize, setPlayerFontSize] = useState(19);
@@ -2098,114 +2099,41 @@ function App() {
     }, [isStageModeActive]);
 
     // === BLOW DETECTION: Sustained mic puff advances a page ===
+    // === BLOW DETECTION: Unification Logic ===
+    // (Actual logic moved to AudioTracker.js. Action handled via startAudioTracker callback)
+    const handleBlowAction = useCallback(() => {
+        if (!isBlowDetectEnabledRef.current) return;
+        
+        const cPlayer = scrollContainerRef.current;
+        const cManual = manualScrollContainerRef.current;
+        lastManualScrollTime.current = 0;
+        
+        // Scroll by 65% of the screen height. 
+        const scrollAmount = window.innerHeight * 0.65;
+
+        if (cPlayer) cPlayer.scrollBy({ top: scrollAmount, behavior: 'smooth' });
+        if (cManual) cManual.scrollBy({ top: scrollAmount, behavior: 'smooth' });
+        
+        try {
+            window.scrollBy({ top: scrollAmount, behavior: 'smooth' });
+            document.documentElement.scrollBy({ top: scrollAmount, behavior: 'smooth' });
+            document.body.scrollBy({ top: scrollAmount, behavior: 'smooth' });
+            
+            setBlowFlash(true);
+            setTimeout(() => setBlowFlash(false), 300);
+        } catch(e) {}
+    }, []);
+
+    const isBlowDetectEnabledRef = useRef(isBlowDetectEnabled);
     useEffect(() => {
-        if (!isBlowDetectEnabled) {
-            releaseSharedMicStream();
-            return;
+        isBlowDetectEnabledRef.current = isBlowDetectEnabled;
+        // If sopsro enabled but tracker not running, start it
+        if (isBlowDetectEnabled && !micEnabled) {
+            startAudioTracker();
+        } else if (!isBlowDetectEnabled && !isDynamicSpeedActive && micEnabled) {
+            // Only stop if both are off
+            stopAudioTracker();
         }
-        let localCtx = null, localSource = null, localAnalyser = null, raf = null;
-        let lastBlowTime = 0, burstStartTime = 0, inBurst = false;
-        
-        // Calibration: Threshold increased, requires longer sustain to ignore noise/claps
-        const BLOW_THRESHOLD = 120, MIN_BLOW_DURATION = 150, BLOW_MAX_DURATION = 400;
-        
-        const checkBlow = () => {
-            if (localAnalyser) {
-                const freqBuf = new Uint8Array(localAnalyser.frequencyBinCount);
-                localAnalyser.getByteFrequencyData(freqBuf);
-                
-                // 1. Calculate Peak-to-Average Ratio (PAR)
-                // Blows (noise) have very low PAR (< 2.5), while tones (notes) have high peaks.
-                let sum = 0, max = 0;
-                for (let i = 0; i < freqBuf.length; i++) {
-                    sum += freqBuf[i];
-                    if (freqBuf[i] > max) max = freqBuf[i];
-                }
-                const avg = sum / freqBuf.length;
-                const par = avg > 0 ? max / avg : 0;
-                
-                // 2. Sub-Bass Dominance Check
-                // Physical puffs create a massive pressure wave in the lowest bin (0-172Hz).
-                const subBass = freqBuf[0]; 
-                const subBassRatio = avg > 0 ? subBass / avg : 0;
-
-                // 3. High-Frequency Suppression
-                // A true blow is mostly low-end rumble. Musical notes have harmonics in the highs.
-                let highSum = 0;
-                for (let i = 20; i < freqBuf.length; i++) highSum += freqBuf[i]; // Above ~3.4kHz
-                const highEnergyRatio = sum > 0 ? highSum / sum : 0;
-
-                const buf = new Float32Array(localAnalyser.fftSize);
-                localAnalyser.getFloatTimeDomainData(buf);
-                let rms = 0;
-                for (let i = 0; i < buf.length; i++) rms += buf[i] * buf[i];
-                rms = Math.sqrt(rms / buf.length) * 500;
-                const now = Date.now();
-                
-                // CHURCH-READY SENSITIVITY
-                // Lowered RMS to 55 for a subtle puff, but tightened PAR and SubBass to keep it quiet and guitar-proof.
-                const isValidPuff = rms > 55 && par < 2.8 && subBassRatio > 2.5;
-                
-                if (isValidPuff) {
-                    // Accumulate frames
-                    if (!inBurst) {
-                        inBurst = true;
-                        burstStartTime = now;
-                    } else if (now - burstStartTime >= 50 && now - lastBlowTime > 1500) {
-                        // Sustained for at least 50ms (3-4 frames) -> Valid!
-                        lastBlowTime = now;
-                        inBurst = false; // reset for next
-                        console.log(`[BlowDetect] 50ms Blow! rms:${rms.toFixed(0)} sub:${subBassRatio.toFixed(2)}`);
-                        
-                        const cPlayer = scrollContainerRef.current;
-                        const cManual = manualScrollContainerRef.current;
-                        lastManualScrollTime.current = 0;
-                        
-                        // Scroll by 65% of the screen height. 
-                        const scrollAmount = window.innerHeight * 0.65;
-
-                        if (cPlayer) cPlayer.scrollBy({ top: scrollAmount, behavior: 'smooth' });
-                        if (cManual) cManual.scrollBy({ top: scrollAmount, behavior: 'smooth' });
-                        
-                        try {
-                            window.scrollBy({ top: scrollAmount, behavior: 'smooth' });
-                            document.documentElement.scrollBy({ top: scrollAmount, behavior: 'smooth' });
-                            document.body.scrollBy({ top: scrollAmount, behavior: 'smooth' });
-                            
-                            setBlowFlash(true);
-                            setTimeout(() => setBlowFlash(false), 300);
-                        } catch(e) {}
-                    }
-                } else {
-                    inBurst = false;
-                }
-            } // Closes if (localAnalyser)
-            raf = requestAnimationFrame(checkBlow);
-        };
-
-        const setup = async () => {
-            try {
-                const stream = await getSharedMicStream();
-                localCtx = new (window.AudioContext || window.webkitAudioContext)();
-                localAnalyser = localCtx.createAnalyser();
-                localAnalyser.fftSize = 256;
-                localSource = localCtx.createMediaStreamSource(stream);
-                localSource.connect(localAnalyser);
-                raf = requestAnimationFrame(checkBlow);
-            } catch (err) {
-                console.warn('[BlowDetect] Mic denied:', err);
-                setIsBlowDetectEnabled(false);
-            }
-        };
-
-        setup();
-
-        return () => {
-            cancelAnimationFrame(raf);
-            if (localSource) localSource.disconnect();
-            if (localCtx) localCtx.close();
-            // Don't kill the stream if IA Sync is still using it! (Handled by releaseSharedMicStream)
-        };
     }, [isBlowDetectEnabled]);
 
     // Track scroll progress for the progress bar
@@ -2355,7 +2283,10 @@ function App() {
                         if (!isSystemMsg && syncLineByTextRef.current) syncLineByTextRef.current(text, isFinal);
                     },
                     (state) => setFsmState(state),
-                    (status) => setConnectionStatus(status)
+                    (status) => setConnectionStatus(status),
+                    () => {
+                        if (handleBlowAction) handleBlowAction();
+                    }
                 );
             }
             audioTrackerRef.current.start(stream).then(() => {
@@ -3310,9 +3241,9 @@ function App() {
 
             try {
                 // Use the new robust name-based endpoint
-                const res = await fetch(`${API_BASE_URL}/api/music/versions?song_name=${encodeURIComponent(s.song_name)}&artist_name=${encodeURIComponent(s.artist_name)}`);
+                const res = await fetch(`${API_BASE_URL}/api/chords/versions?song_slug=${songSlug}&artist_slug=${artistSlug}`);
                 const data = await res.json();
-                setCurrentPlayerVersions(data.versions || []);
+                setCurrentPlayerVersions(data || []);
             } catch (err) {
                 console.error("Erro ao buscar versões no player:", err);
                 setCurrentPlayerVersions([]);
@@ -4437,11 +4368,11 @@ function App() {
                             </div>
 
                             {/* ── ROW C: Tools chips (IA Sync, Sopro, Pedal first — always visible on mobile) ── */}
-                            <div className="flex items-center gap-1.5 px-3 pb-2.5 pt-1.5 w-full overflow-x-auto scrollbar-none border-t border-white/[0.04]">
+                            <div className="flex items-center gap-1.5 px-3 pb-2.5 pt-2 w-full overflow-x-auto scrollbar-none border-t border-white/[0.04] bg-white/[0.02] backdrop-blur-md">
 
                                 {/* IA Sync — first chip, always visible */}
                                 <button
-                                    onClick={() => { const s = !isDynamicSpeedActive; setIsDynamicSpeedActive(s); if (s) { setIsAutoScrolling(false); startAudioTracker(); } else { stopAudioTracker(); } }}
+                                    onClick={() => { const s = !isDynamicSpeedActive; setIsDynamicSpeedActive(s); if (s) { setIsAutoScrolling(false); startAudioTracker(); } else if (!isBlowDetectEnabled) { stopAudioTracker(); } }}
                                     className={`shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-full border text-[10px] font-black uppercase tracking-wide transition-all ${isDynamicSpeedActive ? 'bg-blue-500/20 border-blue-500 text-blue-300 shadow-[0_0_10px_rgba(59,130,246,0.35)]' : 'bg-white/5 border-white/10 text-slate-400 hover:border-white/25 hover:text-white'}`}
                                     title="IA Sync — sincroniza scroll com sua voz"
                                 >
@@ -4461,7 +4392,7 @@ function App() {
 
                                 {/* Bluetooth Pedal — third chip */}
                                 <button
-                                    className="shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-full border bg-white/5 border-white/10 text-slate-500 text-[10px] font-black uppercase tracking-wide cursor-default"
+                                    className="shrink-0 hidden md:flex items-center gap-1 px-2.5 py-1.5 rounded-full border bg-white/5 border-white/10 text-slate-500 text-[10px] font-black uppercase tracking-wide cursor-default"
                                     title="Pedal BT — conecte um pedal/teclado Bluetooth: Space/↓ avança, ↑ volta"
                                 >
                                     <Footprints className="w-3.5 h-3.5" />
@@ -4471,7 +4402,7 @@ function App() {
                                 <div className="w-px h-4 bg-white/10 shrink-0 mx-0.5" />
 
                                 {/* Capo */}
-                                <div className="flex items-center shrink-0 bg-white/5 rounded-full border border-white/10 overflow-hidden">
+                                <div className="hidden md:flex items-center shrink-0 bg-white/5 rounded-full border border-white/10 overflow-hidden">
                                     <span className="px-2 py-1.5 text-[10px] font-black text-slate-500 uppercase tracking-wide border-r border-white/10">Capo</span>
                                     <button onClick={() => { if (selectedManualIndex !== null && songs[selectedManualIndex]) { const n = [...songs]; n[selectedManualIndex].capo = Math.max(0, (n[selectedManualIndex].capo || 0) - 1); setSongs(n); } }} className="px-1.5 py-1.5 text-slate-400 hover:text-white transition-colors"><Minus className="w-3 h-3" /></button>
                                     <span className="text-sm font-black text-[#B87333] w-5 text-center leading-none">{currentSong?.capo || 0}</span>
@@ -4479,7 +4410,7 @@ function App() {
                                 </div>
 
                                 {/* Transpose */}
-                                <div className="flex items-center shrink-0 bg-white/5 rounded-full border border-[#B87333]/25 overflow-hidden">
+                                <div className="hidden md:flex items-center shrink-0 bg-white/5 rounded-full border border-[#B87333]/25 overflow-hidden">
                                     <span className="px-2 py-1.5 text-[10px] font-black text-[#B87333] uppercase tracking-wide border-r border-[#B87333]/15 flex items-center gap-1">
                                         {isTransposing ? <RefreshCw className="w-3 h-3 animate-spin" /> : 'Tom'}
                                     </span>
@@ -4513,21 +4444,30 @@ function App() {
                                 </div>
 
                                 {/* Undo Transpose */}
-                                <button onClick={handleResetSongToOriginal} className="shrink-0 p-1.5 rounded-full bg-white/5 border border-white/10 text-[#B87333] hover:bg-[#B87333] hover:text-white transition-all" title="Tom Original">
+                                <button onClick={handleResetSongToOriginal} className="shrink-0 hidden md:block p-1.5 rounded-full bg-white/5 border border-white/10 text-[#B87333] hover:bg-[#B87333] hover:text-white transition-all" title="Tom Original">
                                     <RotateCcw className="w-3.5 h-3.5" />
                                 </button>
 
                                 <div className="w-px h-4 bg-white/10 shrink-0 mx-0.5" />
 
                                 {/* Tabs Toggle */}
-                                <button onClick={() => setIncludeTabs(!includeTabs)} className={`shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-full border text-[10px] font-black uppercase tracking-wide transition-all ${includeTabs ? 'bg-[#B87333]/20 border-[#B87333]/60 text-[#B87333]' : 'bg-white/5 border-white/10 text-slate-400 hover:border-white/25 hover:text-white'}`}>
+                                <button onClick={() => {
+                                    const next = !includeTabs;
+                                    setIncludeTabs(next);
+                                    if (selectedManualIndex !== null && songs[selectedManualIndex]) {
+                                        const n = [...songs];
+                                        n[selectedManualIndex] = { ...n[selectedManualIndex], include_tabs: next };
+                                        setSongs(n);
+                                    }
+                                }}
+                                className={`shrink-0 hidden md:flex items-center gap-1 px-2.5 py-1.5 rounded-full border text-[10px] font-black uppercase tracking-wide transition-all ${includeTabs ? 'bg-[#B87333]/20 border-[#B87333]/60 text-[#B87333]' : 'bg-white/5 border-white/10 text-slate-400 hover:border-white/25 hover:text-white'}`}>
                                     <FileText className="w-3.5 h-3.5" />
                                     <span>Tabs</span>
                                 </button>
 
                                 {/* Versions */}
                                 {currentPlayerVersions.length > 1 && (
-                                    <div className="relative shrink-0">
+                                    <div className="relative shrink-0 hidden md:block">
                                         <button onClick={() => setIsPlayerVersionsOpen(!isPlayerVersionsOpen)} className={`flex items-center gap-1 px-2.5 py-1.5 rounded-full border text-[10px] font-black uppercase tracking-wide transition-all ${isPlayerVersionsOpen ? 'bg-[#B87333] border-[#B87333] text-white' : 'bg-white/5 border-white/10 text-slate-400 hover:border-white/25 hover:text-white'}`}>
                                             {playerVersionLoading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Layout className="w-3.5 h-3.5" />}
                                             <span>Versões</span>
@@ -7304,6 +7244,130 @@ function App() {
                     document.body
                 )
             }
+
+            {/* ——— MOBILE COMMAND CENTER (Steve Jobs style) ——— */}
+            {isMobileToolsOpen && (
+                <div className="fixed inset-0 z-[1000] flex flex-col md:hidden animate-in fade-in duration-300">
+                    <div className="absolute inset-0 bg-black/60 backdrop-blur-3xl" onClick={() => setIsMobileToolsOpen(false)} />
+                    
+                    <div className="mt-auto bg-[#0A0A0F]/90 backdrop-blur-3xl border-t border-white/10 rounded-t-[42px] p-8 pb-12 shadow-[0_-20px_50px_rgba(0,0,0,0.8)] z-10 animate-in slide-in-from-bottom duration-500 ring-1 ring-white/5">
+                        <div className="w-16 h-1.5 bg-white/10 rounded-full mx-auto mb-10" />
+                        
+                        <div className="flex items-center justify-between mb-10 px-2">
+                            <h2 className="text-2xl font-black text-white italic tracking-tighter uppercase">Command Center</h2>
+                            <button onClick={() => setIsMobileToolsOpen(false)} className="p-3 bg-white/5 rounded-full text-slate-400">
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                            {/* Performance Group */}
+                            <div className="col-span-2 grid grid-cols-2 gap-4 mb-4">
+                                <button 
+                                    onClick={() => { const s = !isDynamicSpeedActive; setIsDynamicSpeedActive(s); if (s) { setIsAutoScrolling(false); startAudioTracker(); } else if (!isBlowDetectEnabled) { stopAudioTracker(); }; setIsMobileToolsOpen(false); }}
+                                    className={`flex flex-col items-center justify-center gap-3 p-6 rounded-[32px] border transition-all ${isDynamicSpeedActive ? 'bg-blue-600 border-blue-500 text-white shadow-[0_10px_30px_rgba(37,99,235,0.4)]' : 'bg-white/5 border-white/10 text-slate-400'}`}
+                                >
+                                    <Zap className={`w-8 h-8 ${isDynamicSpeedActive ? 'animate-pulse' : ''}`} />
+                                    <span className="text-[10px] font-black uppercase tracking-widest text-center">IA Sync</span>
+                                </button>
+                                <button 
+                                    onClick={() => { setIsBlowDetectEnabled(!isBlowDetectEnabled); setIsMobileToolsOpen(false); }}
+                                    className={`flex flex-col items-center justify-center gap-3 p-6 rounded-[32px] border transition-all ${isBlowDetectEnabled ? 'bg-emerald-600 border-emerald-500 text-white shadow-[0_10px_30px_rgba(5,150,105,0.4)]' : 'bg-white/5 border-white/10 text-slate-400'}`}
+                                >
+                                    <Wind className={`w-8 h-8 ${isBlowDetectEnabled ? 'animate-pulse' : ''}`} />
+                                    <span className="text-[10px] font-black uppercase tracking-widest text-center">Sopro</span>
+                                </button>
+                            </div>
+
+                            {/* Sound Setup Group */}
+                            <div className="flex flex-col gap-3 p-5 bg-white/5 border border-white/10 rounded-[32px]">
+                                <div className="flex items-center gap-2 mb-2 px-1">
+                                    <Activity className="w-4 h-4 text-[#B87333]" />
+                                    <span className="text-[9px] font-black uppercase tracking-widest text-[#B87333]">Afinação</span>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                    <button onClick={() => { if (selectedManualIndex !== null) transposeSong(selectedManualIndex, -1); }} className="w-10 h-10 flex items-center justify-center bg-white/5 rounded-full text-white active:bg-white/10"><Minus className="w-4 h-4" /></button>
+                                    <span className="text-xl font-black text-white italic">{getSoundingKey(songs[selectedManualIndex])}</span>
+                                    <button onClick={() => { if (selectedManualIndex !== null) transposeSong(selectedManualIndex, 1); }} className="w-10 h-10 flex items-center justify-center bg-white/5 rounded-full text-white active:bg-white/10"><Plus className="w-4 h-4" /></button>
+                                </div>
+                            </div>
+
+                            <div className="flex flex-col gap-3 p-5 bg-white/5 border border-white/10 rounded-[32px]">
+                                <div className="flex items-center gap-2 mb-2 px-1">
+                                    <Hammer className="w-4 h-4 text-[#B87333]" />
+                                    <span className="text-[9px] font-black uppercase tracking-widest text-[#B87333]">Capo</span>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                    <button onClick={() => { if (selectedManualIndex !== null) { let n = [...songs]; n[selectedManualIndex].capo = Math.max(0, (n[selectedManualIndex].capo || 0) - 1); setSongs(n); } }} className="w-10 h-10 flex items-center justify-center bg-white/5 rounded-full text-white active:bg-white/10"><Minus className="w-4 h-4" /></button>
+                                    <span className="text-xl font-black text-white italic">{songs[selectedManualIndex]?.capo || 0}</span>
+                                    <button onClick={() => { if (selectedManualIndex !== null) { let n = [...songs]; n[selectedManualIndex].capo = Math.max(0, (n[selectedManualIndex].capo || 0) + 1); setSongs(n); } }} className="w-10 h-10 flex items-center justify-center bg-white/5 rounded-full text-white active:bg-white/10"><Plus className="w-4 h-4" /></button>
+                                </div>
+                            </div>
+
+                            {/* View Group */}
+                            <button 
+                                onClick={() => { 
+                                    const next = !includeTabs;
+                                    setIncludeTabs(next);
+                                    if (selectedManualIndex !== null && songs[selectedManualIndex]) {
+                                        const n = [...songs];
+                                        n[selectedManualIndex] = { ...n[selectedManualIndex], include_tabs: next };
+                                        setSongs(n);
+                                    }
+                                }}
+                                className={`flex items-center gap-4 p-5 rounded-[32px] border transition-all ${includeTabs ? 'bg-[#B87333]/20 border-[#B87333]/60 text-white' : 'bg-white/5 border-white/10 text-slate-400'}`}
+                            >
+                                <div className={`w-10 h-10 rounded-full flex items-center justify-center ${includeTabs ? 'bg-[#B87333]' : 'bg-white/5'}`}>
+                                    <FileText className="w-5 h-5" />
+                                </div>
+                                <div className="flex flex-col items-start text-left">
+                                    <span className="text-[10px] font-black uppercase tracking-widest leading-none mb-1">Tabs</span>
+                                    <span className="text-[8px] opacity-60 uppercase">{includeTabs ? 'Ativo' : 'Oculto'}</span>
+                                </div>
+                            </button>
+
+                            {currentPlayerVersions.length > 1 && (
+                                <button 
+                                    onClick={() => { setIsPlayerVersionsOpen(!isPlayerVersionsOpen); }}
+                                    className={`flex items-center gap-4 p-5 rounded-[32px] border transition-all ${isPlayerVersionsOpen ? 'bg-[#B87333]/20 border-[#B87333]/60 text-white' : 'bg-white/5 border-white/10 text-slate-400'}`}
+                                >
+                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${isPlayerVersionsOpen ? 'bg-[#B87333]' : 'bg-white/5'}`}>
+                                        <Layout className="w-5 h-5" />
+                                    </div>
+                                    <div className="flex flex-col items-start text-left">
+                                        <span className="text-[10px] font-black uppercase tracking-widest leading-none mb-1">Versões</span>
+                                        <span className="text-[8px] opacity-60 uppercase">{currentPlayerVersions.length} Opções</span>
+                                    </div>
+                                </button>
+                            )}
+
+                            {/* Versões inline */}
+                            {isPlayerVersionsOpen && currentPlayerVersions.length > 1 && (
+                                <div className="col-span-2 grid grid-cols-1 gap-2 mt-4 max-h-48 overflow-y-auto pr-2 scrollbar-none animate-in zoom-in-95 duration-300">
+                                    {currentPlayerVersions.map((v, i) => (
+                                        <button 
+                                            key={i} 
+                                            onClick={() => { handleSwitchVersion(v.key); setIsPlayerVersionsOpen(false); setIsMobileToolsOpen(false); }}
+                                            className="w-full p-5 bg-white/5 hover:bg-[#B87333]/20 border border-white/10 rounded-[28px] text-left flex items-center justify-between transition-all active:scale-95"
+                                        >
+                                            <span className="text-[11px] font-black uppercase tracking-tight text-white">{v.name}</span>
+                                            <ChevronRight className="w-4 h-4 text-[#B87333]" />
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+
+                        </div>
+
+                        <button 
+                            onClick={() => setIsMobileToolsOpen(false)}
+                            className="w-full mt-10 py-6 bg-white text-black rounded-[32px] font-black uppercase tracking-[0.3em] text-[11px] shadow-[0_20px_40px_rgba(255,255,255,0.1)] active:scale-95 transition-all outline-none"
+                        >
+                            Fechar
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

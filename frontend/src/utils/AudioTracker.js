@@ -2,13 +2,14 @@
 // Encapsulates Microphone access, AudioWorklet, and Speech Recognition setup
 
 export class AudioTracker {
-    constructor(onBpmDetected, onMicLevel, onNoteDetected, onSpeechResult, onAlignmentState, onConnectionStatus) {
+    constructor(onBpmDetected, onMicLevel, onNoteDetected, onSpeechResult, onAlignmentState, onConnectionStatus, onBlowDetected) {
         this.onBpmDetected = onBpmDetected;
         this.onMicLevel = onMicLevel;
         this.onNoteDetected = onNoteDetected;
         this.onSpeechResult = onSpeechResult;
         this.onAlignmentState = onAlignmentState;
-        this.onConnectionStatus = onConnectionStatus; // NEW: Feedback for connection
+        this.onConnectionStatus = onConnectionStatus;
+        this.onBlowDetected = onBlowDetected; // NEW: Blow detection callback
 
         this.audioContext = null;
         this.analyser = null;
@@ -20,7 +21,12 @@ export class AudioTracker {
 
         this.isMicActive = false;
         this.ws = null;
-        this.micGain = 2.0; // Reduced default gain to prevent noise saturation
+        this.micGain = 2.0;
+
+        // Blow detection state
+        this.lastBlowTime = 0;
+        this.burstStartTime = 0;
+        this.inBurst = false;
     }
 
     setGain(value) {
@@ -257,7 +263,7 @@ export class AudioTracker {
 
         const checkAudio = () => {
             if (!this.isMicActive) return;
-            // Use Time Domain data for RMS (more accurate for "vibrating" levels)
+            // Use Time Domain data for RMS
             this.analyser.getFloatTimeDomainData(dataArray);
 
             let sumSquares = 0;
@@ -266,10 +272,50 @@ export class AudioTracker {
             }
             const rms = Math.sqrt(sumSquares / bufferLength);
 
-            // Normalize level (0 to 100)
+            // Normalize level (0 to 100) for UI display
             const level = Math.min(100, rms * 500);
-
             if (this.onMicLevel) this.onMicLevel(level);
+
+            // --- BLOW DETECTION (SOPRO) ---
+            if (this.onBlowDetected) {
+                const freqBuf = new Uint8Array(this.analyser.frequencyBinCount);
+                this.analyser.getByteFrequencyData(freqBuf);
+
+                // 1. Calculate Peak-to-Average Ratio (PAR)
+                let sum = 0, max = 0;
+                for (let i = 0; i < freqBuf.length; i++) {
+                    sum += freqBuf[i];
+                    if (freqBuf[i] > max) max = freqBuf[i];
+                }
+                const avg = sum / freqBuf.length;
+                const par = avg > 0 ? max / avg : 0;
+
+                // 2. Sub-Bass Dominance (Pressure Wave)
+                const subBass = freqBuf[0];
+                const subBassRatio = avg > 0 ? subBass / avg : 0;
+
+                // CHURCH-READY SENSITIVITY (Optimized)
+                // We use the gain-adjusted RMS. 55 is the standard threshold.
+                // We loosen subBassRatio slightly to 2.2 for better consistency.
+                const now = Date.now();
+                const isValidPuff = level > 55 && par < 2.8 && subBassRatio > 2.2;
+
+                if (isValidPuff) {
+                    if (!this.inBurst) {
+                        this.inBurst = true;
+                        this.burstStartTime = now;
+                    } else if (now - this.burstStartTime >= 50 && now - this.lastBlowTime > 1500) {
+                        this.lastBlowTime = now;
+                        this.inBurst = false;
+                        console.log(`[BlowDetect] Unified 50ms Blow! level:${level.toFixed(0)} sub:${subBassRatio.toFixed(2)}`);
+                        this.onBlowDetected();
+                    }
+                } else {
+                    this.inBurst = false;
+                }
+            }
+            // ------------------------------
+
             this.animationFrameId = requestAnimationFrame(checkAudio);
         };
         checkAudio();
