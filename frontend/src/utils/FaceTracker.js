@@ -171,6 +171,10 @@ export class FaceTracker {
         // Average EAR from both eyes
         const ear = (leftEAR + rightEAR) / 2.0;
 
+        if (this.onDebugInfo) {
+            this.onDebugInfo(`EAR: ${ear.toFixed(3)} | Piscadas: ${this.blinkTimestamps.length}/3`);
+        }
+
         // Simple State Machine for Blinks
         if (ear < this.EAR_THRESHOLD_CLOSE && !this.isEyesClosed) {
             // Eyes just closed
