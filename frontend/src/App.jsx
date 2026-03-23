@@ -4925,38 +4925,26 @@ function App() {
                                 <span className="text-white text-[15px] font-black uppercase">A</span>
                             </div>
 
-                            {/* PITCH GAUGE & AUTO-TRANSPOSE UI */}
+                            {/* SUBTLE PITCH GAUGE */}
                             {micEnabled && isDynamicSpeedActive && (
-                                <div className="absolute bottom-10 right-10 bg-black/80 backdrop-blur-3xl border border-white/10 rounded-3xl p-6 shadow-2xl flex flex-col items-center z-[150] w-64 animate-in fade-in slide-in-from-bottom-10">
-                                    <div className="flex justify-between w-full mb-4 items-center">
-                                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-[#B87333]">Afinação</span>
-                                        <button
-                                            onClick={() => setIsAutoPitchEnabled(!isAutoPitchEnabled)}
-                                            className={`p-1.5 rounded-lg border transition-all ${isAutoPitchEnabled ? 'bg-[#B87333]/20 border-[#B87333] text-[#B87333]' : 'bg-white/5 border-white/10 text-slate-500 hover:text-white'}`}
-                                            title="Ligar/Desligar Auto-Regulagem de Tom"
-                                        >
-                                            <Zap className="w-4 h-4" />
-                                        </button>
+                                <div className="absolute bottom-20 right-4 px-3 py-1.5 bg-black/40 backdrop-blur-xl border border-white/10 rounded-full flex items-center gap-3 z-[150] animate-in fade-in slide-in-from-right-4 transition-all duration-500">
+                                    <div className="flex items-center gap-2">
+                                        <div className={`w-1.5 h-1.5 rounded-full ${Math.abs(detectedCents) < 15 ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-red-500'}`} />
+                                        <span className="text-[11px] font-black text-white italic">{detectedNote || "--"}</span>
                                     </div>
-
-                                    <div className="text-5xl font-black text-white italic tracking-tighter mb-2">
-                                        {detectedNote || "--"}
+                                    <div className="w-12 h-1 bg-white/10 rounded-full relative overflow-hidden">
+                                        <div 
+                                            className={`absolute top-0 bottom-0 w-2 rounded-full transition-all duration-300 ${Math.abs(detectedCents) < 15 ? 'bg-green-500' : 'bg-red-500'}`}
+                                            style={{ left: `calc(50% + ${(detectedCents / 50) * 40}%)`, transform: 'translateX(-50%)' }}
+                                        />
                                     </div>
-
-                                    <div className="w-full h-2 bg-white/10 rounded-full relative overflow-hidden mt-4">
-                                        <div className="absolute top-0 bottom-0 w-0.5 bg-white/30 left-1/2 -translate-x-1/2 z-10"></div>
-                                        {detectedNote && (
-                                            <div
-                                                className={`absolute top-0 bottom-0 w-4 rounded-full transition-all duration-500 ${Math.abs(detectedCents) < 15 ? 'bg-green-500' : 'bg-red-500'}`}
-                                                style={{ left: `calc(50% + ${Math.max(-45, Math.min(45, (detectedCents / 50) * 50))}%)`, transform: 'translateX(-50%)' }}
-                                            ></div>
-                                        )}
-                                    </div>
-                                    <div className="flex justify-between w-full mt-3 text-[8px] font-black text-slate-500 uppercase">
-                                        <span>Baixo</span>
-                                        <span className="text-white">{detectedCents > 0 ? '+' : ''}{detectedCents}c</span>
-                                        <span>Alto</span>
-                                    </div>
+                                    <button
+                                        onClick={() => setIsAutoPitchEnabled(!isAutoPitchEnabled)}
+                                        className={`transition-all ${isAutoPitchEnabled ? 'text-[#B87333]' : 'text-white/20 hover:text-white'}`}
+                                        title="Auto-Tom"
+                                    >
+                                        <Zap className="w-3 h-3" />
+                                    </button>
                                 </div>
                             )}
                         </div>
