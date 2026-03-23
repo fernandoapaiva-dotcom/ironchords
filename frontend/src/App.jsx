@@ -2142,12 +2142,9 @@ function App() {
                 rms = Math.sqrt(rms / buf.length) * 500;
                 const now = Date.now();
                 
-                // TRANSIENT & PALM MUTE FILTER
-                // Guitar strums and palm mutes (abrupt stops) create a 50-80ms hiss/thump.
-                // To reject the slap of stopping the guitar, we must drastically raise the RMS volume threshold.
-                // A palm mute from half a meter away cannot physically reach RMS > 65, but a direct blow easily hits 80+.
-                // We keep PAR < 3.0 to reject resonant strings, and require 3 frames (50ms) to bypass the OS limiter.
-                const isValidPuff = rms > 65 && par < 3.0 && subBassRatio > 2.0;
+                // CHURCH-READY SENSITIVITY
+                // Lowered RMS to 55 for a subtle puff, but tightened PAR and SubBass to keep it quiet and guitar-proof.
+                const isValidPuff = rms > 55 && par < 2.8 && subBassRatio > 2.5;
                 
                 if (isValidPuff) {
                     // Accumulate frames
