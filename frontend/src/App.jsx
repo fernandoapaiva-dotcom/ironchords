@@ -2573,54 +2573,55 @@ function App() {
         const timeSinceAnchor = now - lastMatchTimeRef.current;
 
         // --- SMART DISAMBIGUATION HUB (STRICT LINEAR & STANZA RESTARTS) ---
-        // 1. Identify valid targets
-        // Evaluate Forward
-        if (nextLyricIdx !== -1) {
-            const testIdx = nextLyricIdx;
-            const { score, unique } = scoreLine(testIdx);
+        // 1. Identify valid targets: Search up to 3 lyric lines ahead
+        const targetLyricLines = [];
+        let count = 0;
+        for (let i = currentIdx + 1; i < lines.length && count < 3; i++) {
+            const line = lines[i];
+            if (line && line.trim() && !isChordOnlyLine(line) && !isTablatureLine(line) && !line.trim().startsWith('[')) {
+                targetLyricLines.push(i);
+                count++;
+            }
+        }
 
+        // Evaluate Forward candidates
+        for (const testIdx of targetLyricLines) {
+            const { score, unique } = scoreLine(testIdx);
             const testLineText = PhoneticMatcher.normalize(lines[testIdx] || "");
             const currentLineText = PhoneticMatcher.normalize(lines[currentIdx] || "");
 
-            // Scenario A: The next line is DIFFERENT from the current line
+            // Scenario A: The target line is DIFFERENT from the current line
             if (testLineText !== currentLineText) {
-                if (score >= 1 && unique >= 1) {
+                // RELAXED RULE: If score is high (>=2), or if it's the very next line and has at least 1 unique word
+                if (score >= 2 || (score >= 1 && unique >= 1)) {
                     targetIndex = testIdx;
                     lastMatchTimeRef.current = now;
+                    break;
                 }
             }
-            // Scenario B: The next line is EXACTLY IDENTICAL to the current line (e.g., 'Quero louvar-te' repeated twice)
-            else {
-                // Wait for the 2nd or 3rd distinct word of the phrase before jumping down,
-                // to prove they have moved on to the second identical line and aren't just holding notes.
+            // Scenario B: IDENTICAL line (repetition)
+            else if (testIdx === targetLyricLines[0]) {
+                // Only handle identity for the IMMEDIATE next line to prevent runaway jumps
                 if (timeSinceAnchor > 1800) {
                     const targetWordsOrdered = getMeaningfulWords(testLineText);
-                    if (targetWordsOrdered.length > 0) {
-                        const firstWord = targetWordsOrdered[0];
-                        const secondWord = targetWordsOrdered.length > 1 ? targetWordsOrdered[1] : null;
-                        const thirdWord = targetWordsOrdered.length > 2 ? targetWordsOrdered[2] : null;
+                    const wideRecentSpoken = transWords.slice(-8);
+                    const firstWord = targetWordsOrdered[0];
+                    const secondWord = targetWordsOrdered.length > 1 ? targetWordsOrdered[1] : null;
+                    const thirdWord = targetWordsOrdered.length > 2 ? targetWordsOrdered[2] : null;
 
-                        // To prove they've started the second identical line, they must 
-                        // have RECENTLY spoken the 2nd/3rd word of that line.
-                        // We use an 8-word window here (transWords.slice(-8)) instead of 3, 
-                        // because if they sing fast, the trigger words might be pushed out 
-                        // of a 3-word window before the 1800ms timer elapses.
-                        const wideRecentSpoken = transWords.slice(-8);
+                    const hasStartedSecondLine =
+                        (secondWord && wideRecentSpoken.includes(secondWord)) ||
+                        (thirdWord && wideRecentSpoken.includes(thirdWord)) ||
+                        (firstWord && wideRecentSpoken.includes(firstWord));
 
-                        const hasStartedSecondLine =
-                            (secondWord && wideRecentSpoken.includes(secondWord)) ||
-                            (thirdWord && wideRecentSpoken.includes(thirdWord)) ||
-                            (firstWord && wideRecentSpoken.includes(firstWord));
-
-                        // Fallback: If 3.5 seconds have passed and they are generating transcription activity,
-                        // assume they have moved on to the second line even if the engine missed the exact words.
-                        if ((score >= 2 && hasStartedSecondLine) || (score >= 1 && timeSinceAnchor > 3500)) {
-                            targetIndex = testIdx;
-                            lastMatchTimeRef.current = now;
-                        }
+                    if ((score >= 2 && hasStartedSecondLine) || (score >= 1 && timeSinceAnchor > 3500)) {
+                        targetIndex = testIdx;
+                        lastMatchTimeRef.current = now;
+                        break;
                     }
                 }
             }
+            if (targetIndex !== -1) break;
         }
 
         // Evaluate Backward (Only if Forward hasn't matched)

@@ -99,10 +99,19 @@ export class AudioTracker {
             this.voiceLowPass.frequency.value = 1100; // cut above 1100Hz
             this.voiceLowPass.Q.value = 1.0;
 
-            // Chain: gain → highpass → lowpass → pitchAnalyser
+            // Voice Presence Boost: emphasizes consonants and vowels (1.5kHz - 4kHz)
+            // This is primarily for the SpeechRecognition engine, but we apply it to the pre-analysis chain
+            this.voiceBoost = this.audioContext.createBiquadFilter();
+            this.voiceBoost.type = 'peaking';
+            this.voiceBoost.frequency.value = 2500;
+            this.voiceBoost.Q.value = 1.0;
+            this.voiceBoost.gain.value = 6.0;
+
+            // Chain: gain → highpass → lowpass → boost → pitchAnalyser
             this.gainNode.connect(this.voiceHighPass);
             this.voiceHighPass.connect(this.voiceLowPass);
-            this.voiceLowPass.connect(this.pitchAnalyser);
+            this.voiceLowPass.connect(this.voiceBoost);
+            this.voiceBoost.connect(this.pitchAnalyser);
 
             // WebSocket is OPTIONAL — if it fails, mic + speech still work
             try {
