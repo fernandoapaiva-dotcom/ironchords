@@ -1237,6 +1237,16 @@ function App() {
     const [showImmersiveControls, setShowImmersiveControls] = useState(false);
     const [isStageModeActive, setIsStageModeActive] = useState(false);
     const [showStageControls, setShowStageControls] = useState(false);
+    
+    // Manual Form State
+    const [songName, setSongName] = useState('');
+    const [artistName, setArtistName] = useState('');
+    const [songKey, setSongKey] = useState('C');
+    const [songVersion, setSongVersion] = useState('Principal');
+    const [includeTabs, setIncludeTabs] = useState(true);
+    const [manualLoading, setManualLoading] = useState(false);
+    const [manualError, setManualError] = useState('');
+
     const [isBlowDetectEnabled, setIsBlowDetectEnabled] = useState(false);
     const [isDynamicSpeedActive, setIsDynamicSpeedActive] = useState(false);
     const [isAutoScrolling, setIsAutoScrolling] = useState(false);
@@ -1609,14 +1619,7 @@ function App() {
     const [includeDictionary, setIncludeDictionary] = useState(true);
     const coverInputRef = useRef(null);
 
-    // Manual Form State
-    const [songName, setSongName] = useState('');
-    const [artistName, setArtistName] = useState('');
-    const [songKey, setSongKey] = useState('C');
-    const [songVersion, setSongVersion] = useState('Principal');
-    const [includeTabs, setIncludeTabs] = useState(true);
-    const [manualLoading, setManualLoading] = useState(false);
-    const [manualError, setManualError] = useState('');
+
 
     // Pitch Gauge & Auto Transpose States
     const [detectedCents, setDetectedCents] = useState(0);
