@@ -8,21 +8,28 @@ export class FaceTracker {
         this.animationFrameId = null;
         
         this.isTracking = false;
-        this.onThreeBlinksDetected = null;
+        this.onBlinkCountChange = null;
+        this.onBlinkGestureDetected = null;
         this.onStatusChange = null;
 
         // Blink Detection State
         this.blinkTimestamps = [];
         this.isEyesClosed = false;
+        this.requiredBlinks = 3; // Default 3 blinks
         
         // EAR Constants
         this.EAR_THRESHOLD_CLOSE = 0.22; // Relaxed: easy to trigger close
         this.EAR_THRESHOLD_OPEN = 0.24;  // Relaxed: easy to trigger open
-        this.BLINK_WINDOW_MS = 2500;     // 2.5 seconds to do 3 blinks
+        this.BLINK_WINDOW_MS = 3000;     // 3 seconds window
         
         // Landmark indices (MediaPipe Face Mesh)
         this.LEFT_EYE = [362, 385, 387, 263, 373, 380];
         this.RIGHT_EYE = [33, 160, 158, 133, 153, 144];
+    }
+
+    setRequiredBlinks(n) {
+        this.requiredBlinks = Math.max(2, Math.min(n, 5));
+        console.log(`[FaceTracker] Required blinks set to: ${this.requiredBlinks}`);
     }
 
     async init() {
@@ -210,19 +217,19 @@ export class FaceTracker {
                 this.onBlinkCountChange(this.blinkTimestamps.length);
             }
 
-            console.log(`[FaceTracker] Piscou! (${this.blinkTimestamps.length}/3) EAR: ${ear.toFixed(3)}`);
+            console.log(`[FaceTracker] Piscou! (${this.blinkTimestamps.length}/${this.requiredBlinks}) EAR: ${ear.toFixed(3)}`);
 
-            // Check if we hit 3 or more blinks in the window
-            if (this.blinkTimestamps.length >= 3) {
-                console.log("[FaceTracker] 3 PISCADAS DETECTADAS! Disparando scroll...");
+            // Check if we hit the required number of blinks in the window
+            if (this.blinkTimestamps.length >= this.requiredBlinks) {
+                console.log(`[FaceTracker] ${this.requiredBlinks} PISCADAS DETECTADAS! Disparando scroll...`);
                 
                 // --- CPU OPTIMIZATION ---
                 // Suspend MediaPipe for 800ms immediately so the UI thread has 100% power to perform the smooth scroll.
                 this.isPausedForScroll = true;
                 setTimeout(() => { this.isPausedForScroll = false; }, 800);
 
-                if (this.onThreeBlinksDetected) {
-                    this.onThreeBlinksDetected();
+                if (this.onBlinkGestureDetected) {
+                    this.onBlinkGestureDetected();
                 }
                 // Clear timestamps to prevent consecutive multi-triggers
                 this.blinkTimestamps = [];

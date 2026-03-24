@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { PhoneticMatcher } from './utils/PhoneticMatcher';
-import { Music, UploadCloud, Plus, Minus, FileText, CheckCircle, AlertCircle, Eye, EyeOff, FileAudio, Info, X, Guitar, Settings2, Activity, Image as ImageIcon, Database, Edit3, Trash2, ArrowRight, Play, Maximize, Maximize2, Pause, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Download, ArrowLeft, SkipBack, SkipForward, Save, Share2, FolderHeart, Flame, Hammer, Sparkles, RefreshCw, Zap, ShieldCheck, Monitor, Tv, Check, Users, LayoutList, Layout, Mic, Search, RotateCcw, Printer, Archive, GripVertical, Minimize2, Link, MessageCircle, Mail, ExternalLink, Smartphone, Apple, Copy, Wind, Footprints, MoreVertical, Menu, LogOut } from 'lucide-react';
+import { Music, UploadCloud, Plus, Minus, FileText, CheckCircle, AlertCircle, Eye, EyeOff, FileAudio, Info, X, Guitar, Settings2, Activity, Image as ImageIcon, Database, Edit3, Trash2, ArrowRight, Play, Maximize, Maximize2, Pause, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Download, ArrowLeft, SkipBack, SkipForward, Save, Share2, FolderHeart, Flame, Hammer, Sparkles, RefreshCw, Zap, ShieldCheck, Monitor, Tv, Check, Users, LayoutList, Layout, Mic, Search, RotateCcw, Printer, Archive, GripVertical, Minimize2, Link, MessageCircle, Mail, ExternalLink, Smartphone, Apple, Copy, Footprints, MoreVertical, Menu, LogOut } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { SVGuitarChord } from 'svguitar';
 import { AudioTracker } from './utils/AudioTracker';
@@ -774,7 +774,7 @@ const normalize_google_email = (email) => {
     return e;
 };
 
-const SettingsModal = ({ isOpen, onClose, includeToc, setIncludeToc, includeDictionary, setIncludeDictionary, authenticatedUser, setShowUserManagement, deferredPrompt, handleInstallPWA }) => {
+const SettingsModal = ({ isOpen, onClose, includeToc, setIncludeToc, includeDictionary, setIncludeDictionary, blinkThreshold, setBlinkThreshold, authenticatedUser, setShowUserManagement, deferredPrompt, handleInstallPWA }) => {
     if (!isOpen) return null;
 
     return createPortal(
@@ -791,6 +791,37 @@ const SettingsModal = ({ isOpen, onClose, includeToc, setIncludeToc, includeDict
                 </div>
 
                 <div className="overflow-y-auto pr-4 space-y-8 scrollbar-thin scrollbar-thumb-white/10 pb-10">
+                    {/* Blink Threshold Config */}
+                    <div className="bg-orange-500/5 border border-orange-500/10 rounded-[32px] p-8">
+                        <div className="flex items-center space-x-3 mb-6">
+                            <Eye className="w-5 h-5 text-orange-500" />
+                            <h3 className="text-xs font-black text-white uppercase tracking-widest italic">Gesto de Piscada</h3>
+                        </div>
+                        <div className="space-y-6">
+                            <div className="flex items-center justify-between p-5 bg-white/5 border border-white/5 rounded-2xl">
+                                <div>
+                                    <p className="text-sm font-black text-white uppercase tracking-widest">Quantidade de Piscadas</p>
+                                    <p className="text-[10px] font-bold text-slate-500 uppercase mt-1">Piscadas rápidas para descer a cifra</p>
+                                </div>
+                                <div className="flex items-center bg-black/40 rounded-xl p-1 border border-white/5">
+                                    {[2, 3, 4, 5].map(n => (
+                                        <button
+                                            key={n}
+                                            onClick={() => setBlinkThreshold(n)}
+                                            className={`w-10 h-10 rounded-lg font-black transition-all ${blinkThreshold === n ? 'bg-orange-500 text-white shadow-lg' : 'text-slate-500 hover:text-white'}`}
+                                        >
+                                            {n}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                            <p className="text-[10px] font-medium text-slate-400 leading-relaxed px-2">
+                                <AlertCircle className="w-3 h-3 inline mr-1 pb-0.5 text-orange-500/70" />
+                                Escolha 2 para rapidez máxima ou 4+ para evitar disparos acidentais enquanto conversa.
+                            </p>
+                        </div>
+                    </div>
+
                     <div className="bg-black/40 border border-white/5 rounded-[32px] p-8">
                         <div className="flex items-center space-x-3 mb-6">
                             <Settings2 className="w-5 h-5 text-[#B87333]" />
@@ -1483,6 +1514,15 @@ function App() {
     const [faceTrackerStatus, setFaceTrackerStatus] = useState('inativo');
     const [faceTrackerDebug, setFaceTrackerDebug] = useState('');
     const [blinkCount, setBlinkCount] = useState(0);
+    const [blinkThreshold, setBlinkThreshold] = useState(() => getSafeJSON('iron_chords_blink_threshold', 3));
+
+    // Persist blinkThreshold
+    useEffect(() => {
+        localStorage.setItem('iron_chords_blink_threshold', JSON.stringify(blinkThreshold));
+        if (faceTrackerRef.current) {
+            faceTrackerRef.current.setRequiredBlinks(blinkThreshold);
+        }
+    }, [blinkThreshold]);
 
     const getSharedMicStream = async () => {
         if (sharedAudioStreamRef.current && sharedAudioStreamRef.current.active) return sharedAudioStreamRef.current;
@@ -2366,7 +2406,8 @@ function App() {
                 faceTrackerRef.current.onStatusChange = setFaceTrackerStatus;
                 faceTrackerRef.current.onDebugInfo = setFaceTrackerDebug;
                 faceTrackerRef.current.onBlinkCountChange = setBlinkCount;
-                faceTrackerRef.current.onThreeBlinksDetected = () => {
+                faceTrackerRef.current.setRequiredBlinks(blinkThreshold);
+                faceTrackerRef.current.onBlinkGestureDetected = () => {
                     handleBlowAction(true); // force scroll
                     // REMOVIDO: setBlowFlash(true) causava re-render da tela inteira 
                     // e travava o "smooth scroll" no celular por conta da CPU.
@@ -4445,133 +4486,157 @@ function App() {
                                 </div>
                             </div>
 
-                            {/* ── ROW C: Tools Dashboard (2-row grid on mobile, row on desktop) ── */}
-                            <div className="flex flex-wrap md:flex-nowrap items-center justify-center md:justify-start gap-2 px-3 pb-4 pt-3 w-full border-t border-white/[0.06] bg-black/40 backdrop-blur-3xl sticky bottom-0 z-[100] sm:relative">
+                            {/* ── ROW C: Organized Tools Dashboard ── */}
+                            <div className="flex flex-col gap-3 px-4 pb-6 pt-4 w-full border-t border-white/[0.06] bg-black/40 backdrop-blur-3xl sticky bottom-0 z-[100] sm:relative">
+                                
+                                {/* Group 1: Hands-Free / Automation */}
+                                <div className="flex items-center justify-center gap-2">
+                                    {/* IA Sync */}
+                                    <button
+                                        onClick={() => { const s = !isDynamicSpeedActive; setIsDynamicSpeedActive(s); if (s) { setIsAutoScrolling(false); startAudioTracker(); } else { stopAudioTracker(); } }}
+                                        className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl border text-[10px] font-black uppercase tracking-widest transition-all ${isDynamicSpeedActive ? 'bg-blue-500/20 border-blue-500 text-blue-300 shadow-[0_0_15px_rgba(59,130,246,0.3)]' : 'bg-white/5 border-white/5 text-slate-400 hover:border-white/20 hover:text-white'}`}
+                                        title="IA Sync — sincroniza scroll com sua voz"
+                                    >
+                                        <Zap className={`w-4 h-4 ${isDynamicSpeedActive ? 'animate-pulse' : ''}`} />
+                                        <span>IA Sync</span>
+                                    </button>
 
-                                {/* IA Sync — first chip, always visible */}
-                                <button
-                                    onClick={() => { const s = !isDynamicSpeedActive; setIsDynamicSpeedActive(s); if (s) { setIsAutoScrolling(false); startAudioTracker(); } else { stopAudioTracker(); } }}
-                                    className={`shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-full border text-[10px] font-black uppercase tracking-wide transition-all ${isDynamicSpeedActive ? 'bg-blue-500/20 border-blue-500 text-blue-300 shadow-[0_0_10px_rgba(59,130,246,0.35)]' : 'bg-white/5 border-white/10 text-slate-400 hover:border-white/25 hover:text-white'}`}
-                                    title="IA Sync — sincroniza scroll com sua voz"
-                                >
-                                    <Zap className={`w-3.5 h-3.5 ${isDynamicSpeedActive ? 'animate-pulse' : ''}`} />
-                                    <span>IA Sync</span>
-                                </button>
-
-                                {/* Blink Detection — third chip */}
-                                <button
-                                    onClick={() => setIsBlinkDetectEnabled(s => !s)}
-                                    className={`shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-full border text-[10px] font-black uppercase tracking-wide transition-all ${isBlinkDetectEnabled ? 'bg-purple-500/20 border-purple-500 text-purple-300 shadow-[0_0_10px_rgba(168,85,247,0.35)]' : 'bg-white/5 border-white/10 text-slate-400 hover:border-white/25 hover:text-white'}`}
-                                    title="Piscar 3x rápido para avançar a tela (Câmera)"
-                                >
-                                    {isBlinkDetectEnabled && faceTrackerStatus === 'rastreando' ? (
-                                        <Eye className="w-3.5 h-3.5 animate-pulse text-purple-400" />
-                                    ) : isBlinkDetectEnabled ? (
-                                        <Activity className="w-3.5 h-3.5 animate-spin text-purple-400" />
-                                    ) : (
-                                        <EyeOff className="w-3.5 h-3.5" />
-                                    )}
-                                    <span>
-                                        {!isBlinkDetectEnabled ? 'Piscar' : 
-                                         faceTrackerStatus === 'carregando_ia' ? 'Baixando IA...' : 
-                                         faceTrackerStatus === 'rastreando' ? (blinkCount > 0 ? `${blinkCount}/3` : 'Olhando') : 
-                                         faceTrackerStatus === 'erro_camera' ? 'Câmera Negada' : 'Piscar'}
-                                    </span>
-                                </button>
-
-                                {/* Bluetooth Pedal — third chip */}
-                                <button
-                                    className="shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-full border bg-white/5 border-white/10 text-slate-500 text-[10px] font-black uppercase tracking-wide cursor-default"
-                                    title="Pedal BT — conecte um pedal/teclado Bluetooth: Space/↓ avança, ↑ volta"
-                                >
-                                    <Footprints className="w-3.5 h-3.5" />
-                                    <span>Pedal BT</span>
-                                </button>
-
-                                {/* Capo */}
-                                <div className="flex items-center shrink-0 bg-white/5 rounded-full border border-white/10 overflow-hidden">
-                                    <span className="px-2 py-1.5 text-[10px] font-black text-slate-500 uppercase tracking-wide border-r border-white/10">Capo</span>
-                                    <button onClick={() => { if (selectedManualIndex !== null && songs[selectedManualIndex]) { const n = [...songs]; n[selectedManualIndex].capo = Math.max(0, (n[selectedManualIndex].capo || 0) - 1); setSongs(n); } }} className="px-1.5 py-1.5 text-slate-400 hover:text-white transition-colors"><Minus className="w-3 h-3" /></button>
-                                    <span className="text-sm font-black text-[#B87333] w-5 text-center leading-none">{currentSong?.capo || 0}</span>
-                                    <button onClick={() => { if (selectedManualIndex !== null && songs[selectedManualIndex]) { const n = [...songs]; n[selectedManualIndex].capo = Math.min(11, (n[selectedManualIndex].capo || 0) + 1); setSongs(n); } }} className="px-1.5 py-1.5 text-slate-400 hover:text-white transition-colors"><Plus className="w-3 h-3" /></button>
-                                </div>
-
-                                {/* Transpose */}
-                                <div className="flex items-center shrink-0 bg-white/5 rounded-full border border-[#B87333]/25 overflow-hidden">
-                                    <span className="px-2 py-1.5 text-[10px] font-black text-[#B87333] uppercase tracking-wide border-r border-[#B87333]/15 flex items-center gap-1">
-                                        {isTransposing ? <RefreshCw className="w-3 h-3 animate-spin" /> : 'Tom'}
-                                    </span>
-                                    <div className="relative flex items-center px-1.5">
-                                        <select
-                                            value={getSoundingKey(currentSong) || 'C'}
-                                            disabled={isTransposing}
-                                            onChange={(e) => {
-                                                const targetKey = e.target.value;
-                                                const currentKeyMatch = (getSoundingKey(currentSong) || 'C').match(/([A-G][b#]?)/i);
-                                                const targetMatch = targetKey.match(/([A-G][b#]?)/i);
-                                                if (currentKeyMatch && targetMatch) {
-                                                    const NOTES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
-                                                    const norm = k => { const flats = {'Db':'C#','Eb':'D#','Gb':'F#','Ab':'G#','Bb':'A#'}; let n=k.charAt(0).toUpperCase()+k.slice(1); return flats[n]||n; };
-                                                    const cIdx = NOTES.indexOf(norm(currentKeyMatch[1]));
-                                                    const tIdx = NOTES.indexOf(norm(targetMatch[1]));
-                                                    if (cIdx !== -1 && tIdx !== -1) {
-                                                        let diff = tIdx - cIdx;
-                                                        if (diff > 6) diff -= 12;
-                                                        if (diff < -6) diff += 12;
-                                                        if (diff !== 0) transposeSong(selectedManualIndex, diff);
-                                                    }
-                                                }
-                                            }}
-                                            className="bg-transparent text-white font-black italic text-sm py-1.5 outline-none appearance-none cursor-pointer disabled:opacity-50 pr-4"
-                                        >
-                                            {["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"].map(k => <option key={k} value={k} className="bg-[#1A1A1A]">{k}</option>)}
-                                        </select>
-                                        <ChevronDown className="w-3 h-3 text-[#B87333] absolute right-0 pointer-events-none" />
-                                    </div>
-                                </div>
-
-                                {/* Undo Transpose */}
-                                <button onClick={handleResetSongToOriginal} className="shrink-0 block p-1.5 rounded-full bg-white/5 border border-white/10 text-[#B87333] hover:bg-[#B87333] hover:text-white transition-all order-last md:order-none" title="Tom Original">
-                                    <RotateCcw className="w-3.5 h-3.5" />
-                                </button>
-
-                                {/* Tabs Toggle */}
-                                <button onClick={() => {
-                                    const next = !includeTabs;
-                                    setIncludeTabs(next);
-                                    if (selectedManualIndex !== null && songs[selectedManualIndex]) {
-                                        const n = [...songs];
-                                        n[selectedManualIndex] = { ...n[selectedManualIndex], include_tabs: next };
-                                        setSongs(n);
-                                    }
-                                }}
-                                className={`shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-full border text-[10px] font-black uppercase tracking-wide transition-all ${includeTabs ? 'bg-[#B87333]/20 border-[#B87333]/60 text-[#B87333]' : 'bg-white/5 border-white/10 text-slate-400 hover:border-white/25 hover:text-white'}`}>
-                                    <FileText className="w-3.5 h-3.5" />
-                                    <span>Tabs</span>
-                                </button>
-
-                                {/* Versions */}
-                                {currentPlayerVersions.length > 1 && (
-                                    <div className="relative shrink-0 block">
-                                        <button onClick={() => setIsPlayerVersionsOpen(!isPlayerVersionsOpen)} className={`flex items-center gap-1 px-2.5 py-1.5 rounded-full border text-[10px] font-black uppercase tracking-wide transition-all ${isPlayerVersionsOpen ? 'bg-[#B87333] border-[#B87333] text-white' : 'bg-white/5 border-white/10 text-slate-400 hover:border-white/25 hover:text-white'}`}>
-                                            {playerVersionLoading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Layout className="w-3.5 h-3.5" />}
-                                            <span>Versões</span>
-                                        </button>
-                                        {isPlayerVersionsOpen && (
-                                            <>
-                                                <div className="fixed inset-0 z-[290] sm:hidden" onClick={() => setIsPlayerVersionsOpen(false)} />
-                                                <div className="absolute top-full mt-2 left-0 w-48 bg-[#16161D] border border-[#B87333]/40 rounded-xl shadow-[0_0_20px_rgba(184,115,51,0.3)] overflow-hidden z-[400] max-h-48 overflow-y-auto">
-                                                    {currentPlayerVersions.map((v, i) => (
-                                                        <button key={v.key || i} onClick={() => { handleSwitchVersion(v.key); setIsPlayerVersionsOpen(false); }} className="w-full px-3 py-2.5 text-left text-[11px] font-bold text-slate-300 hover:text-white hover:bg-[#B87333]/20 border-b border-white/5 last:border-0">
-                                                            {v.name}
-                                                        </button>
-                                                    ))}
-                                                </div>
-                                            </>
+                                    {/* Blink Detection */}
+                                    <button
+                                        onClick={() => setIsBlinkDetectEnabled(s => !s)}
+                                        className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl border text-[10px] font-black uppercase tracking-widest transition-all ${isBlinkDetectEnabled ? 'bg-purple-500/20 border-purple-500 text-purple-300 shadow-[0_0_15px_rgba(168,85,247,0.3)]' : 'bg-white/5 border-white/5 text-slate-400 hover:border-white/20 hover:text-white'}`}
+                                        title="Piscar para avançar"
+                                    >
+                                        {isBlinkDetectEnabled && faceTrackerStatus === 'rastreando' ? (
+                                            <Eye className="w-4 h-4 animate-pulse text-purple-400" />
+                                        ) : isBlinkDetectEnabled ? (
+                                            <Activity className="w-4 h-4 animate-spin text-purple-400" />
+                                        ) : (
+                                            <EyeOff className="w-4 h-4" />
                                         )}
-                                    </div>
-                                )}
+                                        <span className="truncate">
+                                            {!isBlinkDetectEnabled ? 'Piscar' : 
+                                             faceTrackerStatus === 'carregando_ia' ? 'IA...' : 
+                                             faceTrackerStatus === 'rastreando' ? (blinkCount > 0 ? `${blinkCount}/${blinkThreshold}` : 'Ativo') : 'Piscar'}
+                                        </span>
+                                    </button>
 
+                                    {/* Bluetooth Pedal */}
+                                    <button
+                                        className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl border bg-white/5 border-white/5 text-slate-600 text-[10px] font-black uppercase tracking-widest cursor-default opacity-40"
+                                        title="Pedal BT (Em breve)"
+                                    >
+                                        <Footprints className="w-4 h-4" />
+                                        <span>Pedal</span>
+                                    </button>
+                                </div>
+
+                                {/* Group 2: Song Adjustments (Grid 2x2 or 3x1) */}
+                                <div className="flex flex-wrap items-center justify-center gap-2">
+                                    {/* Capo Control */}
+                                    <div className="flex-1 min-w-[120px] flex items-center bg-white/5 rounded-2xl border border-white/5 overflow-hidden h-12">
+                                        <span className="px-3 text-[9px] font-black text-slate-500 uppercase tracking-widest border-r border-white/5">Capo</span>
+                                        <div className="flex flex-1 items-center justify-around">
+                                            <button onClick={() => { if (selectedManualIndex !== null && songs[selectedManualIndex]) { const n = [...songs]; n[selectedManualIndex].capo = Math.max(0, (n[selectedManualIndex].capo || 0) - 1); setSongs(n); } }} className="p-2 text-slate-400 hover:text-white transition-colors"><Minus className="w-3.5 h-3.5" /></button>
+                                            <span className="text-base font-black text-[#B87333] w-6 text-center">{currentSong?.capo || 0}</span>
+                                            <button onClick={() => { if (selectedManualIndex !== null && songs[selectedManualIndex]) { const n = [...songs]; n[selectedManualIndex].capo = Math.min(11, (n[selectedManualIndex].capo || 0) + 1); setSongs(n); } }} className="p-2 text-slate-400 hover:text-white transition-colors"><Plus className="w-3.5 h-3.5" /></button>
+                                        </div>
+                                    </div>
+
+                                    {/* Transpose Control */}
+                                    <div className="flex-1 min-w-[120px] flex items-center bg-[#B87333]/5 rounded-2xl border border-[#B87333]/20 overflow-hidden h-12">
+                                        <div className="flex items-center gap-2 px-3 border-r border-[#B87333]/10 h-full">
+                                            {isTransposing ? <RefreshCw className="w-3.5 h-3.5 animate-spin text-[#B87333]" /> : <Music className="w-3.5 h-3.5 text-[#B87333]" />}
+                                            <span className="text-[9px] font-black text-[#B87333] uppercase tracking-widest">Tom</span>
+                                        </div>
+                                        <div className="relative flex-1 flex items-center px-3 h-full">
+                                            <select
+                                                value={getSoundingKey(currentSong) || 'C'}
+                                                disabled={isTransposing}
+                                                onChange={(e) => {
+                                                    const targetKey = e.target.value;
+                                                    const currentKeyMatch = (getSoundingKey(currentSong) || 'C').match(/([A-G][b#]?)/i);
+                                                    const targetMatch = targetKey.match(/([A-G][b#]?)/i);
+                                                    if (currentKeyMatch && targetMatch) {
+                                                        const NOTES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+                                                        const norm = k => { const flats = {'Db':'C#','Eb':'D#','Gb':'F#','Ab':'G#','Bb':'A#'}; let n=k.charAt(0).toUpperCase()+k.slice(1); return flats[n]||n; };
+                                                        const cIdx = NOTES.indexOf(norm(currentKeyMatch[1]));
+                                                        const tIdx = NOTES.indexOf(norm(targetMatch[1]));
+                                                        if (cIdx !== -1 && tIdx !== -1) {
+                                                            let diff = tIdx - cIdx;
+                                                            if (diff > 6) diff -= 12;
+                                                            if (diff < -6) diff += 12;
+                                                            if (diff !== 0) transposeSong(selectedManualIndex, diff);
+                                                        }
+                                                    }
+                                                }}
+                                                className="w-full bg-transparent text-white font-black italic text-sm outline-none appearance-none cursor-pointer disabled:opacity-50 pr-4"
+                                            >
+                                                {["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"].map(k => <option key={k} value={k} className="bg-[#1A1A1A]">{k}</option>)}
+                                            </select>
+                                            <ChevronDown className="w-4 h-4 text-[#B87333] absolute right-2 pointer-events-none" />
+                                        </div>
+                                    </div>
+
+                                    {/* Reset / Org Key Button */}
+                                    <button onClick={handleResetSongToOriginal} className="w-12 h-12 rounded-2xl bg-white/5 border border-white/5 text-[#B87333] hover:bg-[#B87333] hover:text-white transition-all flex items-center justify-center shrink-0" title="Voltar ao Tom Original">
+                                        <RotateCcw className="w-5 h-5" />
+                                    </button>
+                                </div>
+
+                                {/* Group 3: View Options & Extras */}
+                                <div className="flex items-center justify-center gap-2">
+                                    {/* Tabs Toggle */}
+                                    <button 
+                                        onClick={() => {
+                                            const next = !includeTabs;
+                                            setIncludeTabs(next);
+                                            if (selectedManualIndex !== null && songs[selectedManualIndex]) {
+                                                const n = [...songs];
+                                                n[selectedManualIndex] = { ...n[selectedManualIndex], include_tabs: next };
+                                                setSongs(n);
+                                            }
+                                        }}
+                                        className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl border text-[10px] font-black uppercase tracking-widest transition-all ${includeTabs ? 'bg-[#B87333]/20 border-[#B87333]/40 text-[#B87333]' : 'bg-white/5 border-white/5 text-slate-500 hover:text-white hover:bg-white/10'}`}
+                                    >
+                                        <FileText className="w-4 h-4" />
+                                        <span>Tabs</span>
+                                    </button>
+
+                                    {/* Versions Switcher */}
+                                    {currentPlayerVersions.length > 1 ? (
+                                        <div className="relative flex-1">
+                                            <button 
+                                                onClick={() => setIsPlayerVersionsOpen(!isPlayerVersionsOpen)} 
+                                                className={`w-full flex items-center justify-center gap-2 py-3 rounded-2xl border text-[10px] font-black uppercase tracking-widest transition-all ${isPlayerVersionsOpen ? 'bg-[#B87333] border-[#B87333] text-white' : 'bg-white/5 border-white/5 text-slate-500 hover:text-white hover:bg-white/10'}`}
+                                            >
+                                                {playerVersionLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Layout className="w-4 h-4" />}
+                                                <span>Versões</span>
+                                            </button>
+                                            {isPlayerVersionsOpen && (
+                                                <>
+                                                    <div className="fixed inset-0 z-[450]" onClick={() => setIsPlayerVersionsOpen(false)} />
+                                                    <div className="absolute bottom-full left-0 mb-2 w-full bg-[#16161D] border border-white/10 rounded-2xl shadow-2xl overflow-hidden z-[500] animate-in slide-in-from-bottom-2 duration-200">
+                                                        {currentPlayerVersions.map((v, idx) => (
+                                                            <button
+                                                                key={idx}
+                                                                onClick={() => { switchSongVersion(v); setIsPlayerVersionsOpen(false); }}
+                                                                className={`w-full px-4 py-3 text-left text-[11px] font-black uppercase italic tracking-tight border-b border-white/5 last:border-0 hover:bg-[#B87333]/20 transition-all ${v.name === (currentSong?.version_name || 'Principal') ? 'text-[#B87333] bg-[#B87333]/10' : 'text-slate-400'}`}
+                                                            >
+                                                                {v.name}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <div className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl border border-white/5 text-slate-700 text-[10px] font-black uppercase tracking-widest opacity-30">
+                                            <Layout className="w-4 h-4" />
+                                            <span>Só 1 Versão</span>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         </div>
 
@@ -6091,6 +6156,8 @@ function App() {
                 setIncludeToc={setIncludeToc}
                 includeDictionary={includeDictionary}
                 setIncludeDictionary={setIncludeDictionary}
+                blinkThreshold={blinkThreshold}
+                setBlinkThreshold={setBlinkThreshold}
                 authenticatedUser={authenticatedUser}
                 setShowUserManagement={setShowUserManagement}
                 deferredPrompt={deferredPrompt}
