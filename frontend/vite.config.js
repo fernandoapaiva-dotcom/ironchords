@@ -8,9 +8,6 @@ export default defineConfig({
     react(),
     legacy({
       targets: ['defaults', 'not IE 11'],
-    })
+    }),
   ],
-  build: {
-    target: 'es2015',
-  }
 })

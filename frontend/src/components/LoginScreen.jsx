@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Mail, CheckCircle2, Clock, ArrowRight, ShieldCheck, Flame } from 'lucide-react';
+import { API_BASE } from '../constants';
 
 // Google Client ID – set your own in VITE_GOOGLE_CLIENT_ID env var
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || ''; 
@@ -33,22 +34,6 @@ const LoginScreen = ({ onAuthorized }) => {
     const [message, setMessage] = useState('');
     const googleBtnRef = useRef(null);
 
-    const getBaseUrl = () => {
-        const hostname = window.location.hostname;
-        const isLocal = hostname === 'localhost' || hostname === '127.0.0.1';
-        
-        // If not local, ALWAYS force the production Render URL to avoid env var issues
-        if (!isLocal) {
-            return 'https://ironchords.onrender.com';
-        }
-        
-        // In local dev, use the env var or default to 8000
-        const raw = import.meta.env.VITE_API_BASE_URL;
-        if (raw) return raw.replace(/\/$/, '');
-        return 'http://127.0.0.1:8000';
-    };
-
-    const API_BASE = `${getBaseUrl()}/api`.replace(/\/+$/, '/api');
 
     useEffect(() => {
         const savedEmail = localStorage.getItem('ironchords_user_email');

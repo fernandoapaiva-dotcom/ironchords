@@ -8,24 +8,9 @@ import { AudioTracker } from './utils/AudioTracker';
 import { FaceTracker } from './utils/FaceTracker';
 import { CifraParser } from './utils/CifraParser';
 import LoginScreen from './components/LoginScreen';
+import { API_BASE_URL } from './constants';
 
-// Dynamic API Base URL detection
-// Dynamic API Base URL detection
-const getBaseUrl = () => {
-    const hostname = window.location.hostname;
-    const isLocal = hostname === 'localhost' || hostname === '127.0.0.1';
-    
-    // If not local, ALWAYS force the production Render URL to avoid env var issues
-    if (!isLocal) {
-        return 'https://ironchords.onrender.com';
-    }
-    
-    // In local dev, use the env var or default to 8000
-    const raw = import.meta.env.VITE_API_BASE_URL;
-    if (raw) return raw.replace(/\/$/, '');
-    return 'http://127.0.0.1:8000';
-};
-const API_BASE_URL = getBaseUrl().replace(/\/api\/?$/, '');
+// -------------------------------------------------------------------
 
 // -------------------------------------------------------------------
 // enabled flag allows re-running the effect when the container element becomes available (player opens)

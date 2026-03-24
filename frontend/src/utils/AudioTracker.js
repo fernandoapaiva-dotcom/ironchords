@@ -1,5 +1,6 @@
 // AudioTracker.js
 // Encapsulates Microphone access, AudioWorklet, and Speech Recognition setup
+import { API_BASE_URL } from '../constants';
 
 export class AudioTracker {
     constructor(onBpmDetected, onMicLevel, onNoteDetected, onSpeechResult, onAlignmentState, onConnectionStatus, onBlowDetected) {
