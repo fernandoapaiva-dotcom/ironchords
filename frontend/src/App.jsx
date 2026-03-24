@@ -1318,10 +1318,11 @@ function App() {
         if (!songToMeasure || !songToMeasure.content) return;
 
         // Bypassing React DOM timing completely: Calculate by string length
+        // We find the longest line to ensures everything fits the horizontal width.
         const lines = songToMeasure.content.split('\n');
         let maxChars = 0;
-        // Sample up to 100 lines
-        for (let i = 0; i < Math.min(lines.length, 100); i++) {
+        // Sample up to 150 lines
+        for (let i = 0; i < Math.min(lines.length, 150); i++) {
             const len = lines[i].replace(/\r/g, '').length;
             if (len > maxChars) maxChars = len;
         }
@@ -1331,22 +1332,25 @@ function App() {
         const containerWidth = container.getBoundingClientRect().width;
         if (containerWidth === 0) return; // Hidden container
 
-        const padding = 60; 
+        // Padding calculation: px-6 in Tailwind is 24px per side = 48px total.
+        // We add an 8px "safety zone" to prevent accidental line wrapping.
+        const padding = 56; 
         const availableWidth = containerWidth - padding;
 
         if (availableWidth > 0) {
-            // An average monospace character width is roughly 60% of its font-size.
-            // newFs = availableWidth / (maxChars * 0.60)
-            let newFs = availableWidth / (maxChars * 0.60);
+            // A monospace character width is roughly 61% of its font-size.
+            // S = availableWidth / (maxChars * 0.61)
+            let newFs = availableWidth / (maxChars * 0.61);
             
-            // Bounds
+            // Bounds: 11px is the smallest readable, 32px is a generous desktop/tablet size.
             const MIN_FONT_SIZE = 11;
-            const MAX_FONT_SIZE = 22;
+            const MAX_FONT_SIZE = 32;
             newFs = Math.max(MIN_FONT_SIZE, Math.min(newFs, MAX_FONT_SIZE));
 
             const currentDocFs = isPlayerActive ? playerFontSize : manualFontSize;
 
-            if (Math.abs(newFs - currentDocFs) > 0.5) {
+            // Sensitivity: Only update if change is > 0.3px to avoid jitter.
+            if (Math.abs(newFs - currentDocFs) > 0.3) {
                 const roundedFs = Math.round(newFs * 10) / 10;
                 if (isPlayerActive) {
                     setPlayerFontSize(roundedFs);
@@ -1355,7 +1359,7 @@ function App() {
                 }
                 setPinchLiveFontSize(roundedFs);
                 
-                // Force CSS update
+                // Force CSS update for immediate feedback without waiting for state re-render
                 container.style.setProperty('--dynamic-zoom-fs', `${roundedFs}px`);
                 container.style.fontSize = `${roundedFs}px`;
             }
