@@ -206,6 +206,10 @@ export class FaceTracker {
             // Allow up to 3 seconds to complete the 3 blinks
             this.blinkTimestamps = this.blinkTimestamps.filter(t => now - t <= 3000);
             
+            if (this.onBlinkCountChange) {
+                this.onBlinkCountChange(this.blinkTimestamps.length);
+            }
+
             console.log(`[FaceTracker] Piscou! (${this.blinkTimestamps.length}/3) EAR: ${ear.toFixed(3)}`);
 
             // Check if we hit 3 or more blinks in the window
@@ -222,6 +226,7 @@ export class FaceTracker {
                 }
                 // Clear timestamps to prevent consecutive multi-triggers
                 this.blinkTimestamps = [];
+                if (this.onBlinkCountChange) this.onBlinkCountChange(0);
             }
         }
     }

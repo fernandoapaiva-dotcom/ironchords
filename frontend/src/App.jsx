@@ -1482,6 +1482,7 @@ function App() {
     const faceTrackerRef = useRef(null);
     const [faceTrackerStatus, setFaceTrackerStatus] = useState('inativo');
     const [faceTrackerDebug, setFaceTrackerDebug] = useState('');
+    const [blinkCount, setBlinkCount] = useState(0);
 
     const getSharedMicStream = async () => {
         if (sharedAudioStreamRef.current && sharedAudioStreamRef.current.active) return sharedAudioStreamRef.current;
@@ -2364,6 +2365,7 @@ function App() {
                 faceTrackerRef.current = new FaceTracker();
                 faceTrackerRef.current.onStatusChange = setFaceTrackerStatus;
                 faceTrackerRef.current.onDebugInfo = setFaceTrackerDebug;
+                faceTrackerRef.current.onBlinkCountChange = setBlinkCount;
                 faceTrackerRef.current.onThreeBlinksDetected = () => {
                     handleBlowAction(true); // force scroll
                     // REMOVIDO: setBlowFlash(true) causava re-render da tela inteira 
@@ -4448,22 +4450,12 @@ function App() {
 
                                 {/* IA Sync — first chip, always visible */}
                                 <button
-                                    onClick={() => { const s = !isDynamicSpeedActive; setIsDynamicSpeedActive(s); if (s) { setIsAutoScrolling(false); startAudioTracker(); } else if (!isBlowDetectEnabled) { stopAudioTracker(); } }}
+                                    onClick={() => { const s = !isDynamicSpeedActive; setIsDynamicSpeedActive(s); if (s) { setIsAutoScrolling(false); startAudioTracker(); } else { stopAudioTracker(); } }}
                                     className={`shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-full border text-[10px] font-black uppercase tracking-wide transition-all ${isDynamicSpeedActive ? 'bg-blue-500/20 border-blue-500 text-blue-300 shadow-[0_0_10px_rgba(59,130,246,0.35)]' : 'bg-white/5 border-white/10 text-slate-400 hover:border-white/25 hover:text-white'}`}
                                     title="IA Sync — sincroniza scroll com sua voz"
                                 >
                                     <Zap className={`w-3.5 h-3.5 ${isDynamicSpeedActive ? 'animate-pulse' : ''}`} />
                                     <span>IA Sync</span>
-                                </button>
-
-                                {/* Blow Detection — second chip */}
-                                <button
-                                    onClick={() => setIsBlowDetectEnabled(s => !s)}
-                                    className={`shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-full border text-[10px] font-black uppercase tracking-wide transition-all ${isBlowDetectEnabled ? 'bg-emerald-500/20 border-emerald-500 text-emerald-300 shadow-[0_0_10px_rgba(16,185,129,0.35)]' : 'bg-white/5 border-white/10 text-slate-400 hover:border-white/25 hover:text-white'}`}
-                                    title="Soprar no microfone para avançar página"
-                                >
-                                    <Wind className={`w-3.5 h-3.5 ${isBlowDetectEnabled ? 'animate-pulse' : ''}`} />
-                                    <span>Sopro</span>
                                 </button>
 
                                 {/* Blink Detection — third chip */}
@@ -4482,7 +4474,7 @@ function App() {
                                     <span>
                                         {!isBlinkDetectEnabled ? 'Piscar' : 
                                          faceTrackerStatus === 'carregando_ia' ? 'Baixando IA...' : 
-                                         faceTrackerStatus === 'rastreando' ? 'Olhando' : 
+                                         faceTrackerStatus === 'rastreando' ? (blinkCount > 0 ? `${blinkCount}/3` : 'Olhando') : 
                                          faceTrackerStatus === 'erro_camera' ? 'Câmera Negada' : 'Piscar'}
                                     </span>
                                 </button>
