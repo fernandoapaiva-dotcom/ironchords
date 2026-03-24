@@ -1315,7 +1315,7 @@ function App() {
     // Feature 3: Music Platform
     const [musicPlatform, setMusicPlatform] = useState(() => localStorage.getItem('iron_chords_music_platform') || null);
     // Feature 2: Blink resume arrow
-    const [blinkResumeArrow, setBlinkResumeArrow] = useState(false);
+    const [blinkResumeArrow, setBlinkResumeArrow] = useState(null);
     const blinkResumeTimerRef = useRef(null);
     // Feature 4: Session snapshot restore flag
     const sessionRestoredRef = useRef(false);
@@ -2375,7 +2375,10 @@ function App() {
 
         // Feature 2: Show brief resume arrow indicator
         if (blinkResumeTimerRef.current) clearTimeout(blinkResumeTimerRef.current);
-        setBlinkResumeArrow(true);
+        
+        // Show arrow at the top of the container after scrolling
+        setBlinkResumeArrow({ top: 120 }); // Fixed top position in the scrollable area
+        blinkResumeTimerRef.current = setTimeout(() => setBlinkResumeArrow(null), 2200);
     }, []);
 
     useEffect(() => {

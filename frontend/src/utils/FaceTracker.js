@@ -195,7 +195,7 @@ export class FaceTracker {
         const thresholdOpen = baselineEAR * 0.72;  // Eye opens above 72% of baseline = reset
 
         if (this.onDebugInfo) {
-            this.onDebugInfo(`EAR: ${ear.toFixed(3)} | Limite: <${thresholdClose.toFixed(3)} | Piscadas: ${this.blinkTimestamps.length}/3`);
+            this.onDebugInfo(`EAR: ${ear.toFixed(3)} | Limite: <${thresholdClose.toFixed(3)} | Piscadas: ${this.blinkTimestamps.length}/${this.requiredBlinks}`);
         }
 
         // Simple State Machine for Blinks
@@ -210,8 +210,9 @@ export class FaceTracker {
             const now = Date.now();
             this.blinkTimestamps.push(now);
             
-            // Allow up to 3 seconds to complete the 3 blinks
-            this.blinkTimestamps = this.blinkTimestamps.filter(t => now - t <= 3000);
+            // Allow more time for higher blink thresholds (e.g. 5 blinks need more than 3s)
+            const windowMs = Math.max(3000, this.requiredBlinks * 1000);
+            this.blinkTimestamps = this.blinkTimestamps.filter(t => now - t <= windowMs);
             
             if (this.onBlinkCountChange) {
                 this.onBlinkCountChange(this.blinkTimestamps.length);
