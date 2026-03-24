@@ -182,8 +182,10 @@ export class FaceTracker {
         const baselineEAR = sortedEARs[Math.floor(sortedEARs.length * 0.9)] || 0.25;
 
         // Dynamic Thresholds
-        const thresholdClose = baselineEAR * 0.70; // 30% drop = blink
-        const thresholdOpen = baselineEAR * 0.85;  // 15% drop = open
+        // We use a tight hysteresis loop so rapid/squinty blinking registers easily.
+        // It doesn't require the eye to fully open back to 100% to register the next blink.
+        const thresholdClose = baselineEAR * 0.65; // Eye drops below 65% of baseline = blink
+        const thresholdOpen = baselineEAR * 0.72;  // Eye opens above 72% of baseline = reset
 
         if (this.onDebugInfo) {
             this.onDebugInfo(`EAR: ${ear.toFixed(3)} | Limite: <${thresholdClose.toFixed(3)} | Piscadas: ${this.blinkTimestamps.length}/3`);
@@ -201,13 +203,13 @@ export class FaceTracker {
             const now = Date.now();
             this.blinkTimestamps.push(now);
             
-            // Clean up old blinks outside the window
-            this.blinkTimestamps = this.blinkTimestamps.filter(t => now - t <= this.BLINK_WINDOW_MS);
+            // Allow up to 3 seconds to complete the 3 blinks
+            this.blinkTimestamps = this.blinkTimestamps.filter(t => now - t <= 3000);
             
             console.log(`[FaceTracker] Piscou! (${this.blinkTimestamps.length}/3) EAR: ${ear.toFixed(3)}`);
 
-            // Check if we hit exactly 3 blinks in the window
-            if (this.blinkTimestamps.length === 3) {
+            // Check if we hit 3 or more blinks in the window
+            if (this.blinkTimestamps.length >= 3) {
                 console.log("[FaceTracker] 3 PISCADAS DETECTADAS! Disparando scroll...");
                 
                 // --- CPU OPTIMIZATION ---
