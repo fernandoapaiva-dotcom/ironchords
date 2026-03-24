@@ -1319,10 +1319,14 @@ function App() {
 
         // Bypassing React DOM timing completely: Calculate by string length
         // We find the longest line to ensures everything fits the horizontal width.
-        const lines = songToMeasure.content.split('\n');
+        const content = (songToMeasure.include_tabs ?? includeTabs) === false
+            ? removeTablatureBlocks(songToMeasure.content)
+            : songToMeasure.content;
+
+        const lines = content.split('\n');
         let maxChars = 0;
-        // Sample up to 150 lines
-        for (let i = 0; i < Math.min(lines.length, 150); i++) {
+        // Sample ALL lines for 100% accuracy
+        for (let i = 0; i < lines.length; i++) {
             const len = lines[i].replace(/\r/g, '').length;
             if (len > maxChars) maxChars = len;
         }
@@ -1332,25 +1336,29 @@ function App() {
         const containerWidth = container.getBoundingClientRect().width;
         if (containerWidth === 0) return; // Hidden container
 
-        // Padding calculation: px-6 in Tailwind is 24px per side = 48px total.
-        // We add an 8px "safety zone" to prevent accidental line wrapping.
-        const padding = 56; 
-        const availableWidth = containerWidth - padding;
+        // Dynamic Padding Detection: Read the actual computed padding from CSS (px-4 or md:p-16)
+        const style = window.getComputedStyle(container);
+        const pl = parseFloat(style.paddingLeft || '0');
+        const pr = parseFloat(style.paddingRight || '0');
+        
+        // Safety Zone: Add a 24px extra buffer to avoid scrollbars/render jitter
+        const totalPadding = pl + pr + 24; 
+        const availableWidth = containerWidth - totalPadding;
 
         if (availableWidth > 0) {
-            // A monospace character width is roughly 61% of its font-size.
-            // S = availableWidth / (maxChars * 0.61)
-            let newFs = availableWidth / (maxChars * 0.61);
+            // A monospace character width is roughly 65% of its font-size in most browsers.
+            // Using 0.65 for a slightly more conservative fit.
+            let newFs = availableWidth / (maxChars * 0.65);
             
-            // Bounds: 11px is the smallest readable, 32px is a generous desktop/tablet size.
-            const MIN_FONT_SIZE = 11;
+            // Bounds: 10px is absolute minimum, 32px is the comfortable maximum.
+            const MIN_FONT_SIZE = 10;
             const MAX_FONT_SIZE = 32;
             newFs = Math.max(MIN_FONT_SIZE, Math.min(newFs, MAX_FONT_SIZE));
 
             const currentDocFs = isPlayerActive ? playerFontSize : manualFontSize;
 
-            // Sensitivity: Only update if change is > 0.3px to avoid jitter.
-            if (Math.abs(newFs - currentDocFs) > 0.3) {
+            // Sensitivity: Only update if change is > 0.2px
+            if (Math.abs(newFs - currentDocFs) > 0.2) {
                 const roundedFs = Math.round(newFs * 10) / 10;
                 if (isPlayerActive) {
                     setPlayerFontSize(roundedFs);
@@ -1359,12 +1367,12 @@ function App() {
                 }
                 setPinchLiveFontSize(roundedFs);
                 
-                // Force CSS update for immediate feedback without waiting for state re-render
+                // Force CSS update for immediate feedback
                 container.style.setProperty('--dynamic-zoom-fs', `${roundedFs}px`);
                 container.style.fontSize = `${roundedFs}px`;
             }
         }
-    }, [playerFontSize, manualFontSize, activeTab, isFullScreenPlayer, isManualFullscreen, currentSong?.content, manualPreviewSong?.content]);
+    }, [playerFontSize, manualFontSize, activeTab, isFullScreenPlayer, isManualFullscreen, currentSong?.id, currentSong?.content, currentSong?.include_tabs, manualPreviewSong?.song_name, manualPreviewSong?.content, includeTabs]);
 
     // Trigger Auto-Fit
     useEffect(() => {
@@ -1376,6 +1384,8 @@ function App() {
         return () => clearTimeout(timer);
     }, [
         songs[selectedManualIndex]?.id,
+        songs[selectedManualIndex]?.include_tabs,
+        includeTabs,
         manualPreviewSong?.song_name, 
         activeTab,
         isFullScreenPlayer,
@@ -4378,10 +4388,13 @@ function App() {
                                                 <div
                                                     key={idx}
                                                     data-line-index={idx}
-                                                    className={`leading-snug transition-all duration-300 ${currentLineIndex === idx ? 'text-[#B87333]' : isChord ? 'text-[#e97c3a] opacity-70' : 'text-white'}`}
-                                                    style={{ fontFamily: isChord ? 'monospace' : 'inherit', fontWeight: isChord ? 700 : 400 }}
+                                                    className={`leading-snug transition-all duration-300 ${currentLineIndex === idx ? 'text-[#B87333]' : isChord ? 'text-[#e97c3a] opacity-70' : 'text-white'} whitespace-pre font-mono`}
+                                                    style={{ 
+                                                        fontSize: 'inherit',
+                                                        fontWeight: isChord ? 700 : 400 
+                                                    }}
                                                 >
-                                                    {trimmed || <br />}
+                                                    {line || ' '}
                                                 </div>
                                             );
                                         })}
