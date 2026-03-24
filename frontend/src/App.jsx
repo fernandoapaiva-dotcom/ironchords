@@ -2365,8 +2365,8 @@ function App() {
                 faceTrackerRef.current.onDebugInfo = setFaceTrackerDebug;
                 faceTrackerRef.current.onThreeBlinksDetected = () => {
                     handleBlowAction(true); // force scroll
-                    setBlowFlash(true); // reuse the visual flash
-                    setTimeout(() => setBlowFlash(false), 300);
+                    // REMOVIDO: setBlowFlash(true) causava re-render da tela inteira 
+                    // e travava o "smooth scroll" no celular por conta da CPU.
                 };
             }
             faceTrackerRef.current.start();

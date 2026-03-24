@@ -97,7 +97,7 @@ export class FaceTracker {
             const renderLoop = (time) => {
                 if (!this.isTracking) return;
 
-                if (this.video.currentTime !== lastVideoTime) {
+                if (!this.isPausedForScroll && this.video.currentTime !== lastVideoTime) {
                     lastVideoTime = this.video.currentTime;
                     const results = this.landmarker.detectForVideo(this.video, performance.now());
                     
@@ -209,6 +209,12 @@ export class FaceTracker {
             // Check if we hit exactly 3 blinks in the window
             if (this.blinkTimestamps.length === 3) {
                 console.log("[FaceTracker] 3 PISCADAS DETECTADAS! Disparando scroll...");
+                
+                // --- CPU OPTIMIZATION ---
+                // Suspend MediaPipe for 800ms immediately so the UI thread has 100% power to perform the smooth scroll.
+                this.isPausedForScroll = true;
+                setTimeout(() => { this.isPausedForScroll = false; }, 800);
+
                 if (this.onThreeBlinksDetected) {
                     this.onThreeBlinksDetected();
                 }
