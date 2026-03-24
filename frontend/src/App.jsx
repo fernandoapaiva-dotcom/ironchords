@@ -1397,6 +1397,33 @@ function App() {
     const micLevelRef = useRef(0);
     const advanceTimerRef = useRef(null);
     const isPausedBySilenceRef = useRef(false);
+    
+    // Feature-specific States moved to top to avoid TDZ
+    const [mainNav, setMainNav] = useState('player');
+    const [blowFlash, setBlowFlash] = useState(false);
+    const [isBlinkDetectEnabled, setIsBlinkDetectEnabled] = useState(false);
+    const faceTrackerRef = useRef(null);
+    const [faceTrackerStatus, setFaceTrackerStatus] = useState('inativo');
+    const [faceTrackerDebug, setFaceTrackerDebug] = useState('');
+    const [blinkCount, setBlinkCount] = useState(0);
+    const [blinkThreshold, setBlinkThreshold] = useState(() => getSafeJSON('iron_chords_blink_threshold', 3));
+    const [saveMode, setSaveMode] = useState('new');
+    const dragItem = useRef(null);
+    const dragOverItem = useRef(null);
+    const [dragOverIdx, setDragOverIdx] = useState(null);
+    const [forgeMessage, setForgeMessage] = useState("Forjando conteúdo...");
+    const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0 });
+    const [downloadUrl, setDownloadUrl] = useState(null);
+    const [transcriptRaw, setTranscriptRaw] = useState('');
+    const [detectedNote, setDetectedNote] = useState(null);
+    const [singerKey, setSingerKey] = useState(null);
+    const noteHistogramRef = useRef({});
+    const noteTimestampsRef = useRef([]);
+    const isBlowDetectEnabledRef = useRef(false);
+    const autoTransposeTimerRef = useRef(null);
+    const lastStableNoteRef = useRef(null);
+    const [playlistNameInput, setPlaylistNameInput] = useState('');
+    const [showPlaylistManager, setShowPlaylistManager] = useState(false);
 
     // Version
     const APP_VERSION = '1.0.3';
@@ -1667,15 +1694,6 @@ function App() {
     // Stage Mode (Modo Palco) — distraction-free display
 
     // Wake Lock
-    const [blowFlash, setBlowFlash] = useState(false);
-
-    // Face Tracking
-    const [isBlinkDetectEnabled, setIsBlinkDetectEnabled] = useState(false);
-    const faceTrackerRef = useRef(null);
-    const [faceTrackerStatus, setFaceTrackerStatus] = useState('inativo');
-    const [faceTrackerDebug, setFaceTrackerDebug] = useState('');
-    const [blinkCount, setBlinkCount] = useState(0);
-    const [blinkThreshold, setBlinkThreshold] = useState(() => getSafeJSON('iron_chords_blink_threshold', 3));
 
     // Persist blinkThreshold
     useEffect(() => {
@@ -1737,14 +1755,6 @@ function App() {
         }
     }, [playerFontSize]);
     // Enhanced Save Modal (Feature 3)
-    const [saveMode, setSaveMode] = useState('new'); // 'new' | 'append'
-    const dragItem = useRef(null);
-    const dragOverItem = useRef(null);
-    const [dragOverIdx, setDragOverIdx] = useState(null);
-    const [forgeMessage, setForgeMessage] = useState("Forjando conteúdo...");
-    const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0 });
-    const [downloadUrl, setDownloadUrl] = useState(null);
-    const [mainNav, setMainNav] = useState('player');
     const [showExportModal, setShowExportModal] = useState(false);
     const [exportStep, setExportStep] = useState(1);
     const [currentExportList, setCurrentExportList] = useState(null);
@@ -2090,14 +2100,7 @@ function App() {
 
         return () => clearTimeout(debounceSave);
     }, [songs, activePlaylistName, authenticatedUser]);
-    const [playlistNameInput, setPlaylistNameInput] = useState('');
-    const [showPlaylistManager, setShowPlaylistManager] = useState(false);
 
-    const [transcriptRaw, setTranscriptRaw] = useState('');
-    const [detectedNote, setDetectedNote] = useState(null);
-    const [singerKey, setSingerKey] = useState(null);
-    const noteHistogramRef = useRef({});
-    const noteTimestampsRef = useRef([]);// Rolling window of {note, time}
 
     // KEY ANALYZER: Accumulate notes over time to determine singer's key
     useEffect(() => {
@@ -2373,10 +2376,8 @@ function App() {
         // Feature 2: Show brief resume arrow indicator
         if (blinkResumeTimerRef.current) clearTimeout(blinkResumeTimerRef.current);
         setBlinkResumeArrow(true);
-        blinkResumeTimerRef.current = setTimeout(() => setBlinkResumeArrow(false), 2200);
     }, []);
 
-    const isBlowDetectEnabledRef = useRef(isBlowDetectEnabled);
     useEffect(() => {
         isBlowDetectEnabledRef.current = isBlowDetectEnabled;
         // If sopsro enabled but tracker not running, start it
@@ -2636,8 +2637,6 @@ function App() {
     }, [micEnabled, isRhythmicMode]);
 
     // AUTO-TRANSPOSE LOGIC: Monitor pitch stability and auto-shift the song key
-    const autoTransposeTimerRef = useRef(null);
-    const lastStableNoteRef = useRef(null);
     const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 
     useEffect(() => {
