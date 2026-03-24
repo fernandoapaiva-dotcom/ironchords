@@ -5210,6 +5210,20 @@ function App() {
                                         <X className="w-5 h-5" />
                                     </button>
                                 )}
+
+                                {/* BLINK ARROW INDICATOR (Outside scroll container to stay at top) */}
+                                {blinkResumeArrow && (
+                                    <div 
+                                        className="absolute left-0 lg:left-8 z-[100] pointer-events-none animate-in slide-in-from-left-4 fade-in duration-300"
+                                        style={{ top: `${blinkResumeArrow.top}px` }}
+                                    >
+                                        <div className="flex items-center space-x-2 text-orange-500 bg-black/80 backdrop-blur-md px-4 py-2 rounded-r-2xl border-y border-r border-orange-500/50 shadow-[0_0_20px_rgba(249,115,22,0.3)]">
+                                            <ArrowRight className="w-5 h-5 animate-pulse" />
+                                            <span className="text-xs font-black uppercase tracking-widest">Resumo</span>
+                                        </div>
+                                    </div>
+                                )}
+
                                 <div 
                                     ref={!isStageModeActive ? scrollContainerRef : null} 
                                     className="relative flex-1 overflow-auto overflow-x-auto p-4 md:p-16 scroll-smooth scrollbar-none pb-64 w-full"
@@ -5219,18 +5233,6 @@ function App() {
                                     }}
                                 >
 
-                                    {/* BLINK ARROW INDICATOR */}
-                                    {blinkResumeArrow && (
-                                        <div 
-                                            className="absolute left-0 lg:left-8 z-50 pointer-events-none animate-in slide-in-from-left-4 fade-in duration-300"
-                                            style={{ top: `${blinkResumeArrow.top}px` }}
-                                        >
-                                            <div className="flex items-center space-x-2 text-orange-500 bg-black/80 backdrop-blur-md px-4 py-2 rounded-r-2xl border-y border-r border-orange-500/50 shadow-[0_0_20px_rgba(249,115,22,0.3)]">
-                                                <ArrowRight className="w-5 h-5 animate-pulse" />
-                                                <span className="text-xs font-black uppercase tracking-widest">Resumo</span>
-                                            </div>
-                                        </div>
-                                    )}
 
                                     <div className="max-w-4xl mx-auto space-y-1 printable-area">
                                         {/* Print Only Header */}
@@ -5838,8 +5840,22 @@ function App() {
                                                             </div>
 
                                                             {/* Scrollable Chord Content (Optimized Stage View) */}
-                                                            <div
-                                                                ref={manualScrollContainerRef}
+                                                            <div className="relative flex-1 flex flex-col min-h-0">
+                                                                {/* BLINK ARROW INDICATOR (Outside scroll container) */}
+                                                                {blinkResumeArrow && (
+                                                                    <div 
+                                                                        className="absolute left-0 lg:left-8 z-[100] pointer-events-none animate-in slide-in-from-left-4 fade-in duration-300"
+                                                                        style={{ top: '80px' }}
+                                                                    >
+                                                                        <div className="flex items-center space-x-2 text-orange-500 bg-black/80 backdrop-blur-md px-4 py-2 rounded-r-2xl border-y border-r border-orange-500/50 shadow-[0_0_20px_rgba(249,115,22,0.3)]">
+                                                                            <ArrowRight className="w-5 h-5 animate-pulse" />
+                                                                            <span className="text-xs font-black uppercase tracking-widest">Resumo</span>
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+
+                                                                <div
+                                                                    ref={manualScrollContainerRef}
                                                                 className={`
                                                                     flex-1 overflow-auto overflow-x-auto ${isManualFullscreen ? 'p-4 md:p-20 pt-16 md:pt-24' : 'p-4 md:p-10'}
                                                                     scrollbar-none pb-32 transition-all w-full
@@ -5898,7 +5914,8 @@ function App() {
                                                                 </div>
                                                             </div>
                                                         </div>
-                                                    )}
+                                                    </div>
+                                                )}
 
 
                                                     {/* Error display */}
