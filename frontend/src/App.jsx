@@ -1211,8 +1211,9 @@ function App() {
     const [isAutoScrolling, setIsAutoScrolling] = useState(false);
     const [queueSearchTerm, setQueueSearchTerm] = useState('');
     const [scrollSpeed, setScrollSpeed] = useState(1);
-    const [playerFontSize, setPlayerFontSize] = useState(19);
-    const [manualFontSize, setManualFontSize] = useState(18);
+    const isMobileInit = window.innerWidth < 768;
+    const [playerFontSize, setPlayerFontSize] = useState(isMobileInit ? 14 : 19);
+    const [manualFontSize, setManualFontSize] = useState(isMobileInit ? 14 : 18);
     const [printFontSize, setPrintFontSize] = useState(15);
     const [micEnabled, setMicEnabled] = useState(false);
     const [micLevel, setMicLevel] = useState(0);
@@ -5068,16 +5069,6 @@ function App() {
                                 );
                             })()}
 
-                            {/* FACE TRACKER DEBUG UI */}
-                            {isBlinkDetectEnabled && faceTrackerDebug && (
-                                <div className="absolute bottom-[160px] right-4 px-3 py-2 bg-purple-900/60 backdrop-blur-xl border border-purple-500/50 rounded-lg z-[150] shadow-lg animate-in fade-in slide-in-from-right-4">
-                                    <div className="flex items-center gap-2 mb-1">
-                                        <div className="w-2 h-2 rounded-full bg-purple-400 animate-pulse" />
-                                        <span className="text-[10px] font-black uppercase tracking-widest text-purple-300">Diagnóstico Olho</span>
-                                    </div>
-                                    <span className="text-[11px] font-mono text-white block">{faceTrackerDebug}</span>
-                                </div>
-                            )}
                         </div>
                     </div>
                 ) : activeTab === 'presentation' ? (
