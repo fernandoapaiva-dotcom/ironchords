@@ -774,7 +774,7 @@ const normalize_google_email = (email) => {
     return e;
 };
 
-const SettingsModal = ({ isOpen, onClose, includeToc, setIncludeToc, includeDictionary, setIncludeDictionary, blinkThreshold, setBlinkThreshold, authenticatedUser, setShowUserManagement, deferredPrompt, handleInstallPWA }) => {
+const SettingsModal = ({ isOpen, onClose, includeToc, setIncludeToc, includeDictionary, setIncludeDictionary, blinkThreshold, setBlinkThreshold, authenticatedUser, setShowUserManagement, deferredPrompt, handleInstallPWA, musicPlatform, setMusicPlatform, searchHistory, setSearchHistory, onHistoryItemClick }) => {
     if (!isOpen) return null;
 
     return createPortal(
@@ -798,17 +798,17 @@ const SettingsModal = ({ isOpen, onClose, includeToc, setIncludeToc, includeDict
                             <h3 className="text-xs font-black text-white uppercase tracking-widest italic">Gesto de Piscada</h3>
                         </div>
                         <div className="space-y-6">
-                            <div className="flex items-center justify-between p-5 bg-white/5 border border-white/5 rounded-2xl">
+                            <div className="flex items-center justify-between p-5 bg-white/5 border border-white/5 rounded-2xl flex-wrap gap-4">
                                 <div>
                                     <p className="text-sm font-black text-white uppercase tracking-widest">Quantidade de Piscadas</p>
                                     <p className="text-[10px] font-bold text-slate-500 uppercase mt-1">Piscadas rápidas para descer a cifra</p>
                                 </div>
-                                <div className="flex items-center bg-black/40 rounded-xl p-1 border border-white/5">
+                                <div className="flex items-center bg-black/40 rounded-xl p-1 border border-white/5 overflow-x-auto max-w-full">
                                     {[2, 3, 4, 5].map(n => (
                                         <button
                                             key={n}
                                             onClick={() => setBlinkThreshold(n)}
-                                            className={`w-10 h-10 rounded-lg font-black transition-all ${blinkThreshold === n ? 'bg-orange-500 text-white shadow-lg' : 'text-slate-500 hover:text-white'}`}
+                                            className={`min-w-[2.5rem] w-10 h-10 rounded-lg font-black transition-all ${blinkThreshold === n ? 'bg-orange-500 text-white shadow-lg' : 'text-slate-500 hover:text-white'}`}
                                         >
                                             {n}
                                         </button>
@@ -821,6 +821,97 @@ const SettingsModal = ({ isOpen, onClose, includeToc, setIncludeToc, includeDict
                             </p>
                         </div>
                     </div>
+
+                    {/* Feature 3: Music Platform */}
+                    <div className="bg-[#B87333]/5 border border-[#B87333]/20 rounded-[32px] p-8">
+                        <div className="flex items-center space-x-3 mb-6">
+                            <Headphones className="w-5 h-5 text-[#B87333]" />
+                            <h3 className="text-xs font-black text-white uppercase tracking-widest italic">Plataforma de Música</h3>
+                        </div>
+                        <div className="space-y-4">
+                            <p className="text-[10px] font-medium text-slate-400 leading-relaxed px-2 mb-4">
+                                Escolha um aplicativo principal para ouvir as músicas ou criar playlists diretamente do IronChords.
+                            </p>
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                {[{ id: 'spotify', name: 'Spotify' }, { id: 'deezer', name: 'Deezer' }, { id: 'youtube', name: 'YouTube Music' }].map(plat => (
+                                    <button
+                                        key={plat.id}
+                                        onClick={() => {
+                                            const newVal = musicPlatform === plat.id ? null : plat.id;
+                                            setMusicPlatform(newVal);
+                                            if (newVal) localStorage.setItem('iron_chords_music_platform', newVal);
+                                            else localStorage.removeItem('iron_chords_music_platform');
+                                        }}
+                                        className={`flex flex-col items-center justify-center p-4 rounded-2xl border transition-all ${musicPlatform === plat.id ? 'bg-[#B87333] border-[#B87333] text-white shadow-lg shadow-[#B87333]/20' : 'bg-white/5 border-white/10 text-slate-400 hover:text-white hover:border-[#B87333]/50'}`}
+                                    >
+                                        <span className="text-sm font-black italic tracking-tighter mt-1">{plat.name}</span>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Feature 1: Search History Settings Page */}
+                    <div className="bg-black/40 border border-white/5 rounded-[32px] p-8">
+                        <div className="flex items-center justify-between mb-6">
+                            <div className="flex items-center space-x-3">
+                                <RotateCcw className="w-5 h-5 text-slate-400" />
+                                <h3 className="text-xs font-black text-white uppercase tracking-widest italic">Histórico de Buscas</h3>
+                            </div>
+                            {searchHistory && searchHistory.length > 0 && (
+                                <button
+                                    onClick={() => {
+                                        if (window.confirm("Limpar todo o histórico de buscas?")) {
+                                            setSearchHistory([]);
+                                            localStorage.removeItem('iron_chords_search_history');
+                                        }
+                                    }}
+                                    className="text-[10px] font-black text-slate-500 hover:text-red-400 uppercase transition-colors px-2 py-1 rounded-lg border border-transparent hover:border-red-500/30"
+                                >
+                                    Limpar Tudo
+                                </button>
+                            )}
+                        </div>
+                        <div className="space-y-2">
+                            {(!searchHistory || searchHistory.length === 0) ? (
+                                <div className="text-center py-6 border border-dashed border-white/10 rounded-2xl">
+                                    <p className="text-[10px] text-slate-500 uppercase tracking-widest">Nenhum histórico recente</p>
+                                </div>
+                            ) : (
+                                <div className="max-h-[300px] overflow-y-auto pr-2 space-y-2 custom-scrollbar">
+                                    {searchHistory.map((item, i) => (
+                                        <div key={i} className="flex items-center justify-between p-3 bg-white/5 border border-white/5 rounded-xl group/hist hover:border-[#B87333]/30 transition-all">
+                                            <button
+                                                onClick={() => {
+                                                    onClose();
+                                                    onHistoryItemClick({ song: item.song, artist: item.artist });
+                                                }}
+                                                className="flex-1 text-left flex items-center space-x-3 truncate"
+                                            >
+                                                <Search className="w-3.5 h-3.5 text-slate-600 shrink-0" />
+                                                <div className="flex flex-col min-w-0">
+                                                    <span className="text-xs font-black text-white uppercase italic truncate group-hover/hist:text-[#B87333]">{item.song}</span>
+                                                    <span className="text-[10px] text-slate-500 truncate">{item.artist}</span>
+                                                </div>
+                                            </button>
+                                            <button
+                                                onClick={() => {
+                                                    const updated = searchHistory.filter((_, j) => j !== i);
+                                                    setSearchHistory(updated);
+                                                    localStorage.setItem('iron_chords_search_history', JSON.stringify(updated));
+                                                }}
+                                                className="p-2 text-slate-600 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all shrink-0 opacity-0 group-hover/hist:opacity-100"
+                                                title="Remover"
+                                            >
+                                                <X className="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
 
                     <div className="bg-black/40 border border-white/5 rounded-[32px] p-8">
                         <div className="flex items-center space-x-3 mb-6">
@@ -1233,6 +1324,16 @@ function App() {
     const [playerSongSearchLoading, setPlayerSongSearchLoading] = useState(false);
     const [playerSongSuggestions, setPlayerSongSuggestions] = useState([]);
     const [addingSongSlug, setAddingSongSlug] = useState(null);
+    // Feature 1: Search History
+    const [searchHistory, setSearchHistory] = useState(() => getSafeJSON('iron_chords_search_history', []));
+    const [showSearchHistory, setShowSearchHistory] = useState(false);
+    // Feature 3: Music Platform
+    const [musicPlatform, setMusicPlatform] = useState(() => localStorage.getItem('iron_chords_music_platform') || null);
+    // Feature 2: Blink resume arrow
+    const [blinkResumeArrow, setBlinkResumeArrow] = useState(false);
+    const blinkResumeTimerRef = useRef(null);
+    // Feature 4: Session snapshot restore flag
+    const sessionRestoredRef = useRef(false);
     const [isImmersiveMode, setIsImmersiveMode] = useState(false);
     const [showImmersiveControls, setShowImmersiveControls] = useState(false);
     const [isStageModeActive, setIsStageModeActive] = useState(false);
@@ -1465,6 +1566,57 @@ function App() {
         };
         checkAuth();
     }, []);
+
+    // Feature 4: Save session snapshot on page hide (PWA hibernation)
+    useEffect(() => {
+        const saveSnapshot = () => {
+            if (!songs || songs.length === 0) return;
+            const scrollTop = scrollContainerRef.current?.scrollTop || manualScrollContainerRef.current?.scrollTop || 0;
+            const snapshot = {
+                songs,
+                selectedManualIndex,
+                activePlaylistName,
+                mainNav,
+                scrollTop,
+                savedAt: Date.now()
+            };
+            try {
+                localStorage.setItem('iron_chords_session_snapshot', JSON.stringify(snapshot));
+            } catch(e) { /* storage full, skip */ }
+        };
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'hidden') saveSnapshot();
+        };
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        window.addEventListener('pagehide', saveSnapshot);
+        return () => {
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+            window.removeEventListener('pagehide', saveSnapshot);
+        };
+    }, [songs, selectedManualIndex, activePlaylistName, mainNav]);
+
+    // Feature 4: Restore session snapshot on app load (after auth)
+    useEffect(() => {
+        if (!authenticatedUser || sessionRestoredRef.current) return;
+        sessionRestoredRef.current = true;
+        try {
+            const raw = localStorage.getItem('iron_chords_session_snapshot');
+            if (!raw) return;
+            const snap = JSON.parse(raw);
+            const MAX_AGE_MS = 30 * 60 * 1000; // 30 minutes
+            if (!snap || !snap.songs || !snap.savedAt || Date.now() - snap.savedAt > MAX_AGE_MS) return;
+            // Restore state
+            setSongs(snap.songs);
+            if (snap.selectedManualIndex !== undefined && snap.selectedManualIndex !== null) setSelectedManualIndex(snap.selectedManualIndex);
+            if (snap.activePlaylistName) setActivePlaylistName(snap.activePlaylistName);
+            if (snap.mainNav) setMainNav(snap.mainNav);
+            // Restore scroll after DOM paint
+            setTimeout(() => {
+                const container = scrollContainerRef.current || manualScrollContainerRef.current;
+                if (container && snap.scrollTop > 0) container.scrollTop = snap.scrollTop;
+            }, 600);
+        } catch(e) { console.warn('[Session] Restore failed:', e); }
+    }, [authenticatedUser]);
 
     const syncCloudPlaylists = async (email) => {
         if (!email) return;
@@ -2219,20 +2371,24 @@ function App() {
         const cManual = manualScrollContainerRef.current;
         lastManualScrollTime.current = 0;
         
-        // Scroll by 65% of the screen height. 
-        const scrollAmount = window.innerHeight * 0.65;
+        // Feature 2 Fix: scroll 75% of the CONTAINER viewport height (not full screen height)
+        // This leaves ~25% overlap so the user never loses context.
+        const activeContainer = cPlayer || cManual;
+        const containerHeight = activeContainer ? activeContainer.clientHeight : window.innerHeight;
+        const scrollAmount = containerHeight * 0.75;
 
         if (cPlayer) cPlayer.scrollBy({ top: scrollAmount, behavior: 'smooth' });
         if (cManual) cManual.scrollBy({ top: scrollAmount, behavior: 'smooth' });
         
         try {
-            window.scrollBy({ top: scrollAmount, behavior: 'smooth' });
-            document.documentElement.scrollBy({ top: scrollAmount, behavior: 'smooth' });
-            document.body.scrollBy({ top: scrollAmount, behavior: 'smooth' });
-            
             setBlowFlash(true);
             setTimeout(() => setBlowFlash(false), 300);
         } catch(e) {}
+
+        // Feature 2: Show brief resume arrow indicator
+        if (blinkResumeTimerRef.current) clearTimeout(blinkResumeTimerRef.current);
+        setBlinkResumeArrow(true);
+        blinkResumeTimerRef.current = setTimeout(() => setBlinkResumeArrow(false), 2200);
     }, []);
 
     const isBlowDetectEnabledRef = useRef(isBlowDetectEnabled);
@@ -3660,6 +3816,16 @@ function App() {
 
             setPlayerSongSearch('');
             setPlayerSongSuggestions([]);
+            setShowSearchHistory(false);
+
+            // Feature 1: Save to search history
+            setSearchHistory(prev => {
+                const entry = { song: data.song_name, artist: data.artist_name };
+                const filtered = prev.filter(h => h.song !== entry.song || h.artist !== entry.artist);
+                const updated = [entry, ...filtered].slice(0, 10);
+                localStorage.setItem('iron_chords_search_history', JSON.stringify(updated));
+                return updated;
+            });
 
             fetch(`${API_BASE_URL}/api/chords`, {
                 method: 'POST',
@@ -4708,7 +4874,7 @@ function App() {
 
                                 {playerSidebarTab === 'fila' && (
                                     <div className="flex flex-col flex-1 overflow-hidden space-y-6">
-                                        {/* ——— SEARCH BAR (Feature 1) ——— */}
+                                        {/* ——— SEARCH BAR with History (Feature 1) ——— */}
                                         {!isSidebarCollapsed && (
                                             <div className="relative">
                                                 <div className="relative">
@@ -4717,18 +4883,65 @@ function App() {
                                                         type="text"
                                                         placeholder="Buscar e adicionar música..."
                                                         value={playerSongSearch}
-                                                        onChange={e => handlePlayerSongSearch(e.target.value)}
-                                                        className="w-full bg-[#B87333] border border-[#B87333]/50 rounded-xl pl-9 pr-4 py-3 text-[11px] font-bold text-white placeholder:text-white/60 focus:outline-none focus:ring-2 focus:ring-white/30 shadow-lg shadow-[#B87333]/20 transition-all"
+                                                        onChange={e => { handlePlayerSongSearch(e.target.value); if(e.target.value) setShowSearchHistory(false); else setShowSearchHistory(true); }}
+                                                        onFocus={() => { if (!playerSongSearch) setShowSearchHistory(true); }}
+                                                        onBlur={() => setTimeout(() => setShowSearchHistory(false), 200)}
+                                                        className="w-full bg-[#B87333] border border-[#B87333]/50 rounded-xl pl-9 pr-8 py-3 text-[11px] font-bold text-white placeholder:text-white/60 focus:outline-none focus:ring-2 focus:ring-white/30 shadow-lg shadow-[#B87333]/20 transition-all"
                                                     />
-                                                    {playerSongSearchLoading && <RefreshCw className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/60 animate-spin" />}
+                                                    {playerSongSearch ? (
+                                                        <button onClick={() => { setPlayerSongSearch(''); setPlayerSongSuggestions([]); setShowSearchHistory(true); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-white/60 hover:text-white transition-all">
+                                                            <X className="w-3.5 h-3.5" />
+                                                        </button>
+                                                    ) : (
+                                                        playerSongSearchLoading && <RefreshCw className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/60 animate-spin" />
+                                                    )}
                                                 </div>
+                                                {/* History Dropdown */}
+                                                {showSearchHistory && !playerSongSearch && searchHistory.length > 0 && (
+                                                    <div className="absolute z-[200] w-full mt-1 bg-[#16161D] border border-white/10 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.7)] overflow-hidden backdrop-blur-3xl animate-in fade-in zoom-in-95 duration-200">
+                                                        <div className="flex items-center justify-between px-4 py-2.5 border-b border-white/5">
+                                                            <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+                                                                <RotateCcw className="w-3 h-3" /> Buscas Recentes
+                                                            </span>
+                                                            <button
+                                                                onMouseDown={() => { setSearchHistory([]); localStorage.removeItem('iron_chords_search_history'); }}
+                                                                className="text-[9px] font-black text-slate-600 hover:text-red-400 uppercase tracking-widest transition-all px-1"
+                                                            >Limpar</button>
+                                                        </div>
+                                                        <div className="max-h-[240px] overflow-y-auto">
+                                                            {searchHistory.map((item, i) => (
+                                                                <div key={i} className="flex items-center border-b border-white/5 last:border-none">
+                                                                    <button
+                                                                        type="button"
+                                                                        onMouseDown={() => handleAddSongFromSearch({ song: item.song, artist: item.artist })}
+                                                                        className="flex-1 text-left px-4 py-3 hover:bg-[#B87333]/15 transition-all group flex items-center gap-3"
+                                                                    >
+                                                                        <RotateCcw className="w-3 h-3 text-slate-600 shrink-0" />
+                                                                        <div className="flex flex-col min-w-0">
+                                                                            <span className="text-[11px] font-black text-white uppercase italic truncate group-hover:text-[#B87333]">{item.song}</span>
+                                                                            <span className="text-[9px] text-slate-500 truncate">{item.artist}</span>
+                                                                        </div>
+                                                                    </button>
+                                                                    <button
+                                                                        onMouseDown={() => {
+                                                                            const updated = searchHistory.filter((_, j) => j !== i);
+                                                                            setSearchHistory(updated);
+                                                                            localStorage.setItem('iron_chords_search_history', JSON.stringify(updated));
+                                                                        }}
+                                                                        className="p-3 text-slate-700 hover:text-red-400 transition-all shrink-0"
+                                                                    ><X className="w-3 h-3" /></button>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                                {/* Suggestions Dropdown */}
                                                 {playerSongSuggestions.length > 0 && (
                                                     <div className="absolute z-[200] w-full mt-1 bg-[#16161D] border border-white/10 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.7)] overflow-hidden backdrop-blur-3xl animate-in fade-in zoom-in-95 duration-200">
                                                         <div className="max-h-[280px] overflow-y-auto">
                                                             {playerSongSuggestions.map((item, i) => {
                                                                 const sKey = item.slug || `${item.song}-${item.artist}`;
                                                                 const isAdding = addingSongSlug === sKey;
-
                                                                 return (
                                                                     <button key={i} type="button"
                                                                         disabled={isAdding}
@@ -5012,12 +5225,25 @@ function App() {
                                 )}
                                 <div 
                                     ref={!isStageModeActive ? scrollContainerRef : null} 
-                                    className="flex-1 overflow-auto overflow-x-auto p-4 md:p-16 scroll-smooth scrollbar-none pb-64 w-full"
+                                    className="relative flex-1 overflow-auto overflow-x-auto p-4 md:p-16 scroll-smooth scrollbar-none pb-64 w-full"
 
                                     style={{ 
                                         fontSize: `var(--dynamic-zoom-fs, ${showPinchBar ? pinchLiveFontSize : playerFontSize}px)`
                                     }}
                                 >
+
+                                    {/* BLINK ARROW INDICATOR */}
+                                    {blinkResumeArrow && (
+                                        <div 
+                                            className="absolute left-0 lg:left-8 z-50 pointer-events-none animate-in slide-in-from-left-4 fade-in duration-300"
+                                            style={{ top: `${blinkResumeArrow.top}px` }}
+                                        >
+                                            <div className="flex items-center space-x-2 text-orange-500 bg-black/80 backdrop-blur-md px-4 py-2 rounded-r-2xl border-y border-r border-orange-500/50 shadow-[0_0_20px_rgba(249,115,22,0.3)]">
+                                                <ArrowRight className="w-5 h-5 animate-pulse" />
+                                                <span className="text-xs font-black uppercase tracking-widest">Resumo</span>
+                                            </div>
+                                        </div>
+                                    )}
 
                                     <div className="max-w-4xl mx-auto space-y-1 printable-area">
                                         {/* Print Only Header */}
@@ -5033,6 +5259,34 @@ function App() {
                                                 <p className="text-xl font-bold text-slate-700 uppercase">{currentSong?.artist_name}</p>
                                                 <p className="text-2xl font-black uppercase italic tracking-widest">Tom: {getSoundingKey(currentSong)}</p>
                                             </div>
+
+                                            {/* Feature 3: Music Platform Player */}
+                                            {musicPlatform && currentSong && (
+                                                <div className="no-print mt-8 mb-4 flex items-center bg-black/40 border border-white/10 rounded-[24px] p-2 pr-6 w-fit transition-all hover:bg-white/10 hover:border-[#B87333]/50 hover:scale-[1.02] cursor-pointer group shadow-xl"
+                                                    onClick={() => {
+                                                        const query = encodeURIComponent(`${currentSong.song_name} ${currentSong.artist_name}`);
+                                                        let url = '';
+                                                        let fallback = '';
+                                                        if (musicPlatform === 'spotify') { url = `spotify:search:${query}`; fallback = `https://open.spotify.com/search/${query}`; }
+                                                        else if (musicPlatform === 'deezer') { url = `deezer://search/${query}`; fallback = `https://www.deezer.com/search/${query}`; }
+                                                        else if (musicPlatform === 'youtube') { url = `https://music.youtube.com/search?q=${query}`; fallback = url; }
+                                                        
+                                                        // Open fallback directly for broader compatibility (some browsers block raw custom protocols without interaction logic)
+                                                        window.open(fallback, '_blank');
+                                                    }}
+                                                    title={`Ouvir ${currentSong.song_name} no ${musicPlatform === 'spotify' ? 'Spotify' : musicPlatform === 'deezer' ? 'Deezer' : 'YouTube Music'}`}
+                                                >
+                                                    <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center mr-4 group-hover:bg-[#B87333] transition-colors relative overflow-hidden">
+                                                        <div className="absolute inset-0 bg-[#B87333] opacity-0 group-hover:opacity-20 transition-opacity"></div>
+                                                        <Headphones className="w-5 h-5 text-slate-400 group-hover:text-white z-10" />
+                                                    </div>
+                                                    <div className="flex flex-col justify-center">
+                                                        <span className="text-[9px] font-black uppercase tracking-[0.2em] text-[#B87333] group-hover:text-white transition-colors mb-0.5">Tocar no {musicPlatform === 'spotify' ? 'Spotify' : musicPlatform === 'deezer' ? 'Deezer' : 'YouTube Music'}</span>
+                                                        <span className="text-[13px] font-black text-slate-300 group-hover:text-white transition-colors capitalize truncate max-w-[200px] italic">{currentSong.song_name}</span>
+                                                    </div>
+                                                    <Play className="w-5 h-5 text-[#B87333] ml-6 opacity-0 group-hover:opacity-100 transition-all transform -translate-x-2 group-hover:translate-x-0" />
+                                                </div>
+                                            )}
                                         </div>
                                         {((currentSong?.include_tabs ?? includeTabs) === false
                                             ? removeTablatureBlocks(currentSong?.content || "")
@@ -6182,6 +6436,11 @@ function App() {
                 setShowUserManagement={setShowUserManagement}
                 deferredPrompt={deferredPrompt}
                 handleInstallPWA={handleInstallPWA}
+                musicPlatform={musicPlatform}
+                setMusicPlatform={setMusicPlatform}
+                searchHistory={searchHistory}
+                setSearchHistory={setSearchHistory}
+                onHistoryItemClick={handleAddSongFromSearch}
             />
 
             {/* Export Livreto Modal */}
