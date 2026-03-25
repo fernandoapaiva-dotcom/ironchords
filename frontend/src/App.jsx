@@ -1364,6 +1364,7 @@ function App() {
     const [showSettingsModal, setShowSettingsModal] = useState(false);
     const [isManualColumns, setIsManualColumns] = useState(false);
     const [showBottomToolsDrawer, setShowBottomToolsDrawer] = useState(false);
+    const [showMobileTools, setShowMobileTools] = useState(false);
 
     // Derived State
     const currentSong = songs[selectedManualIndex] || null;
