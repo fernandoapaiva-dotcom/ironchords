@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { PhoneticMatcher } from './utils/PhoneticMatcher';
-import { Music, UploadCloud, Plus, Minus, FileText, CheckCircle, AlertCircle, Eye, EyeOff, FileAudio, Info, X, Guitar, Settings2, Activity, Image as ImageIcon, Database, Edit3, Trash2, ArrowRight, Play, Maximize, Maximize2, Pause, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Download, ArrowLeft, SkipBack, SkipForward, Save, Share2, FolderHeart, Flame, Hammer, Sparkles, RefreshCw, Zap, ShieldCheck, Monitor, Tv, Check, Users, LayoutList, Layout, Mic, Search, RotateCcw, Printer, Archive, GripVertical, Minimize2, Link, MessageCircle, Mail, ExternalLink, Smartphone, Apple, Copy, Footprints, MoreVertical, Menu, LogOut, Headphones } from 'lucide-react';
+import { Music, UploadCloud, Plus, Minus, FileText, CheckCircle, AlertCircle, Eye, EyeOff, FileAudio, Info, X, Guitar, Settings, Settings2, Activity, Image as ImageIcon, Database, Edit3, Trash2, ArrowRight, Play, Maximize, Maximize2, Pause, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Download, ArrowLeft, SkipBack, SkipForward, Save, Share2, FolderHeart, Flame, Hammer, Sparkles, RefreshCw, Zap, ShieldCheck, Monitor, Tv, Check, Users, LayoutList, Layout, Mic, Search, RotateCcw, Printer, Archive, GripVertical, Minimize2, Link, MessageCircle, Mail, ExternalLink, Smartphone, Apple, Copy, Footprints, MoreVertical, Menu, LogOut, Headphones } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { SVGuitarChord } from 'svguitar';
 import { AudioTracker } from './utils/AudioTracker';
@@ -2779,6 +2779,15 @@ function App() {
         syncLineByTextRef.current = syncLineByText;
     });
 
+    // Helper to ensure line indices match exactly what the DOM renders (accounting for excluded tablatures)
+    const getComputedSongLines = (song) => {
+        if (!song || !song.content) return [];
+        const computedContent = (song.include_tabs ?? includeTabs) === false
+            ? removeTablatureBlocks(song.content)
+            : song.content;
+        return computedContent.split('\n');
+    };
+
     const syncLineByText = (text, isFinal) => {
         const songIdx = (activeTab === 'presentation') ? presenterSongIndex : ((isFullScreenPlayer || activeTab === 'player' || mainNav === 'player') ? selectedManualIndex : null);
         if (songIdx === null || !songs[songIdx]) return;
@@ -2787,8 +2796,7 @@ function App() {
         if (isPausedBySilence) setIsPausedBySilence(false);
         if (!text || text.trim().length === 0) return;
 
-        const currentSongData = songs[songIdx];
-        const lines = (currentSongData.content || "").split('\n');
+        const lines = getComputedSongLines(songs[songIdx]);
 
         // Normalize and get tokens
         const normTranscript = PhoneticMatcher.normalize(PhoneticMatcher.applyAliases(text));
@@ -3034,7 +3042,7 @@ function App() {
                 if (micEnabled && isAnchored && next > (lastVoiceMatchedIndexRef.current + maxLeashLines)) return;
                 const currentSong = songs[songIdx];
                 if (currentSong) {
-                    const lines = (currentSong.content || "").split('\n');
+                    const lines = getComputedSongLines(currentSong);
                     if (next < lines.length) {
                         let targetIndex = next;
                         while (targetIndex < lines.length && (lines[targetIndex].match(/^[a-g][b#]?\s/i) || lines[targetIndex].trim().length < 2)) {
@@ -4651,8 +4659,11 @@ function App() {
                                     </button>
                                 </div>
 
-                                {/* Right: Reset only (Share is now in the sidebar) */}
+                                {/* Right: Reset & Tools Toggle */}
                                 <div className="flex items-center justify-end gap-1.5 flex-1">
+                                    <button onClick={() => setShowMobileTools(!showMobileTools)} className="md:hidden w-8 h-8 rounded-xl flex items-center justify-center bg-white/5 text-slate-500 hover:text-[#B87333] hover:bg-[#B87333]/10 transition-all shrink-0" title="Ferramentas">
+                                        <Settings className="w-3.5 h-3.5" />
+                                    </button>
                                     <button onClick={() => { setCurrentLineIndex(0); currentLineIndexRef.current = 0; if (scrollContainerRef.current) scrollContainerRef.current.scrollTop = 0; }} className="w-8 h-8 rounded-xl flex items-center justify-center bg-white/5 text-slate-500 hover:text-[#B87333] hover:bg-[#B87333]/10 transition-all shrink-0" title="Reiniciar do Topo">
                                         <RotateCcw className="w-3.5 h-3.5 -scale-x-100" />
                                     </button>
@@ -4660,7 +4671,7 @@ function App() {
                             </div>
 
                             {/* ── ROW C: Organized Tools Dashboard ── */}
-                            <div className="flex flex-col gap-3 px-4 pb-6 pt-4 w-full border-t border-white/[0.06] bg-black/40 backdrop-blur-3xl sticky bottom-0 z-[100] sm:relative">
+                            <div className={`flex flex-col gap-3 px-4 pb-6 pt-4 w-full border-t border-white/[0.06] bg-black/40 backdrop-blur-3xl shrink-0 z-[100] ${!showMobileTools ? 'hidden md:flex' : 'flex'}`}>
                                 
                                 {/* Group 1: Hands-Free / Automation */}
                                 <div className="flex items-center justify-center gap-2">
@@ -4818,7 +4829,7 @@ function App() {
                             {/* MOBILE BACKDROP FOR SIDEBAR */}
                             {!isSidebarCollapsed && (
                                 <div 
-                                    className="md:hidden absolute inset-0 z-[140] bg-black/60 backdrop-blur-sm transition-opacity"
+                                    className="md:hidden fixed inset-0 z-[350] bg-black/60 backdrop-blur-sm transition-opacity pointer-events-auto"
                                     onClick={() => setIsSidebarCollapsed(true)}
                                 />
                             )}
@@ -4828,8 +4839,9 @@ function App() {
                                 ${isSidebarCollapsed ? '-translate-x-full md:translate-x-0 w-[85vw] md:w-20 px-4 md:px-3' : 'translate-x-0 w-[85vw] md:w-80 px-4 md:px-6'} 
                                 ${isImmersiveMode ? 'hidden' : ''} 
                                 bg-black/95 md:bg-black/40 backdrop-blur-3xl md:backdrop-blur-none border-r border-y-0 border-white/5 
-                                flex flex-col py-6 space-y-6 shrink-0 absolute left-0 md:relative h-full z-[150] no-print 
-                                transition-all duration-300 ease-in-out
+                                flex flex-col py-6 space-y-6 shrink-0 fixed inset-y-0 left-0 md:relative md:h-full z-[400] md:z-[150] no-print 
+                                transition-transform duration-500 ease-[cubic-bezier(0.23,1,0.32,1)]
+                                shadow-[20px_0_50px_rgba(0,0,0,0.8)] md:shadow-none pointer-events-auto
                             `}>
                                 {/* Toggle Button */}
                                 <button
@@ -6479,7 +6491,7 @@ function App() {
                                                             <h3 className="text-xs font-black text-white uppercase tracking-widest italic">Saída de Dados</h3>
                                                         </div>
                                                         <div className="grid grid-cols-1 gap-4">
-                                                            {['docx'].map(fmt => (
+                                                            {['docx', 'pdf'].map(fmt => (
                                                                 <button
                                                                     key={fmt}
                                                                     onClick={() => setExportFormat(fmt)}
@@ -6487,10 +6499,10 @@ function App() {
                                                                 >
                                                                     <div>
                                                                         <p className={`text-sm font-black uppercase tracking-widest transition-colors ${exportFormat === fmt ? 'text-white' : 'text-slate-400 group-hover:text-white'}`}>
-                                                                            Microsoft Word (.docx)
+                                                                            {fmt === 'pdf' ? 'Documento PDF (.pdf)' : 'Microsoft Word (.docx)'}
                                                                         </p>
                                                                         <p className={`text-[10px] font-bold mt-1 uppercase ${exportFormat === fmt ? 'text-white/60' : 'text-slate-600'}`}>
-                                                                            Otimizado para edição e impressão (PDF só vis impressão local)
+                                                                            {fmt === 'pdf' ? 'Formato universal para leitura e impressão rápida' : 'Otimizado para edição e impressão (PDF só vis impressão local)'}
                                                                         </p>
                                                                     </div>
                                                                     <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${exportFormat === fmt ? 'bg-white border-white text-[#B87333]' : 'border-white/10'}`}>
@@ -7408,15 +7420,57 @@ function App() {
                             <div className="grid grid-cols-3 gap-4">
                                 <div>
                                     <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest ml-1">Tom Original</label>
-                                    <select value={editQueueSong.song_key} onChange={e => setEditQueueSong({ ...editQueueSong, song_key: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white font-bold outline-none focus:border-[#B87333]/50 transition-all">
-                                        {["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"].map(k => <option key={k} value={k} className="bg-[#1A1A1A]">{k}</option>)}
-                                    </select>
+                                    <div className="flex space-x-2">
+                                        <select
+                                            value={editQueueSong.song_key}
+                                            onChange={async e => {
+                                                const oldKey = editQueueSong.song_key;
+                                                const newKey = e.target.value;
+                                                const NOTES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+                                                const oldIdx = NOTES.indexOf(oldKey);
+                                                const newIdx = NOTES.indexOf(newKey);
+                                                if (oldIdx !== -1 && newIdx !== -1) {
+                                                    const diff = newIdx - oldIdx;
+                                                    setIsTransposing(true);
+                                                    try {
+                                                        const res = await fetch(`${API_BASE_URL}/api/transpose`, {
+                                                            method: 'POST',
+                                                            headers: { 'Content-Type': 'application/json' },
+                                                            body: JSON.stringify({ content: editQueueSong.content, current_key: oldKey, semitones: diff })
+                                                        });
+                                                        const data = await res.json();
+                                                        if (data.transposed_content) {
+                                                            setEditQueueSong(prev => ({
+                                                                ...prev,
+                                                                content: data.transposed_content,
+                                                                song_key: data.new_key
+                                                            }));
+                                                        }
+                                                    } catch (err) { console.error(err); }
+                                                    finally { setIsTransposing(false); }
+                                                } else {
+                                                    setEditQueueSong({ ...editQueueSong, song_key: newKey });
+                                                }
+                                            }}
+                                            className="flex-1 w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white font-bold outline-none focus:border-[#B87333]/50 transition-all"
+                                        >
+                                            {["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"].map(k => <option key={k} value={k} className="bg-[#1A1A1A]">{k}</option>)}
+                                        </select>
+                                    </div>
                                 </div>
-                                <div>
+                                <div className="flex flex-col">
                                     <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2 ml-1">Capo</label>
-                                    <select value={editQueueSong.capo} onChange={e => setEditQueueSong({ ...editQueueSong, capo: Number(e.target.value) })} className="w-full bg-black/60 border border-white/10 rounded-xl px-4 py-3 text-white outline-none cursor-pointer font-bold appearance-none focus:border-[#B87333]/50 transition-all">
-                                        {[...Array(13)].map((_, i) => <option key={i} value={i} className="bg-[#1A1A1A]">{i === 0 ? 'Sem Capo' : `${i}ª Casa`}</option>)}
-                                    </select>
+                                    <div className="flex items-center space-x-2 h-[46px]">
+                                        <select value={editQueueSong.capo} onChange={e => setEditQueueSong({ ...editQueueSong, capo: Number(e.target.value) })} className="flex-1 w-full bg-black/60 border border-white/10 rounded-xl px-4 py-3 h-full text-white outline-none cursor-pointer font-bold appearance-none focus:border-[#B87333]/50 transition-all">
+                                            {[...Array(13)].map((_, i) => <option key={i} value={i} className="bg-[#1A1A1A]">{i === 0 ? 'Sem Capo' : `${i}ª Casa`}</option>)}
+                                        </select>
+                                        {editQueueSong.capo > 0 && (
+                                            <div className="px-3 h-full flex flex-col justify-center bg-[#B87333]/10 border border-[#B87333]/30 rounded-xl whitespace-nowrap">
+                                                <span className="text-[8px] font-black text-[#B87333] uppercase block leading-none mb-1">Som</span>
+                                                <span className="text-sm font-black text-white italic">{getSoundingKey({ song_key: editQueueSong.song_key, capo: editQueueSong.capo })}</span>
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                                 <div className="flex flex-col justify-end">
                                     <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2 ml-1">Tablaturas</label>

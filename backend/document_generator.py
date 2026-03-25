@@ -35,29 +35,28 @@ def add_header_logo(section):
         run = p.add_run()
         run.add_picture(LOGO_PATH, width=Inches(1.0)) # Slightly larger for the combined mark
 
-def add_toc(doc):
-    from docx.oxml import OxmlElement
-    from docx.oxml.ns import qn
-    p = doc.add_paragraph()
-    run = p.add_run()
+def add_toc(doc, songs):
+    from docx.shared import Pt
     
-    fldChar1 = OxmlElement('w:fldChar')
-    fldChar1.set(qn('w:fldCharType'), 'begin')
-    
-    instrText = OxmlElement('w:instrText')
-    instrText.set(qn('xml:space'), 'preserve')
-    instrText.text = 'TOC \\o "1-3" \\h \\z \\u'
-    
-    fldChar2 = OxmlElement('w:fldChar')
-    fldChar2.set(qn('w:fldCharType'), 'separate')
-    
-    fldChar3 = OxmlElement('w:fldChar')
-    fldChar3.set(qn('w:fldCharType'), 'end')
-    
-    run._r.append(fldChar1)
-    run._r.append(instrText)
-    run._r.append(fldChar2)
-    run._r.append(fldChar3)
+    for i, song in enumerate(songs):
+        title = str(song.get('song_name', 'Sem Nome')).title()
+        artist = str(song.get('artist_name', 'Artista'))
+        key = song.get('sounding_key') or song.get('key', 'C')
+        
+        p = doc.add_paragraph()
+        p.paragraph_format.space_after = Pt(4)
+        
+        run_num = p.add_run(f"{i+1}. ")
+        run_num.bold = True
+        
+        run_title = p.add_run(f"{title} ")
+        run_title.bold = True
+        
+        run_artist = p.add_run(f"— {artist} ")
+        run_artist.italic = True
+        
+        run_key = p.add_run(f"({key})")
+        run_key.font.size = Pt(9)
 
 def add_footer_with_branding(doc):
     """Adds a branded footer with 'Forja ao Palco' and page numbers."""
@@ -253,15 +252,15 @@ def generate_docx(songs: list, output_filename: str = "Livreto.docx", cover_imag
     
     doc.add_page_break()
     
-    if include_toc:
-        doc.add_heading('Sumário', level=1)
-        add_toc(doc)
-        doc.add_page_break()
-    
     if sort_order == "alphabetical":
         songs_sorted = sorted(songs, key=lambda x: str(x.get('song_name', '')).lower())
     else:
         songs_sorted = songs # Keep queue order
+        
+    if include_toc:
+        doc.add_heading('Sumário', level=1)
+        add_toc(doc, songs_sorted)
+        doc.add_page_break()
         
     temp_dir = tempfile.mkdtemp()
     out_p = os.path.join(os.path.dirname(__file__), output_filename)
@@ -450,14 +449,7 @@ def generate_docx(songs: list, output_filename: str = "Livreto.docx", cover_imag
                             para.add_run().add_picture(img_p, width=Inches(i_w))
                         col_i += 1
                 
-        # Forçar atualização de campos do Word ao abrir
-        try:
-            settings = doc.settings.element
-            update_fields = OxmlElement('w:updateFields')
-            update_fields.set(qn('w:val'), 'true')
-            settings.append(update_fields)
-        except:
-            pass
+        # XML field update not needed since we replaced dynamic TOC with manual list.
 
         doc.save(out_p)
     finally:
