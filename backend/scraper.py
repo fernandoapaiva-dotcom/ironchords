@@ -4,20 +4,38 @@ import urllib.parse
 from typing import Optional, Dict, List
 import re
 
+_CHORD_TOKEN_RE = re.compile(
+    r'^[\s]*([A-G][b#]?(?:m|maj|min|sus|aug|dim|add)?[0-9]?(?:\/[A-G][b#]?)?[\s]+)+[A-G][b#]?(?:m|maj|min|sus|aug|dim|add)?[0-9]?(?:\/[A-G][b#]?)?[\s]*$'
+)
+
+def _is_chord_line(line: str) -> bool:
+    """Returns True if the line consists mainly of chord names (and spaces), not lyrics."""
+    stripped = line.strip()
+    if not stripped:
+        return False
+    # Remove all chord tokens and whitespace; if little remains it's a chord line
+    remainder = re.sub(r'[A-G][b#]?(?:m(?:aj)?|sus|aug|dim|add)?[0-9]?(?:\/[A-G][b#]?)?', '', stripped)
+    remainder_clean = remainder.replace(' ', '').replace('\t', '').replace('(', '').replace(')', '').replace('-', '').replace('/', '')
+    return len(remainder_clean) < max(2, len(stripped) * 0.2)
+
 def clean_text(text: str) -> str:
     if not text: return ""
     text = text.replace('\r', '')
-    lines = [re.sub(r'[ \t]{2,}', ' ', line) for line in text.split('\n')]
     new_lines = []
     last_was_empty = False
-    for line in lines:
+    for line in text.split('\n'):
         is_empty = not line.strip()
         if is_empty:
             if not last_was_empty:
                 new_lines.append("")
             last_was_empty = True
         else:
-            new_lines.append(line.rstrip())
+            # Preserve multiple spaces in chord lines (they align chords above lyrics)
+            # Only collapse spaces in regular lyric/text lines
+            if _is_chord_line(line):
+                new_lines.append(line.rstrip())
+            else:
+                new_lines.append(re.sub(r'[ \t]{2,}', ' ', line).rstrip())
             last_was_empty = False
     return '\n'.join(new_lines).strip()
 
