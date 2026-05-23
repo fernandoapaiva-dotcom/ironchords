@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { PhoneticMatcher } from './utils/PhoneticMatcher';
-import { Music, UploadCloud, Plus, Minus, FileText, CheckCircle, AlertCircle, Eye, EyeOff, FileAudio, Info, X, Guitar, Settings, Settings2, Activity, Image as ImageIcon, Database, Edit3, Trash2, ArrowRight, Play, Maximize, Maximize2, Pause, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Download, ArrowLeft, SkipBack, SkipForward, Save, Share2, FolderHeart, Flame, Hammer, Sparkles, RefreshCw, Zap, ShieldCheck, Monitor, Tv, Check, Users, LayoutList, Layout, Mic, Search, RotateCcw, Printer, Archive, GripVertical, Minimize2, Link, MessageCircle, Mail, ExternalLink, Smartphone, Apple, Copy, Footprints, MoreVertical, Menu, LogOut, Headphones } from 'lucide-react';
+import { Music, UploadCloud, Plus, Minus, FileText, CheckCircle, AlertCircle, Eye, EyeOff, FileAudio, Info, X, Guitar, Settings, Settings2, Activity, Image as ImageIcon, Database, Edit3, Trash2, ArrowRight, Play, Maximize, Maximize2, Pause, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Download, ArrowLeft, SkipBack, SkipForward, Save, Share2, FolderHeart, Flame, Hammer, Sparkles, RefreshCw, Zap, ShieldCheck, Monitor, Tv, Check, Users, LayoutList, Layout, Mic, Search, RotateCcw, Printer, Archive, GripVertical, Minimize2, Link, MessageCircle, Mail, ExternalLink, Smartphone, Apple, Copy, Footprints, MoreVertical, Menu, LogOut, Headphones, Wind } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { SVGuitarChord } from 'svguitar';
 import { AudioTracker } from './utils/AudioTracker';
@@ -385,20 +385,25 @@ const CHORD_TOKEN_RE = /(?:^|\s)([A-G][b#]?(?:m|maj|min|M|dim|aug|sus|add|alt|7|
 function isChordOnlyLine(line) {
     if (!line || !line.trim()) return false;
     if (isTablatureLine(line)) return false;
+    
+    // Clean line and count potential chords
     const chords = (line.match(CHORD_TOKEN_RE) || []).map(m => m.trim());
+    if (chords.length === 0) return false;
+
+    // A line is "chord only" if it contains mostly chords and very few other characters
+    // We filter out common spacers like | ( ) - whitespace
     const cleaned = line.replace(CHORD_TOKEN_RE, '').replace(/[\s|()\-xX0-9:]/g, '');
-    return chords.length > 0 && cleaned.length < Math.max(2, line.trim().length * 0.5);
+    
+    // If the remaining characters are more than 20% of the line length, it's probably lyrics
+    return cleaned.length < Math.max(2, line.trim().length * 0.2);
 }
 
 function isEndOfSection(lines, currentIdx) {
-    // A section usually ends before an empty line, a marker like [Chorus], 
-    // or if it's the very last line of the song.
     if (currentIdx >= lines.length - 1) return true;
     for (let i = currentIdx + 1; i < lines.length; i++) {
         const line = lines[i];
         if (!line || !line.trim()) return true;
         if (line.trim().startsWith('[')) return true;
-        // If we find another lyric line before a break, it's NOT the end of section
         if (!isChordOnlyLine(line) && !isTablatureLine(line)) return false;
     }
     return true;
@@ -407,8 +412,9 @@ function isEndOfSection(lines, currentIdx) {
 function isTablatureLine(line) {
     if (!line) return false;
     const trimmed = line.trim();
+    // Tablatures usually start with string names or have many hyphens
     if (/^[eEaAdDgGbB]\|/.test(trimmed)) return true;
-    if ((trimmed.match(/-/g) || []).length > 8) return true;
+    if ((trimmed.match(/-/g) || []).length > 10) return true;
     return false;
 }
 
@@ -422,44 +428,39 @@ function removeTablatureBlocks(content) {
         const line = lines[i];
         const trimmed = line.trim();
 
-        // Check if entering a tab block
-        if (/^\[.*(tab|solo|riff|dedilhado|batida).*\]$/i.test(trimmed)) {
+        // Check if entering a specific tab-only header
+        if (/^\[(tab|solo|riff|batida)\]$/i.test(trimmed)) {
             inTabBlock = true;
             continue;
         }
 
         if (inTabBlock) {
-            // Exit tab block if a non-tab header is found
-            if (/^\[.*\]$/i.test(trimmed) && !/^\[.*(tab|solo|riff|dedilhado|batida).*\]$/i.test(trimmed)) {
+            // Exit tab block if a new header starts
+            if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
                 inTabBlock = false;
                 result.push(line);
                 continue;
             }
 
-            // Exit tab block if we hit actual lyrics (not empty, not chord, not tab, not header, not guitar note)
-            if (trimmed.length > 0 && !isChordOnlyLine(line) && !isTablatureLine(line) && !/^\[.*\]$/.test(trimmed)) {
-                const isGuitarNote = /guitarra|dedilhado|batida|solo|riff|ritmo|frase|passagem/i.test(line) && (line.includes('(') || line.includes('['));
-                if (!isGuitarNote) {
-                    inTabBlock = false;
-                    result.push(line);
-                    continue;
-                }
+            // Exit tab block if we hit actual lyrics
+            if (trimmed.length > 0 && !isChordOnlyLine(line) && !isTablatureLine(line) && !trimmed.startsWith('[')) {
+                inTabBlock = false;
+                result.push(line);
+                continue;
             }
-            continue; // Drop line inside tab block
+            continue; // Skip lines inside tab block
         }
 
-        // Even outside a block, drop standalone tab-related lines
-        const isTabLine = line.includes('|-') || line.includes('-|') || /^[eBGDAE]\|/.test(trimmed);
-        const isRhythmArrow = line.includes('↓') || line.includes('↑');
-        const isGuitarNote = /guitarra|dedilhado|batida|solo|riff|ritmo|frase|passagem/i.test(line) && (line.includes('(') || line.includes('['));
+        // Even outside a block, drop standalone tab lines (---)
+        const isTabLine = (trimmed.match(/-/g) || []).length > 12 || /^[eBGDAE]\|/.test(trimmed);
+        const isRhythmArrow = trimmed.includes('↓') || trimmed.includes('↑');
 
-        if (isTabLine || isRhythmArrow || isGuitarNote) continue;
+        if (isTabLine || isRhythmArrow) continue;
 
         result.push(line);
     }
 
-    // Clean up excessive blank lines left over
-    return result.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+    return result.join('\n').replace(/\n{4,}/g, '\n\n\n').trim();
 }
 
 function transposeChord(chord, semitones) {
@@ -3364,11 +3365,11 @@ function App() {
 
     const fetchVersions = async (artistSlug, songSlug) => {
         try {
-            const res = await fetch(`${API_BASE_URL}/api/song/versions?artist_slug=${artistSlug}&song_slug=${songSlug}`);
+            const res = await fetch(`${API_BASE_URL}/api/chords/versions?artist_slug=${artistSlug}&song_slug=${songSlug}`);
             const data = await res.json();
-            if (data.versions && data.versions.length > 0) {
-                setAvailableVersions(data.versions);
-                setSongVersion(data.versions[0].key);
+            if (Array.isArray(data) && data.length > 0) {
+                setAvailableVersions(data);
+                setSongVersion(data[0].key);
             } else {
                 setAvailableVersions([{ name: 'Principal', key: 'Principal' }]);
                 setSongVersion('Principal');
@@ -4671,156 +4672,75 @@ function App() {
                                 </div>
                             </div>
 
-                            {/* ── ROW C: Organized Tools Dashboard ── */}
-                            <div className={`flex flex-col gap-3 px-4 pb-6 pt-4 w-full border-t border-white/[0.06] bg-black/40 backdrop-blur-3xl shrink-0 z-[100] ${!showMobileTools ? 'hidden md:flex' : 'flex'}`}>
-                                
-                                {/* Group 1: Hands-Free / Automation */}
-                                <div className="flex items-center justify-center gap-2">
+                            {/* ── ROW C: Consolidated Tools Dashboard ── */}
+                            <div className={`flex flex-col gap-2 px-4 pb-3 pt-2 w-full border-t border-white/[0.06] bg-black/40 backdrop-blur-3xl shrink-0 z-[100] ${!showMobileTools ? 'hidden md:flex' : 'flex'}`}>
+                                <div className="flex items-center justify-between gap-1.5 p-1 bg-black/20 rounded-2xl border border-white/5">
                                     {/* IA Sync */}
-                                    <button
-                                        onClick={() => { const s = !isDynamicSpeedActive; setIsDynamicSpeedActive(s); if (s) { setIsAutoScrolling(false); startAudioTracker(); } else { stopAudioTracker(); } }}
-                                        className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl border text-[10px] font-black uppercase tracking-widest transition-all ${isDynamicSpeedActive ? 'bg-blue-500/20 border-blue-500 text-blue-300 shadow-[0_0_15px_rgba(59,130,246,0.3)]' : 'bg-white/5 border-white/5 text-slate-400 hover:border-white/20 hover:text-white'}`}
-                                        title="IA Sync — sincroniza scroll com sua voz"
-                                    >
-                                        <Zap className={`w-4 h-4 ${isDynamicSpeedActive ? 'animate-pulse' : ''}`} />
-                                        <span>IA Sync</span>
-                                    </button>
-
-                                    {/* Blink Detection */}
-                                    <button
-                                        onClick={() => setIsBlinkDetectEnabled(s => !s)}
-                                        className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl border text-[10px] font-black uppercase tracking-widest transition-all ${isBlinkDetectEnabled ? 'bg-purple-500/20 border-purple-500 text-purple-300 shadow-[0_0_15px_rgba(168,85,247,0.3)]' : 'bg-white/5 border-white/5 text-slate-400 hover:border-white/20 hover:text-white'}`}
-                                        title="Piscar para avançar"
-                                    >
-                                        {isBlinkDetectEnabled && faceTrackerStatus === 'rastreando' ? (
-                                            <Eye className="w-4 h-4 animate-pulse text-purple-400" />
-                                        ) : isBlinkDetectEnabled ? (
-                                            <Activity className="w-4 h-4 animate-spin text-purple-400" />
-                                        ) : (
-                                            <EyeOff className="w-4 h-4" />
-                                        )}
-                                        <span className="truncate">
-                                            {!isBlinkDetectEnabled ? 'Piscar' : 
-                                             faceTrackerStatus === 'carregando_ia' ? 'IA...' : 
-                                             faceTrackerStatus === 'rastreando' ? (blinkCount > 0 ? `${blinkCount}/${blinkThreshold}` : 'Ativo') : 'Piscar'}
-                                        </span>
-                                    </button>
-
-                                    {/* Bluetooth Pedal */}
-                                    <button
-                                        className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl border bg-white/5 border-white/5 text-slate-600 text-[10px] font-black uppercase tracking-widest cursor-default opacity-40"
-                                        title="Pedal BT (Em breve)"
-                                    >
-                                        <Footprints className="w-4 h-4" />
-                                        <span>Pedal</span>
-                                    </button>
-                                </div>
-
-                                {/* Group 2: Song Adjustments (Grid 2x2 or 3x1) */}
-                                <div className="flex flex-wrap items-center justify-center gap-2">
-                                    {/* Capo Control */}
-                                    <div className="flex-1 min-w-[120px] flex items-center bg-white/5 rounded-2xl border border-white/5 overflow-hidden h-12">
-                                        <span className="px-3 text-[9px] font-black text-slate-500 uppercase tracking-widest border-r border-white/5">Capo</span>
-                                        <div className="flex flex-1 items-center justify-around">
-                                            <button onClick={() => { if (selectedManualIndex !== null && songs[selectedManualIndex]) { const n = [...songs]; n[selectedManualIndex].capo = Math.max(0, (n[selectedManualIndex].capo || 0) - 1); setSongs(n); } }} className="p-2 text-slate-400 hover:text-white transition-colors"><Minus className="w-3.5 h-3.5" /></button>
-                                            <span className="text-base font-black text-[#B87333] w-6 text-center">{currentSong?.capo || 0}</span>
-                                            <button onClick={() => { if (selectedManualIndex !== null && songs[selectedManualIndex]) { const n = [...songs]; n[selectedManualIndex].capo = Math.min(11, (n[selectedManualIndex].capo || 0) + 1); setSongs(n); } }} className="p-2 text-slate-400 hover:text-white transition-colors"><Plus className="w-3.5 h-3.5" /></button>
-                                        </div>
-                                    </div>
-
-                                    {/* Transpose Control */}
-                                    <div className="flex-1 min-w-[120px] flex items-center bg-[#B87333]/5 rounded-2xl border border-[#B87333]/20 overflow-hidden h-12">
-                                        <div className="flex items-center gap-2 px-3 border-r border-[#B87333]/10 h-full">
-                                            {isTransposing ? <RefreshCw className="w-3.5 h-3.5 animate-spin text-[#B87333]" /> : <Music className="w-3.5 h-3.5 text-[#B87333]" />}
-                                            <span className="text-[9px] font-black text-[#B87333] uppercase tracking-widest">Tom</span>
-                                        </div>
-                                        <div className="relative flex-1 flex items-center px-3 h-full">
-                                            <select
-                                                value={getSoundingKey(currentSong) || 'C'}
-                                                disabled={isTransposing}
-                                                onChange={(e) => {
-                                                    const targetKey = e.target.value;
-                                                    const currentKeyMatch = (getSoundingKey(currentSong) || 'C').match(/([A-G][b#]?)/i);
-                                                    const targetMatch = targetKey.match(/([A-G][b#]?)/i);
-                                                    if (currentKeyMatch && targetMatch) {
-                                                        const NOTES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
-                                                        const norm = k => { const flats = {'Db':'C#','Eb':'D#','Gb':'F#','Ab':'G#','Bb':'A#'}; let n=k.charAt(0).toUpperCase()+k.slice(1); return flats[n]||n; };
-                                                        const cIdx = NOTES.indexOf(norm(currentKeyMatch[1]));
-                                                        const tIdx = NOTES.indexOf(norm(targetMatch[1]));
-                                                        if (cIdx !== -1 && tIdx !== -1) {
-                                                            let diff = tIdx - cIdx;
-                                                            if (diff > 6) diff -= 12;
-                                                            if (diff < -6) diff += 12;
-                                                            if (diff !== 0) transposeSong(selectedManualIndex, diff);
-                                                        }
-                                                    }
-                                                }}
-                                                className="w-full bg-transparent text-white font-black italic text-sm outline-none appearance-none cursor-pointer disabled:opacity-50 pr-4"
-                                            >
-                                                {["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"].map(k => <option key={k} value={k} className="bg-[#1A1A1A]">{k}</option>)}
-                                            </select>
-                                            <ChevronDown className="w-4 h-4 text-[#B87333] absolute right-2 pointer-events-none" />
-                                        </div>
-                                    </div>
-
-                                    {/* Reset / Org Key Button */}
-                                    <button onClick={handleResetSongToOriginal} className="w-12 h-12 rounded-2xl bg-white/5 border border-white/5 text-[#B87333] hover:bg-[#B87333] hover:text-white transition-all flex items-center justify-center shrink-0" title="Voltar ao Tom Original">
-                                        <RotateCcw className="w-5 h-5" />
-                                    </button>
-                                </div>
-
-                                {/* Group 3: View Options & Extras */}
-                                <div className="flex items-center justify-center gap-2">
-                                    {/* Tabs Toggle */}
                                     <button 
-                                        onClick={() => {
-                                            const next = !includeTabs;
-                                            setIncludeTabs(next);
-                                            if (selectedManualIndex !== null && songs[selectedManualIndex]) {
-                                                const n = [...songs];
-                                                n[selectedManualIndex] = { ...n[selectedManualIndex], include_tabs: next };
-                                                setSongs(n);
-                                            }
-                                        }}
-                                        className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl border text-[10px] font-black uppercase tracking-widest transition-all ${includeTabs ? 'bg-[#B87333]/20 border-[#B87333]/40 text-[#B87333]' : 'bg-white/5 border-white/5 text-slate-500 hover:text-white hover:bg-white/10'}`}
+                                        onClick={() => setIsDynamicSpeedActive(!isDynamicSpeedActive)}
+                                        className={`p-2 rounded-xl transition-all ${isDynamicSpeedActive ? 'bg-[#B87333] text-white shadow-[0_0_15px_rgba(184,115,51,0.4)]' : 'text-slate-500 hover:text-white hover:bg-white/5'}`}
+                                        title="IA Sync (Acompanha Voz)"
                                     >
-                                        <FileText className="w-4 h-4" />
-                                        <span>Tabs</span>
+                                        <Zap className="w-5 h-5" />
                                     </button>
+
+                                    {/* Sopro (Blow) */}
+                                    <button 
+                                        onClick={() => setIsBlowDetectEnabled(!isBlowDetectEnabled)}
+                                        className={`p-2 rounded-xl transition-all ${isBlowDetectEnabled ? 'bg-cyan-500 text-white shadow-[0_0_15px_rgba(6,182,212,0.4)]' : 'text-slate-500 hover:text-white hover:bg-white/5'}`}
+                                        title="Sopro (Blow to Scroll)"
+                                    >
+                                        <Wind className="w-5 h-5" />
+                                    </button>
+
+                                    {/* Blink Scroll */}
+                                    <button 
+                                        onClick={() => setIsBlinkDetectEnabled(!isBlinkDetectEnabled)}
+                                        className={`p-2 rounded-xl transition-all ${isBlinkDetectEnabled ? 'bg-indigo-500 text-white shadow-[0_0_15px_rgba(99,102,241,0.4)]' : 'text-slate-500 hover:text-white hover:bg-white/5'}`}
+                                        title="Piscar (Blink to Scroll)"
+                                    >
+                                        <Eye className="w-5 h-5" />
+                                    </button>
+
+                                    {/* Divider */}
+                                    <div className="w-px h-6 bg-white/5 mx-1" />
+
+                                    {/* Capo & Key controls grouped compactly */}
+                                    <div className="flex items-center gap-1">
+                                        <button onClick={() => setManualCapo(prev => Math.max(0, prev - 1))} className="p-1.5 text-slate-500 hover:text-white focus:outline-none"><Minus className="w-3 h-3" /></button>
+                                        <span className="text-[10px] font-black text-[#B87333] uppercase">Capo {manualCapo}</span>
+                                        <button onClick={() => setManualCapo(prev => Math.min(12, prev + 1))} className="p-1.5 text-slate-500 hover:text-white focus:outline-none"><Plus className="w-3 h-3" /></button>
+                                    </div>
+
+                                    {/* Divider */}
+                                    <div className="w-px h-6 bg-white/5 mx-1" />
 
                                     {/* Versions Switcher */}
-                                    {currentPlayerVersions.length > 1 ? (
-                                        <div className="relative flex-1">
-                                            <button 
-                                                onClick={() => setIsPlayerVersionsOpen(!isPlayerVersionsOpen)} 
-                                                className={`w-full flex items-center justify-center gap-2 py-3 rounded-2xl border text-[10px] font-black uppercase tracking-widest transition-all ${isPlayerVersionsOpen ? 'bg-[#B87333] border-[#B87333] text-white' : 'bg-white/5 border-white/5 text-slate-500 hover:text-white hover:bg-white/10'}`}
-                                            >
-                                                {playerVersionLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Layout className="w-4 h-4" />}
-                                                <span>Versões</span>
-                                            </button>
-                                            {isPlayerVersionsOpen && (
-                                                <>
-                                                    <div className="fixed inset-0 z-[450]" onClick={() => setIsPlayerVersionsOpen(false)} />
-                                                    <div className="absolute bottom-full left-0 mb-2 w-full bg-[#16161D] border border-white/10 rounded-2xl shadow-2xl overflow-hidden z-[500] animate-in slide-in-from-bottom-2 duration-200">
-                                                        {currentPlayerVersions.map((v, idx) => (
-                                                            <button
-                                                                key={idx}
-                                                                onClick={() => { switchSongVersion(v); setIsPlayerVersionsOpen(false); }}
-                                                                className={`w-full px-4 py-3 text-left text-[11px] font-black uppercase italic tracking-tight border-b border-white/5 last:border-0 hover:bg-[#B87333]/20 transition-all ${v.name === (currentSong?.version_name || 'Principal') ? 'text-[#B87333] bg-[#B87333]/10' : 'text-slate-400'}`}
-                                                            >
-                                                                {v.name}
-                                                            </button>
-                                                        ))}
-                                                    </div>
-                                                </>
-                                            )}
-                                        </div>
-                                    ) : (
-                                        <div className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl border border-white/5 text-slate-700 text-[10px] font-black uppercase tracking-widest opacity-30">
-                                            <Layout className="w-4 h-4" />
-                                            <span>Só 1 Versão</span>
-                                        </div>
-                                    )}
+                                    <div className="relative">
+                                        <button 
+                                            onClick={() => setIsPlayerVersionsOpen(!isPlayerVersionsOpen)} 
+                                            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-[9px] font-black uppercase tracking-widest transition-all ${isPlayerVersionsOpen ? 'bg-[#B87333] border-[#B87333] text-white shadow-lg' : 'bg-[#B87333]/10 border-[#B87333]/20 text-[#B87333] hover:bg-[#B87333] hover:text-white'}`}
+                                        >
+                                            {playerVersionLoading ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Layout className="w-3 h-3" />}
+                                            <span>Versões</span>
+                                        </button>
+                                        {isPlayerVersionsOpen && (
+                                            <>
+                                                <div className="fixed inset-0 z-[450]" onClick={() => setIsPlayerVersionsOpen(false)} />
+                                                <div className="absolute right-0 top-full mt-2 w-48 bg-[#16161D] border border-white/10 rounded-2xl shadow-2xl overflow-hidden z-[500] animate-in slide-in-from-top-2 duration-200">
+                                                    {currentPlayerVersions.map((v, idx) => (
+                                                        <button
+                                                            key={idx}
+                                                            onClick={() => { handleSwitchVersion(v.key); setIsPlayerVersionsOpen(false); }}
+                                                            className={`w-full px-4 py-3 text-left text-[11px] font-black uppercase italic tracking-tight border-b border-white/5 last:border-0 hover:bg-[#B87333]/20 transition-all ${v.name === (currentSong?.version_name || 'Principal') ? 'text-[#B87333] bg-[#B87333]/10' : 'text-slate-400'}`}
+                                                        >
+                                                            {v.name}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -4837,13 +4757,17 @@ function App() {
 
                             {/* PLAYER PLAYLIST SIDEBAR — hidden in immersive mode */}
                             <div className={`
-                                ${isSidebarCollapsed ? '-translate-x-full md:translate-x-0 w-[85vw] md:w-20 px-4 md:px-3' : 'translate-x-0 w-[85vw] md:w-80 px-4 md:px-6'} 
+                                ${isSidebarCollapsed ? '-translate-x-full md:translate-x-0 w-[85vw] md:w-20 px-4 md:px-3' : 'translate-x-0 w-[85vw] md:w-[480px] px-4 md:px-5'} 
                                 ${isImmersiveMode ? 'hidden' : ''} 
-                                bg-black/95 md:bg-black/40 backdrop-blur-3xl md:backdrop-blur-none border-r border-y-0 border-white/5 
+                                bg-black/98 md:bg-[#0D0D15] border-r border-white/5 
                                 flex flex-col py-6 space-y-6 shrink-0 fixed inset-y-0 left-0 md:relative md:h-full z-[400] md:z-[150] no-print 
-                                transition-transform duration-500 ease-[cubic-bezier(0.23,1,0.32,1)]
-                                shadow-[20px_0_50px_rgba(0,0,0,0.8)] md:shadow-none pointer-events-auto
+                                transition-all duration-500 ease-[cubic-bezier(0.23,1,0.32,1)]
+                                shadow-[20px_0_100px_rgba(0,0,0,0.9)] md:shadow-none pointer-events-auto
                             `}>
+                                {/* High Visibility Debug Tag */}
+                                {!isSidebarCollapsed && (
+                                    <div className="absolute top-2 right-4 bg-[#B87333]/20 px-2 py-0.5 rounded text-[8px] font-black text-[#B87333] tracking-widest uppercase">LAYOUT V2.2 - RECARREGADO</div>
+                                )}
                                 {/* Toggle Button */}
                                 <button
                                     onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
@@ -5115,15 +5039,15 @@ function App() {
                                                                 else { dragItem.current = null; dragOverItem.current = null; setDragOverIdx(null); }
                                                             }}
                                                             onClick={() => { setSelectedManualIndex(idx); setCurrentLineIndex(0); currentLineIndexRef.current = 0; }}
-                                                            className={`flex-1 ${isSidebarCollapsed ? 'p-2 justify-center' : 'p-3'} rounded-2xl border transition-all text-left flex items-center ${isSidebarCollapsed ? 'space-x-0' : 'space-x-3'} relative overflow-hidden ${selectedManualIndex === idx ? 'bg-[#B87333] border-[#B87333] shadow-lg shadow-[#B87333]/20' : 'bg-white/5 border-white/5 hover:border-[#B87333]/30'} ${dragOverIdx === idx ? (dragItem.current !== null && dragOverItem.current !== null && dragItem.current < dragOverItem.current ? 'border-b-4 border-b-orange-500' : 'border-t-4 border-t-orange-500') : ''} ${!isSidebarCollapsed ? 'cursor-default' : ''}`}
+                                                            className={`flex-1 ${isSidebarCollapsed ? 'p-2 justify-center' : 'p-5'} rounded-2xl border transition-all text-left flex items-center ${isSidebarCollapsed ? 'space-x-0' : 'space-x-5'} relative overflow-hidden ${selectedManualIndex === idx ? 'bg-[#B87333] border-[#B87333] shadow-lg shadow-[#B87333]/20' : 'bg-white/5 border-white/5 hover:border-[#B87333]/30'} ${dragOverIdx === idx ? (dragItem.current !== null && dragOverItem.current !== null && dragItem.current < dragOverItem.current ? 'border-b-4 border-b-orange-500' : 'border-t-4 border-t-orange-500') : ''} ${!isSidebarCollapsed ? 'cursor-default' : ''}`}
                                                             title={isSidebarCollapsed ? `${idx + 1}. ${s.song_name}` : "Clique para tocar"}
                                                             data-drag-index={idx}
                                                         >
-                                                            <div className={`w-7 h-7 rounded-xl flex items-center justify-center font-black text-xs shrink-0 transition-all ${selectedManualIndex === idx ? 'bg-white text-[#B87333]' : 'bg-black/60 text-slate-700 group-hover/song:text-white'}`}>{idx + 1}</div>
+                                                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-sm shrink-0 transition-all ${selectedManualIndex === idx ? 'bg-white text-[#B87333]' : 'bg-black/60 text-slate-700 group-hover/song:text-white'}`}>{idx + 1}</div>
                                                             {!isSidebarCollapsed && (
                                                                 <div className="flex-1 min-w-0">
-                                                                    <p className={`text-[11px] font-black uppercase italic truncate tracking-tight ${selectedManualIndex === idx ? 'text-white' : 'text-slate-400 group-hover/song:text-slate-200'}`}>{s.song_name}</p>
-                                                                    <p className={`text-[9px] font-bold uppercase truncate ${selectedManualIndex === idx ? 'text-white/60' : 'text-slate-600'}`}>{s.artist_name}</p>
+                                                                    <p className={`text-sm font-black uppercase italic truncate tracking-tight ${selectedManualIndex === idx ? 'text-white' : 'text-slate-100 group-hover/song:text-white'}`}>{s.song_name}</p>
+                                                                    <p className={`text-[11px] font-bold uppercase truncate ${selectedManualIndex === idx ? 'text-white/60' : 'text-slate-500'}`}>{s.artist_name}</p>
                                                                 </div>
                                                             )}
                                                         </button>
@@ -5294,7 +5218,7 @@ function App() {
                                             ? removeTablatureBlocks(currentSong?.content || "")
                                             : currentSong?.content || "").split('\n').map((line, lIdx, allLines) => {
                                                 const trimmed = line.trim();
-                                                const isChordLine = !!(line && trimmed.length > 0 && (line.match(CHORD_TOKEN_RE) || []).length > 0 && line.replace(CHORD_TOKEN_RE, '').replace(/[\s|()\-xX0-9:]/g, '').length < Math.max(2, trimmed.length * 0.25));
+                                                const isChordLine = isChordOnlyLine(line);
 
                                                 // Smart highlight:
                                                 // - A lyric line is active when currentLineIndex points to it
@@ -5913,7 +5837,7 @@ function App() {
                                                                         {((manualPreviewSong?.include_tabs ?? includeTabs) === false
                                                                             ? removeTablatureBlocks(manualPreviewSong?.content || "")
                                                                             : manualPreviewSong?.content || "").split('\n').map((line, lIdx, allLines) => {
-                                                                                const isChordLine = !!(line && line.trim().length > 0 && (line.match(CHORD_TOKEN_RE) || []).length > 0 && line.replace(CHORD_TOKEN_RE, '').replace(/[\s|()\-xX0-9:]/g, '').length < Math.max(2, line.trim().length * 0.5));
+                                                                                const isChordLine = isChordOnlyLine(line);
 
                                                                                 return (
                                                                                     <pre key={lIdx} className={`font-mono leading-relaxed whitespace-pre break-inside-avoid ${isChordLine ? 'text-[#B87333] print:text-[#B87333] font-black italic tracking-tight mb-0' : 'text-slate-300 print:text-gray-900 font-medium mb-1'}`} style={{ fontSize: 'inherit' }}>

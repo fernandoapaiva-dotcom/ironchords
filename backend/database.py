@@ -46,10 +46,10 @@ def get_db_connection():
         # Add connection timeout to avoid long hangs
         if "connect_timeout" not in url:
             separator = "&" if "?" in url else "?"
-            url += f"{separator}connect_timeout=10"
+            url += f"{separator}connect_timeout=3"
         
         # Retry logic for robust startup
-        for attempt in range(3):
+        for attempt in range(2):
             try:
                 conn = psycopg2.connect(url)
                 LAST_DB_ERROR = None
@@ -57,10 +57,10 @@ def get_db_connection():
             except Exception as e:
                 LAST_DB_ERROR = str(e)
                 print(f"[DB] Connection attempt {attempt+1} failed: {e}")
-                if attempt < 2:
-                    _time.sleep(2)
+                if attempt < 1:
+                    _time.sleep(1)
         if LAST_DB_ERROR:
-            raise Exception(f"Database connection failed after 3 attempts: {LAST_DB_ERROR}")
+            raise Exception(f"Database connection failed after 2 attempts: {LAST_DB_ERROR}")
         raise Exception("Failed to connect to database")
     else:
         conn = sqlite3.connect(DB_PATH)
@@ -210,9 +210,10 @@ def init_db():
         conn.close()
 
 def _exec_select(sql, params=None):
-    conn = get_db_connection()
     is_postgres = DATABASE_URL is not None
+    conn = None
     try:
+        conn = get_db_connection()
         if is_postgres:
             from psycopg2.extras import RealDictCursor
             cursor = conn.cursor(cursor_factory=RealDictCursor)
@@ -231,16 +232,19 @@ def _exec_select(sql, params=None):
         print(f"[DB] Select error: {e}")
         return []
     finally:
-        conn.close()
+        if conn:
+            try: conn.close()
+            except: pass
 
 def _exec_write(sql, params=None):
-    conn = get_db_connection()
     is_postgres = DATABASE_URL is not None
-    cursor = conn.cursor()
-    if is_postgres:
-        sql = sql.replace('?', '%s')
-    
+    conn = None
     try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        if is_postgres:
+            sql = sql.replace('?', '%s')
+        
         if params:
             cursor.execute(sql, params)
         else:
@@ -249,11 +253,14 @@ def _exec_write(sql, params=None):
         return True
     except Exception as e:
         print(f"[DB] Write error: {e}")
-        if is_postgres:
-            conn.rollback()
+        if is_postgres and conn:
+            try: conn.rollback()
+            except: pass
         return False
     finally:
-        conn.close()
+        if conn:
+            try: conn.close()
+            except: pass
 
 def get_all_users():
     return _exec_select("SELECT * FROM users ORDER BY created_at DESC")
@@ -278,11 +285,12 @@ def check_user_status(email: str):
     return None
 
 def get_chord(song_name: str, artist_name: str, song_key: Optional[str] = None, version: Optional[str] = "Principal"):
-    conn = get_db_connection()
     is_postgres = DATABASE_URL is not None
     v = version if version else "Principal"
+    conn = None
     
     try:
+        conn = get_db_connection()
         if is_postgres:
             from psycopg2.extras import RealDictCursor
             cursor = conn.cursor(cursor_factory=RealDictCursor)
@@ -317,12 +325,15 @@ def get_chord(song_name: str, artist_name: str, song_key: Optional[str] = None, 
         print(f"[DB] Get chord error: {e}")
         return None
     finally:
-        conn.close()
+        if conn:
+            try: conn.close()
+            except: pass
 
 def get_all_chords():
-    conn = get_db_connection()
     is_postgres = DATABASE_URL is not None
+    conn = None
     try:
+        conn = get_db_connection()
         if is_postgres:
             from psycopg2.extras import RealDictCursor
             cursor = conn.cursor(cursor_factory=RealDictCursor)
@@ -337,12 +348,13 @@ def get_all_chords():
         print(f"[DB] Get all chords error: {e}")
         return []
     finally:
-        conn.close()
+        if conn:
+            try: conn.close()
+            except: pass
 
 def save_chord(song_name: str, artist_name: str, song_key: str, content: str, source: str, capo: int = 0, include_tabs: bool = True, version: str = "Principal"):
-    conn = get_db_connection()
     is_postgres = DATABASE_URL is not None
-    cursor = conn.cursor()
+    conn = None
     name = song_name.strip()
     artist = artist_name.strip()
     v = version if version else "Principal"
@@ -358,27 +370,39 @@ def save_chord(song_name: str, artist_name: str, song_key: str, content: str, so
         key_to_save = key_to_save.upper()
     
     try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
         sql = 'INSERT INTO chords (song_name, artist_name, song_key, content, source, capo, include_tabs, version) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
         if is_postgres: sql = sql.replace('?', '%s')
         cursor.execute(sql, (name, artist, key_to_save, content, source, capo, tabs_val, v))
         conn.commit()
     except Exception:
-        if is_postgres: conn.rollback()
+        if is_postgres and conn:
+            try: conn.rollback()
+            except: pass
         try:
+            if not conn:
+                conn = get_db_connection()
+            cursor = conn.cursor()
             sql = 'UPDATE chords SET song_key = ?, content = ?, source = ?, capo = ?, include_tabs = ? WHERE song_name = ? AND artist_name = ? AND version = ?'
             if is_postgres: sql = sql.replace('?', '%s')
             cursor.execute(sql, (key_to_save, content, source, capo, tabs_val, name, artist, v))
             conn.commit()
         except Exception as e:
-            if is_postgres: conn.rollback()
+            if is_postgres and conn:
+                try: conn.rollback()
+                except: pass
             print(f"[DB] Save chord error: {e}")
     finally:
-        conn.close()
+        if conn:
+            try: conn.close()
+            except: pass
 
 def get_user_playlists(email: str):
-    conn = get_db_connection()
     is_postgres = DATABASE_URL is not None
+    conn = None
     try:
+        conn = get_db_connection()
         if is_postgres:
             from psycopg2.extras import RealDictCursor
             cursor = conn.cursor(cursor_factory=RealDictCursor)
@@ -393,64 +417,87 @@ def get_user_playlists(email: str):
         print(f"[DB] Get playlists error: {e}")
         return []
     finally:
-        conn.close()
+        if conn:
+            try: conn.close()
+            except: pass
 
 def save_user_playlist(email: str, name: str, data_json: str):
-    conn = get_db_connection()
     is_postgres = DATABASE_URL is not None
-    cursor = conn.cursor()
+    conn = None
     try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
         sql = 'INSERT INTO playlists (user_email, name, data) VALUES (?, ?, ?)'
         if is_postgres: sql = sql.replace('?', '%s')
         cursor.execute(sql, (email.strip(), name.strip(), data_json))
         conn.commit()
     except Exception:
-        if is_postgres: conn.rollback()
+        if is_postgres and conn:
+            try: conn.rollback()
+            except: pass
         try:
+            if not conn:
+                conn = get_db_connection()
+            cursor = conn.cursor()
             sql = 'UPDATE playlists SET data = ? WHERE user_email = ? AND name = ?'
             if is_postgres: sql = sql.replace('?', '%s')
             cursor.execute(sql, (data_json, email.strip(), name.strip()))
             conn.commit()
         except Exception as e:
-            if is_postgres: conn.rollback()
+            if is_postgres and conn:
+                try: conn.rollback()
+                except: pass
             print(f"[DB] Save playlist error: {e}")
     finally:
-        conn.close()
+        if conn:
+            try: conn.close()
+            except: pass
 
 def delete_user_playlist(email: str, name: str):
-    conn = get_db_connection()
     is_postgres = DATABASE_URL is not None
-    cursor = conn.cursor()
+    conn = None
     try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
         sql = "DELETE FROM playlists WHERE user_email = ? AND name = ?"
         if is_postgres: sql = sql.replace('?', '%s')
         cursor.execute(sql, (email.strip(), name.strip()))
         conn.commit()
     except Exception as e:
-        if is_postgres: conn.rollback()
+        if is_postgres and conn:
+            try: conn.rollback()
+            except: pass
         print(f"[DB] Delete playlist error: {e}")
     finally:
-        conn.close()
+        if conn:
+            try: conn.close()
+            except: pass
 
 def save_short_link(slug: str, data_json: str):
-    conn = get_db_connection()
     is_postgres = DATABASE_URL is not None
-    cursor = conn.cursor()
+    conn = None
     try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
         sql = 'INSERT INTO short_links (slug, data) VALUES (?, ?)'
         if is_postgres: sql = sql.replace('?', '%s')
         cursor.execute(sql, (slug, data_json))
         conn.commit()
     except Exception as e:
-        if is_postgres: conn.rollback()
+        if is_postgres and conn:
+            try: conn.rollback()
+            except: pass
         print(f"[DB] Save short link error: {e}")
     finally:
-        conn.close()
+        if conn:
+            try: conn.close()
+            except: pass
 
 def get_short_link(slug: str):
-    conn = get_db_connection()
     is_postgres = DATABASE_URL is not None
+    conn = None
     try:
+        conn = get_db_connection()
         if is_postgres:
             from psycopg2.extras import RealDictCursor
             cursor = conn.cursor(cursor_factory=RealDictCursor)
@@ -465,4 +512,6 @@ def get_short_link(slug: str):
         print(f"[DB] Get short link error: {e}")
         return None
     finally:
-        conn.close()
+        if conn:
+            try: conn.close()
+            except: pass

@@ -447,9 +447,8 @@ def add_manual_music(request: ManualEntryRequest):
         if not req_key: # If original requested, use found key
             req_key = chord_data['key']
     
-    # Define if we need to scrape based on Tablature cache mismatch
     needs_scrape = False
-    if not chord_data:
+    if not chord_data or not chord_data.get('content') or len(chord_data['content'].strip()) < 100:
         needs_scrape = True
     elif request.version and request.version != "Principal":
         needs_scrape = True
@@ -663,9 +662,8 @@ def add_batch_music(request: BatchRequest):
             # Try to find exactly this song version (name, artist, key)
             chord_data = get_chord(song_name, artist_name, req_key, version=row.version)
             
-            # Determine if we need to override cache based on tabs presence
             needs_scrape = False
-            if not chord_data:
+            if not chord_data or not chord_data.get('content') or len(chord_data['content'].strip()) < 100:
                 needs_scrape = True
             elif row.version and row.version != "Principal":
                 needs_scrape = True

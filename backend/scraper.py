@@ -5,7 +5,21 @@ from typing import Optional, Dict, List
 import re
 
 def clean_text(text: str) -> str:
-    return text.replace('\r', '').strip()
+    if not text: return ""
+    text = text.replace('\r', '')
+    lines = [re.sub(r'[ \t]{2,}', ' ', line) for line in text.split('\n')]
+    new_lines = []
+    last_was_empty = False
+    for line in lines:
+        is_empty = not line.strip()
+        if is_empty:
+            if not last_was_empty:
+                new_lines.append("")
+            last_was_empty = True
+        else:
+            new_lines.append(line.rstrip())
+            last_was_empty = False
+    return '\n'.join(new_lines).strip()
 
 def get_slug(name: str) -> str:
     """Standard slug generator."""
@@ -124,55 +138,93 @@ def scrape_cifraclub_url(url: str) -> Optional[Dict]:
     except: return None
 
 def get_cifraclub_versions(artist_url_name: str, song_slug: str) -> List[Dict]:
-    url = f"https://www.cifraclub.com.br/{artist_url_name}/{song_slug}/"
+    """Fetches all versions of a song from Cifra Club."""
+    # List of common variations to try for the artist part if it's "Musicas para Missa"
+    artist_candidates = [artist_url_name]
+    if artist_url_name == "musicas-para-missa":
+        artist_candidates = ["catolicas", "padre-marcelo-rossi", "padre-zeca", "corquinto"] + artist_candidates
+
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
-    versions = []
-    try:
-        response = requests.get(url, headers=headers, timeout=10)
-        if response.status_code != 200: return []
-        soup = BeautifulSoup(response.text, 'html.parser')
-        
-        # Versions are typically in a div with class 'list-versions'
-        versions_container = soup.find('div', class_='list-versions')
-        if versions_container:
-            for link in versions_container.find_all('a', class_='js-version'):
-                title_span = link.find('span', title=True)
-                if not title_span:
-                    # Fallback to direct span text if title is not present
-                    title_span = link.find('span')
+    
+    # Try direct candidates first
+    for a_slug in artist_candidates:
+        url = f"https://www.cifraclub.com.br/{a_slug}/{song_slug}/"
+        versions = []
+        try:
+            response = requests.get(url, headers=headers, timeout=5)
+            if response.status_code != 200: continue
+            
+            soup = BeautifulSoup(response.text, 'html.parser')
+            
+            # 1. Search for links with specific classes used by CifraClub
+            for link in soup.find_all('a', class_=re.compile(r'js-version|c-versions')):
+                href = link.get('href', '')
+                if not href or song_slug not in href: continue
                 
+                title_span = link.find('span', title=True) or link.find('span')
                 version_name = title_span.get('title') if title_span and title_span.get('title') else (title_span.text.strip() if title_span else "Principal")
                 
-                # Extract version suffix from URL
-                # Example: /legiao-urbana/tempo-perdido/simplificada.html
-                # We want "simplificada"
-                href = link.get('href', '')
+                version_name = version_name.replace('Cifra: ', '').replace(' (violão e guitarra)', '').strip()
+
                 v_slug = "Principal"
-                if href:
-                    parts = href.strip('/').split('/')
-                    if len(parts) > 2:
-                        last_part = parts[-1]
-                        if last_part.endswith('.html'):
-                            v_slug = last_part.replace('.html', '')
-                        else:
-                            # Might be just a folder or the principal one
-                            v_slug = last_part
-                    elif len(parts) == 2:
-                        v_slug = "Principal"
+                match = re.search(fr"/{song_slug}/([^#\?]+)", href)
+                if match:
+                    v_slug = match.group(1).replace('.html', '').strip('/')
+                    if not v_slug: v_slug = "Principal"
                 
-                versions.append({
-                    "name": version_name,
-                    "key": v_slug,
-                    "label": version_name # Using the display name as label
-                })
-        else:
-            # If no versions found, at least return "Principal"
-            versions.append({"name": "Principal", "key": "Principal"})
+                if not any(v['key'] == v_slug for v in versions):
+                    versions.append({"name": version_name, "key": v_slug, "label": version_name})
+
+            # 2. Search sidebar / alternate links
+            for side_link in soup.find_all('a', id=re.compile(r'side-')):
+                href = side_link.get('href', '')
+                if song_slug in href:
+                    label = side_link.text.strip() or side_link.get('title', 'Principal')
+                    v_slug = "Principal"
+                    match = re.search(fr"/{song_slug}/([^#\?]+)", href)
+                    if match:
+                        v_slug = match.group(1).replace('.html', '').strip('/')
+                    
+                    if not any(v['key'] == v_slug for v in versions):
+                        versions.append({"name": label, "key": v_slug, "label": label})
+
+            if versions:
+                # Deduplicate and return
+                seen = set()
+                final = []
+                for v in versions:
+                    if v['key'] not in seen:
+                        seen.add(v['key'])
+                        final.append(v)
+                if not any(v['key'] == "Principal" for v in final):
+                    final.insert(0, {"name": "Principal", "key": "Principal", "label": "Principal"})
+                return final
+        except:
+            continue
+
+    # 3. Last Resort: Try to find the song via search to get the REAL slugs
+    try:
+        search_query = f"{song_slug.replace('-', ' ')}".strip()
+        search_url = f"https://www.cifraclub.com.br/api/search/suggestions/?q={urllib.parse.quote(search_query)}"
+        s_res = requests.get(search_url, headers=headers, timeout=5)
+        if s_res.status_code == 200:
+            data = s_res.json()
+            # Find the best match
+            for sug in data:
+                # Simple check if current song_slug matches partially
+                if song_slug.replace('-', '') in sug.get('url', '').replace('-', ''):
+                    # Found a potentially better url: /artist-slug/song-slug/
+                    parts = sug.get('url', '').strip('/').split('/')
+                    if len(parts) >= 2:
+                        new_a = parts[0]
+                        new_s = parts[1]
+                        if new_a != artist_url_name:
+                            # Recursive call with better slugs (only once)
+                            return get_cifraclub_versions(new_a, new_s)
+    except:
+        pass
             
-        return versions
-    except Exception as e:
-        print(f"Error fetching versions: {e}")
-        return [{"name": "Principal", "key": "Principal"}]
+    return [{"name": "Principal", "key": "Principal", "label": "Principal"}]
 
 def scrape_cifras_com_br(song_name: str, artist_name: str) -> Optional[Dict]:
     a_slug = get_slug(artist_name)
@@ -228,17 +280,34 @@ def scrape_musicas_para_missa(song_name: str) -> Optional[Dict]:
     try:
         response = requests.get(url, headers=headers, timeout=10)
         if response.status_code != 200: return None
+        
+        response.encoding = response.apparent_encoding
+        
         soup = BeautifulSoup(response.text, 'html.parser')
         div_cifra = soup.find('div', id='div-cifra')
+        
+        if not div_cifra:
+            div_cifra = soup.find('pre')
+            
         if not div_cifra: return None
+        
+        for br in div_cifra.find_all("br"):
+            br.replace_with("\n")
+            
+        content = div_cifra.get_text()
+        
         key = "C"
         key_match = re.search(r"TOM:\s*([A-G][b#]?m?)", response.text, re.IGNORECASE)
         if key_match: key = key_match.group(1).upper()
+        
+        cleaned_content = clean_text(content)
+        if not cleaned_content: return None
+        
         return {
             "song_name": song_name,
             "artist_name": "Músicas para Missa",
             "key": key,
-            "content": clean_text(div_cifra.get_text(separator='\n')),
+            "content": cleaned_content,
             "source": "musicasparamissa"
         }
     except: return None
@@ -279,8 +348,10 @@ def find_chord_cascade(song_name: str, artist_name: str, version: Optional[str] 
             elif site == "bananacifras": result = scrape_banana_cifras(s_variant, artist)
             elif site == "musicasparamissa": result = scrape_musicas_para_missa(s_variant)
             
-            if result:
-                print(f"ENCONTRADO em {site}!")
+            if result and result.get("content") and len(result["content"].strip()) > 100:
+                print(f"ENCONTRADO em {site} com conteúdo válido ({len(result['content'])} caracteres)!")
                 return result
+            elif result:
+                print(f"[SCRAPER] Conteúdo de {site} era vazio ou muito curto ({len(result.get('content', ''))} caracteres). Descartando e continuando...")
                 
     return None
